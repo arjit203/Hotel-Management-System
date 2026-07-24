@@ -1,0 +1,22 @@
+{
+  "name": "7vachan-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "7 Vachan - Hotel + Marriage Hall + Restaurant platform (monorepo root)",
+  "workspaces": [
+    "frontend",
+    "backend",
+    "admin-panel"
+  ],
+  "scripts": {
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "dev:backend": "npm run dev --workspace=backend",
+    "dev:admin": "npm run dev --workspace=admin-panel",
+    "dev:all": "concurrently -n FRONTEND,BACKEND,ADMIN -c blue,green,magenta \"npm:dev:frontend\" \"npm:dev:backend\" \"npm:dev:admin\"",
+    "build:all": "npm run build --workspace=backend && npm run build --workspace=frontend && npm run build --workspace=admin-panel",
+    "db:seed": "npm run db:seed --workspace=backend"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
