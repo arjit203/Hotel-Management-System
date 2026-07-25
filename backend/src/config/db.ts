@@ -2,6 +2,12 @@
 // SETUP STUB ONLY — no models/business logic yet, per project rules.
 
 import mongoose from "mongoose";
+import dns from "dns";
+
+// Windows sometimes ignores system DNS settings for Node's SRV lookups
+// (used by mongodb+srv:// URIs), causing ECONNREFUSED even when the
+// system resolver (nslookup) works fine. Forcing Google DNS here fixes it reliably.
+dns.setServers(["8.8.8.8", "1.1.1.1"]);
 
 export async function connectDB(): Promise<void> {
   const uri = process.env.MONGODB_URI || "mongodb://localhost:27017/vachan_dev";
