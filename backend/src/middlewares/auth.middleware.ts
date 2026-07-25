@@ -48,6 +48,30 @@ export function authenticate(actorType: ActorType) {
  * Role-based access control. Use after `authenticate()`.
  * Example: router.get('/admin/only', authenticate('admin'), requireRole('super_admin'), handler)
  */
+/**
+ * Like authenticate(), but never rejects the request. If a valid token is
+ * present, req.actor is populated; if missing/invalid, the request proceeds
+ * as an anonymous/guest request. Required for guest-checkout booking flows
+ * per RULES.md ("do not force login for any booking flow"), while still
+ * letting logged-in users get their booking linked to their account.
+ */
+export function optionalAuthenticate(actorType: ActorType) {
+  return (req: Request, _res: Response, next: NextFunction) => {
+    const token = extractToken(req);
+    if (!token) return next();
+
+    try {
+      const payload = verifyJwt(token, actorType);
+      if (payload.actorType === actorType) {
+        req.actor = payload;
+      }
+    } catch {
+      // Invalid/expired token on an optional route — proceed as guest rather than failing.
+    }
+    next();
+  };
+}
+
 export function requireRole(...allowedRoles: string[]) {
   return (req: Request, res: Response, next: NextFunction) => {
     if (!req.actor) {

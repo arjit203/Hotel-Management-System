@@ -7,6 +7,11 @@ import dotenv from "dotenv";
 import connectDB from "./config/db";
 import authRoutes from "./modules/auth/auth.routes";        // ← NEW
 import { errorHandler } from "./middlewares/error.middleware"; // ← NEW
+import {
+  publicHotelRouter,
+  publicBookingRouter,
+  adminHotelRouter,
+} from "./modules/hotel/hotel.routes";
 
 dotenv.config();
 
@@ -22,6 +27,9 @@ app.get("/api/v1/health", (_req, res) => {
 });
 
 app.use("/api/v1/auth", authRoutes);   // ← NEW
+app.use("/api/v1/hotels", publicHotelRouter);
+app.use("/api/v1/hotel-bookings", publicBookingRouter);
+app.use("/api/v1/admin/hotels", adminHotelRouter);
 
 // 404 handler                          // ← NEW
 app.use((req, res) => {                 // ← NEW
