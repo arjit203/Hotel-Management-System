@@ -1,8 +1,15 @@
+import Link from "next/link";
+
 export default function HomePage() {
   return (
     <main style={{ padding: "2rem", fontFamily: "sans-serif" }}>
-      <h1>7 Vachan — Frontend</h1>
-      <p>Setup scaffold running successfully. No business modules built yet.</p>
+      <h1>7 Vachan</h1>
+      <p>Hotel, Marriage Hall & Restaurant.</p>
+      <p>
+        <Link href="/hotel" style={{ color: "#0066cc" }}>
+          View Hotel →
+        </Link>
+      </p>
     </main>
   );
 }

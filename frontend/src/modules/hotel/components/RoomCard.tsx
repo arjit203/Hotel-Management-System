@@ -11,13 +11,7 @@ export interface RoomSummary {
   images: string[];
 }
 
-export default function RoomCard({
-  hotelSlug,
-  room,
-}: {
-  hotelSlug: string;
-  room: RoomSummary;
-}) {
+export default function RoomCard({ room }: { room: RoomSummary }) {
   return (
     <div style={{ border: "1px solid #e5e5e5", borderRadius: 12, overflow: "hidden" }}>
       {room.images?.[0] && (
@@ -45,7 +39,7 @@ export default function RoomCard({
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <strong>₹{room.basePrice} / night</strong>
           <Link
-            href={`/hotels/${hotelSlug}/rooms/${room.slug}`}
+            href={`/hotel/rooms/${room.slug}`}
             style={{
               background: "#111",
               color: "#fff",

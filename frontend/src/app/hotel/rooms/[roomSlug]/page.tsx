@@ -2,44 +2,14 @@ import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import GalleryGrid from "@/components/GalleryGrid";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000/api/v1";
-
-interface RoomDetailsData {
-  hotel: { _id: string; name: string; slug: string };
-  room: {
-    _id: string;
-    name: string;
-    slug: string;
-    categoryName: string;
-    description: string;
-    images: string[];
-    basePrice: number;
-    maxOccupancy: number;
-    amenities: string[];
-    metaTitle?: string;
-    metaDescription?: string;
-  };
-}
-
-async function getRoomDetails(hotelSlug: string, roomSlug: string): Promise<RoomDetailsData | null> {
-  try {
-    const res = await fetch(`${API_BASE_URL}/hotels/${hotelSlug}/rooms/${roomSlug}`, {
-      cache: "no-store",
-    });
-    const json = await res.json();
-    return json.success ? json.data : null;
-  } catch {
-    return null;
-  }
-}
+import { getTheHotelRoom } from "@/lib/hotel";
 
 export async function generateMetadata({
   params,
 }: {
-  params: { slug: string; roomSlug: string };
+  params: { roomSlug: string };
 }): Promise<Metadata> {
-  const data = await getRoomDetails(params.slug, params.roomSlug);
+  const data = await getTheHotelRoom(params.roomSlug);
   if (!data) return {};
 
   return {
@@ -48,12 +18,8 @@ export async function generateMetadata({
   };
 }
 
-export default async function RoomDetailsPage({
-  params,
-}: {
-  params: { slug: string; roomSlug: string };
-}) {
-  const data = await getRoomDetails(params.slug, params.roomSlug);
+export default async function RoomDetailsPage({ params }: { params: { roomSlug: string } }) {
+  const data = await getTheHotelRoom(params.roomSlug);
   if (!data) return notFound();
 
   const { hotel, room } = data;
@@ -61,7 +27,7 @@ export default async function RoomDetailsPage({
   return (
     <main style={{ padding: "2rem", maxWidth: 1000, margin: "0 auto" }}>
       <p>
-        <Link href={`/hotels/${hotel.slug}`}>← Back to {hotel.name}</Link>
+        <Link href="/hotel">← Back to {hotel.name}</Link>
       </p>
       <span style={{ fontSize: 13, textTransform: "uppercase", color: "#888" }}>
         {room.categoryName}
@@ -70,7 +36,7 @@ export default async function RoomDetailsPage({
 
       {room.images.length > 0 && (
         <div style={{ margin: "16px 0" }}>
-          <GalleryGrid images={room.images.map((url, i) => ({ _id: String(i), imageUrl: url }))} />
+          <GalleryGrid images={room.images.map((url: string, i: number) => ({ _id: String(i), imageUrl: url }))} />
         </div>
       )}
 
@@ -79,7 +45,7 @@ export default async function RoomDetailsPage({
 
       <h3>Amenities</h3>
       <ul>
-        {room.amenities.map((a) => (
+        {room.amenities.map((a: string) => (
           <li key={a}>{a}</li>
         ))}
       </ul>
@@ -94,7 +60,7 @@ export default async function RoomDetailsPage({
       >
         <strong style={{ fontSize: 24 }}>₹{room.basePrice} / night</strong>
         <Link
-          href={`/hotels/${hotel.slug}/rooms/${room.slug}/book`}
+          href={`/hotel/rooms/${room.slug}/book`}
           style={{
             background: "#111",
             color: "#fff",

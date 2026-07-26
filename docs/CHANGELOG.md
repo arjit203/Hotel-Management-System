@@ -4,6 +4,27 @@ Format: newest entries on top. Categories: Added / Changed / Fixed / Security / 
 
 ---
 
+## [2026-07-25 (c)] — Hotel Frontend Simplification (single-property, Option A)
+
+### Changed
+- Removed hotel **listing** page (`frontend/src/app/hotels/page.tsx`) and the `hotelSlug`-based dynamic routes — per current business scale (1 physical property, `RULES.md`), a listing/selection UI added no value.
+- New route structure: `/hotel` (single hotel page, no slug param) → `/hotel/rooms/[roomSlug]` → `/hotel/rooms/[roomSlug]/book` → `/booking-confirmation/[reference]` (unchanged).
+- `frontend/src/modules/hotel/components/RoomCard.tsx` — dropped the now-unnecessary `hotelSlug` prop; links directly to `/hotel/rooms/:slug`.
+- `frontend/src/app/page.tsx` — updated stub home page to link to `/hotel`.
+
+### Added
+- `frontend/src/lib/hotel.ts` — `getTheHotel()` / `getTheHotelRoom(slug)` helpers. These call the **unchanged** backend (`GET /hotels`, `GET /hotels/:slug`) and simply auto-select the first/only active hotel. This is the single place that would need to change if a second property is added later — no backend or API contract changes required.
+
+### Removed
+- `frontend/src/app/hotels/` (entire folder — listing page + old slug-based room/booking routes, superseded by `/hotel/...` above).
+- `frontend/src/modules/hotel/components/HotelCard.tsx` — no longer used (was only for the listing page).
+
+### Notes
+- **Backend is completely unchanged** — `hotel.service.ts`, `hotel.controller.ts`, `hotel.routes.ts`, and all models remain multi-hotel-ready (admin can still create multiple hotels via the existing admin API). This was a frontend-only simplification per explicit request, not an architecture rollback.
+- `next build` re-verified: 5 routes compile successfully (`/`, `/hotel`, `/hotel/rooms/[roomSlug]`, `/hotel/rooms/[roomSlug]/book`, `/booking-confirmation/[reference]`).
+
+---
+
 ## [2026-07-25 (b)] — Hotel Module (Phase 3)
 
 ### Added

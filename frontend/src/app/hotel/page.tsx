@@ -4,48 +4,11 @@ import StarRating from "@/components/StarRating";
 import GalleryGrid from "@/components/GalleryGrid";
 import FaqAccordion from "@/components/FaqAccordion";
 import MapPlaceholder from "@/components/MapPlaceholder";
-import RoomCard, { RoomSummary } from "@/modules/hotel/components/RoomCard";
+import RoomCard from "@/modules/hotel/components/RoomCard";
+import { getTheHotel } from "@/lib/hotel";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000/api/v1";
-
-interface HotelDetailsData {
-  hotel: {
-    _id: string;
-    name: string;
-    slug: string;
-    description: string;
-    starRating: number;
-    address: string;
-    contactPhone: string;
-    contactEmail: string;
-    amenities: { name: string; icon?: string }[];
-    metaTitle?: string;
-    metaDescription?: string;
-  };
-  rooms: RoomSummary[];
-  gallery: { _id: string; imageUrl: string; title?: string }[];
-  faqs: { _id: string; question: string; answer: string }[];
-  offers: { _id: string; title: string; description?: string }[];
-  reviewSummary: { average: number; count: number };
-  reviews: { _id: string; guestName?: string; rating: number; comment: string }[];
-}
-
-async function getHotelDetails(slug: string): Promise<HotelDetailsData | null> {
-  try {
-    const res = await fetch(`${API_BASE_URL}/hotels/${slug}`, { cache: "no-store" });
-    const json = await res.json();
-    return json.success ? json.data : null;
-  } catch {
-    return null;
-  }
-}
-
-export async function generateMetadata({
-  params,
-}: {
-  params: { slug: string };
-}): Promise<Metadata> {
-  const data = await getHotelDetails(params.slug);
+export async function generateMetadata(): Promise<Metadata> {
+  const data = await getTheHotel();
   if (!data) return {};
 
   return {
@@ -54,8 +17,8 @@ export async function generateMetadata({
   };
 }
 
-export default async function HotelDetailsPage({ params }: { params: { slug: string } }) {
-  const data = await getHotelDetails(params.slug);
+export default async function HotelPage() {
+  const data = await getTheHotel();
   if (!data) return notFound();
 
   const { hotel, rooms, gallery, faqs, offers, reviewSummary, reviews } = data;
@@ -89,7 +52,7 @@ export default async function HotelDetailsPage({ params }: { params: { slug: str
         </ul>
       </section>
 
-      <section style={{ margin: "24px 0" }}>
+      <section style={{ margin: "24px 0" }} id="rooms">
         <h2>Rooms</h2>
         <div
           style={{
@@ -99,7 +62,7 @@ export default async function HotelDetailsPage({ params }: { params: { slug: str
           }}
         >
           {rooms.map((room) => (
-            <RoomCard key={room._id} hotelSlug={hotel.slug} room={room} />
+            <RoomCard key={room._id} room={room} />
           ))}
         </div>
       </section>
