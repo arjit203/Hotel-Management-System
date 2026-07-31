@@ -17,6 +17,7 @@ Unified booking + management platform for Hotel, Marriage Hall, and Restaurant u
 | Auth | JWT (separate secrets for User/Admin), bcrypt password hashing |
 | Payments | Razorpay (planned, not yet built) |
 | Email | Nodemailer (SMTP; logs to console in dev if SMTP unset) |
+| Media Storage | Cloudinary (image upload/transform/delete — added this session) |
 
 ## 3. Module Status
 | Module | Status |
@@ -92,14 +93,20 @@ Complete customer-facing and admin-facing hotel functionality: listing, details,
 - A new shared `utils/apiError.util.ts` (`ApiError` class) was introduced for the Hotel module and future modules to share; the Auth module's own local `ApiError` (inside `auth.service.ts`) was left untouched to avoid modifying a completed module — unifying these is flagged as minor tech debt for a future cleanup pass.
 
 ### Dependencies
-No new npm packages required — Hotel module uses only what Auth/scaffold already installed (`mongoose`, `zod`, `express`, `nodemailer`).
+No new npm packages required at initial build — Hotel module used only what Auth/scaffold already installed (`mongoose`, `zod`, `express`, `nodemailer`).
+- **`cloudinary`** (`^2.5.1`, added [2026-07-30] session) — image upload/transform/delete for Hotel/Room/Gallery/Offer images. `multer` (already in scaffold's `package.json` since initial setup but previously unused) now used for in-memory file handling ahead of the Cloudinary upload. No `@types/cloudinary` needed — the SDK ships its own types.
 
 ### Environment Variables Added
-None. Hotel module reuses existing `FRONTEND_URL`/`EMAIL_FROM`/SMTP vars from the Auth module's `.env`.
+- [2026-07-30] `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` — required for `POST/DELETE /api/v1/admin/hotels/upload-image` to function; get these from the Cloudinary dashboard (Settings → API Keys). Without them, upload routes respond `500` with a clear "not configured" message rather than crashing the server (see `config/cloudinary.ts`).
+- [2026-07-30] `MAX_IMAGE_UPLOAD_MB` (optional, default `5`) — max accepted upload size per image.
+- (Previously: none beyond reusing existing `FRONTEND_URL`/`EMAIL_FROM`/SMTP vars from the Auth module's `.env`.)
 
 ### Folder Locations
 - `backend/src/modules/hotel/` — models, service, controller, routes, validation (matches pre-approved path)
 - `backend/src/modules/content/` — new shared module (models + service) for Review/Gallery/Faq/Offer, per `FOLDER_STRUCTURE.md`'s `content/` slot
+- `backend/src/config/cloudinary.ts` — [2026-07-30] Cloudinary SDK config (shared, not hotel-specific — reuse for Hall/Restaurant later)
+- `backend/src/utils/cloudinary.util.ts` — [2026-07-30] shared upload/delete helper functions (shared, not hotel-specific)
+- `backend/src/middlewares/upload.middleware.ts` — [2026-07-30] multer memory-storage middleware (shared, not hotel-specific)
 - `frontend/src/modules/hotel/components/` — `HotelCard`, `RoomCard`, `BookingForm`
 - `frontend/src/components/` — new shared, vertical-agnostic components: `StarRating`, `FaqAccordion`, `GalleryGrid`, `MapPlaceholder`
 - `frontend/src/app/hotels/`, `frontend/src/app/booking-confirmation/` — Next.js App Router pages

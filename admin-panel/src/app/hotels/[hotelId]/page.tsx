@@ -4,9 +4,18 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import RequireAdmin from "@/components/RequireAdmin";
-import { adminApi } from "@/lib/api";
+import { adminApi, formatApiError } from "@/lib/api";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000/api/v1";
+
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-");
+}
 
 interface HotelData {
   _id: string;
@@ -42,6 +51,15 @@ interface GalleryData {
   imageUrl: string;
   category: string;
 }
+interface ReviewData {
+  _id: string;
+  guestName?: string;
+  rating: number;
+  comment: string;
+  isApproved: boolean;
+  adminReply?: string;
+  createdAt: string;
+}
 
 export default function ManageHotelPage() {
   const params = useParams();
@@ -52,6 +70,8 @@ export default function ManageHotelPage() {
   const [offers, setOffers] = useState<OfferData[]>([]);
   const [faqs, setFaqs] = useState<FaqData[]>([]);
   const [gallery, setGallery] = useState<GalleryData[]>([]);
+  const [reviews, setReviews] = useState<ReviewData[]>([]);
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
   const [showRoomForm, setShowRoomForm] = useState(false);
@@ -63,17 +83,20 @@ export default function ManageHotelPage() {
     basePrice: "",
     maxOccupancy: "2",
     totalRooms: "1",
+    amenities: "",
   });
 
   const [offerForm, setOfferForm] = useState({ title: "", description: "", validFrom: "", validTo: "" });
   const [faqForm, setFaqForm] = useState({ question: "", answer: "" });
   const [galleryForm, setGalleryForm] = useState({ imageUrl: "", category: "exterior" });
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
+  const [enlargedImage, setEnlargedImage] = useState<string | null>(null);
+  const [galleryFile, setGalleryFile] = useState<File | null>(null);
+  const [uploadingGallery, setUploadingGallery] = useState(false);
+  const [galleryUploadMethod, setGalleryUploadMethod] = useState<"file" | "camera" | "url">("file");
 
   async function loadAll() {
     setLoading(true);
-    // Hotel details (public endpoint returns rooms/offers/gallery/faqs too, but we
-    // need this hotel's slug first — fetch by iterating admin's own list once,
-    // simplest reliable path given no admin-only "get by id" public route).
     const listRes = await fetch(`${API_BASE_URL}/hotels`, { cache: "no-store" });
     const listJson = await listRes.json();
     const found = (listJson.data || []).find((h: any) => h._id === hotelId);
@@ -91,6 +114,10 @@ export default function ManageHotelPage() {
       setFaqs(detailsJson.data.faqs);
       setGallery(detailsJson.data.gallery);
     }
+
+    const reviewsRes = await adminApi.get<ReviewData[]>(`/admin/hotels/${hotelId}/reviews`);
+    if (reviewsRes.success) setReviews(reviewsRes.data || []);
+
     setLoading(false);
   }
 
@@ -106,9 +133,13 @@ export default function ManageHotelPage() {
       basePrice: Number(roomForm.basePrice),
       maxOccupancy: Number(roomForm.maxOccupancy),
       totalRooms: Number(roomForm.totalRooms),
+      amenities: roomForm.amenities
+        .split(",")
+        .map((a) => a.trim())
+        .filter(Boolean),
     });
     if (!res.success) {
-      alert(res.message);
+      alert(formatApiError(res));
       return;
     }
     setShowRoomForm(false);
@@ -120,6 +151,7 @@ export default function ManageHotelPage() {
       basePrice: "",
       maxOccupancy: "2",
       totalRooms: "1",
+      amenities: "",
     });
     loadAll();
   }
@@ -128,14 +160,14 @@ export default function ManageHotelPage() {
     if (!confirm("Deactivate this room?")) return;
     const res = await adminApi.delete(`/admin/hotels/rooms/${roomId}`);
     if (res.success) loadAll();
-    else alert(res.message);
+    else alert(formatApiError(res));
   }
 
   async function handleCreateOffer(e: React.FormEvent) {
     e.preventDefault();
     const res = await adminApi.post(`/admin/hotels/${hotelId}/offers`, offerForm);
     if (!res.success) {
-      alert(res.message);
+      alert(formatApiError(res));
       return;
     }
     setOfferForm({ title: "", description: "", validFrom: "", validTo: "" });
@@ -145,14 +177,14 @@ export default function ManageHotelPage() {
   async function handleDeleteOffer(offerId: string) {
     const res = await adminApi.delete(`/admin/hotels/offers/${offerId}`);
     if (res.success) loadAll();
-    else alert(res.message);
+    else alert(formatApiError(res));
   }
 
   async function handleCreateFaq(e: React.FormEvent) {
     e.preventDefault();
     const res = await adminApi.post(`/admin/hotels/${hotelId}/faqs`, faqForm);
     if (!res.success) {
-      alert(res.message);
+      alert(formatApiError(res));
       return;
     }
     setFaqForm({ question: "", answer: "" });
@@ -162,24 +194,78 @@ export default function ManageHotelPage() {
   async function handleDeleteFaq(faqId: string) {
     const res = await adminApi.delete(`/admin/hotels/faqs/${faqId}`);
     if (res.success) loadAll();
-    else alert(res.message);
+    else alert(formatApiError(res));
   }
+async function handleAddGalleryItem(e: React.FormEvent) {
+  e.preventDefault();
 
-  async function handleAddGalleryItem(e: React.FormEvent) {
-    e.preventDefault();
-    const res = await adminApi.post(`/admin/hotels/${hotelId}/gallery`, galleryForm);
-    if (!res.success) {
-      alert(res.message);
+  let finalImageUrl = "";
+
+  if (galleryUploadMethod === "url") {
+    if (!galleryForm.imageUrl.trim()) {
+      alert("Please paste an image URL.");
       return;
     }
-    setGalleryForm({ imageUrl: "", category: "exterior" });
-    loadAll();
+    finalImageUrl = galleryForm.imageUrl.trim();
+  } else {
+    if (!galleryFile) {
+      alert(galleryUploadMethod === "camera" ? "Please take a photo." : "Please choose an image file.");
+      return;
+    }
+    setUploadingGallery(true);
+    const uploadRes = await adminApi.upload(galleryFile, "gallery");
+    setUploadingGallery(false);
+    if (!uploadRes.success || !uploadRes.data) {
+      alert(formatApiError(uploadRes));
+      return;
+    }
+    finalImageUrl = uploadRes.data.url;
   }
 
+  const res = await adminApi.post(`/admin/hotels/${hotelId}/gallery`, {
+    imageUrl: finalImageUrl,
+    category: galleryForm.category,
+  });
+  if (!res.success) {
+    alert(formatApiError(res));
+    return;
+  }
+  setGalleryForm({ imageUrl: "", category: "exterior" });
+  setGalleryFile(null);
+  loadAll();
+}
   async function handleDeleteGalleryItem(itemId: string) {
     const res = await adminApi.delete(`/admin/hotels/gallery/${itemId}`);
     if (res.success) loadAll();
-    else alert(res.message);
+    else alert(formatApiError(res));
+  }
+
+  async function handleApproveReview(reviewId: string) {
+    const res = await adminApi.put(`/admin/hotels/reviews/${reviewId}/approve`, {});
+    if (res.success) loadAll();
+    else alert(formatApiError(res));
+  }
+
+  async function handleReplyToReview(reviewId: string) {
+    const reply = (replyDrafts[reviewId] || "").trim();
+    if (!reply) {
+      alert("Please write a reply first.");
+      return;
+    }
+    const res = await adminApi.put(`/admin/hotels/reviews/${reviewId}/reply`, { reply });
+    if (!res.success) {
+      alert(formatApiError(res));
+      return;
+    }
+    setReplyDrafts((prev) => ({ ...prev, [reviewId]: "" }));
+    loadAll();
+  }
+
+  async function handleDeleteReview(reviewId: string) {
+    if (!confirm("Delete this review permanently?")) return;
+    const res = await adminApi.delete(`/admin/hotels/reviews/${reviewId}`);
+    if (res.success) loadAll();
+    else alert(formatApiError(res));
   }
 
   if (loading) {
@@ -235,16 +321,10 @@ export default function ManageHotelPage() {
               <input
                 required
                 value={roomForm.name}
-                onChange={(e) => setRoomForm({ ...roomForm, name: e.target.value })}
-                style={inputStyle}
-              />
-            </label>
-            <label style={labelStyle}>
-              Slug
-              <input
-                required
-                value={roomForm.slug}
-                onChange={(e) => setRoomForm({ ...roomForm, slug: e.target.value })}
+                onChange={(e) => {
+                  const name = e.target.value;
+                  setRoomForm((prev) => ({ ...prev, name, slug: slugify(name) }));
+                }}
                 style={inputStyle}
               />
             </label>
@@ -286,6 +366,16 @@ export default function ManageHotelPage() {
                 onChange={(e) => setRoomForm({ ...roomForm, totalRooms: e.target.value })}
                 style={inputStyle}
               />
+            </label>
+            <label style={labelStyle}>
+              Amenities
+              <input
+                value={roomForm.amenities}
+                onChange={(e) => setRoomForm({ ...roomForm, amenities: e.target.value })}
+                placeholder="e.g. AC, Free WiFi, Mini Bar"
+                style={inputStyle}
+              />
+              <small style={{ color: "#888" }}>Comma-separated list.</small>
             </label>
             <button type="submit" style={btnPrimary}>
               Create Room
@@ -381,46 +471,139 @@ export default function ManageHotelPage() {
         ))}
       </section>
 
+
       {/* GALLERY */}
+
       <section style={{ marginTop: 32 }}>
         <h2>Gallery</h2>
         <form onSubmit={handleAddGalleryItem} style={formBox}>
           <label style={labelStyle}>
-            Image URL
-            <input
-              required
-              value={galleryForm.imageUrl}
-              onChange={(e) => setGalleryForm({ ...galleryForm, imageUrl: e.target.value })}
-              style={inputStyle}
-            />
-          </label>
+  Add Image Via
+  <div style={{ display: "flex", gap: 16, marginTop: 4, marginBottom: 8 }}>
+    <label style={{ fontWeight: "normal" }}>
+      <input
+        type="radio"
+        name="galleryUploadMethod"
+        checked={galleryUploadMethod === "file"}
+        onChange={() => setGalleryUploadMethod("file")}
+      />{" "}
+      Upload File
+    </label>
+    <label style={{ fontWeight: "normal" }}>
+      <input
+        type="radio"
+        name="galleryUploadMethod"
+        checked={galleryUploadMethod === "camera"}
+        onChange={() => setGalleryUploadMethod("camera")}
+      />{" "}
+      Take Photo
+    </label>
+    <label style={{ fontWeight: "normal" }}>
+      <input
+        type="radio"
+        name="galleryUploadMethod"
+        checked={galleryUploadMethod === "url"}
+        onChange={() => setGalleryUploadMethod("url")}
+      />{" "}
+      Image URL
+    </label>
+  </div>
+</label>
+
+{galleryUploadMethod === "url" ? (
+  <label style={labelStyle}>
+    Image URL
+    <input
+      value={galleryForm.imageUrl}
+      onChange={(e) => setGalleryForm({ ...galleryForm, imageUrl: e.target.value })}
+      placeholder="https://example.com/photo.jpg"
+      style={inputStyle}
+    />
+  </label>
+) : (
+  <label style={labelStyle}>
+    {galleryUploadMethod === "camera" ? "Take Photo" : "Image File"}
+    <input
+      key={galleryUploadMethod}
+      type="file"
+      accept="image/*"
+      capture={galleryUploadMethod === "camera" ? "environment" : undefined}
+      onChange={(e) => setGalleryFile(e.target.files?.[0] || null)}
+      style={inputStyle}
+    />
+  </label>
+)}
           <label style={labelStyle}>
             Category
-            <input
-              required
-              value={galleryForm.category}
-              onChange={(e) => setGalleryForm({ ...galleryForm, category: e.target.value })}
+            <select
+              value={isCustomCategory ? "other" : galleryForm.category}
+              onChange={(e) => {
+                if (e.target.value === "other") {
+                  setIsCustomCategory(true);
+                  setGalleryForm({ ...galleryForm, category: "" });
+                } else {
+                  setIsCustomCategory(false);
+                  setGalleryForm({ ...galleryForm, category: e.target.value });
+                }
+              }}
               style={inputStyle}
-            />
+            >
+              <option value="Exterior">Exterior</option>
+              <option value="Interior">Interior</option>
+              <option value="Food">Food</option>
+              <option value="Building">Building</option>
+              <option value="Rooms">Rooms</option>
+              <option value="other">Other (custom)</option>
+            </select>
           </label>
-          <button type="submit" style={btnPrimary}>
-            Add Image
-          </button>
+          {isCustomCategory && (
+            <label style={labelStyle}>
+              Custom Category
+              <input
+                required
+                value={galleryForm.category}
+                onChange={(e) => setGalleryForm({ ...galleryForm, category: e.target.value })}
+                placeholder="Enter custom category name"
+                style={inputStyle}
+              />
+            </label>
+          )}
+       <button type="submit" style={btnPrimary} disabled={uploadingGallery}>
+              {uploadingGallery ? "Uploading..." : "Add Image"}
+            </button>
         </form>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 12 }}>
-          {gallery.map((g) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <div key={g._id} style={{ position: "relative" }}>
-              <img src={g.imageUrl} alt="" style={{ width: 120, height: 90, objectFit: "cover", borderRadius: 6 }} />
-              <button
-                onClick={() => handleDeleteGalleryItem(g._id)}
-                style={{ position: "absolute", top: 2, right: 2, background: "#c00", color: "#fff", border: "none", borderRadius: 4, fontSize: 11, cursor: "pointer" }}
-              >
-                ✕
-              </button>
-            </div>
-          ))}
+
+       {Object.entries(
+  gallery.reduce((acc: Record<string, typeof gallery>, g) => {
+    const key = g.category || "Other";
+    acc[key] = acc[key] || [];
+    acc[key].push(g);
+    return acc;
+  }, {})
+).map(([category, items]) => (
+  <div key={category} style={{ marginTop: 16 }}>
+    <h4 style={{ textTransform: "capitalize", margin: "0 0 8px" }}>{category}</h4>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+      {items.map((g) => (
+        <div key={g._id} style={{ position: "relative" }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={g.imageUrl}
+            alt=""
+            onClick={() => setEnlargedImage(g.imageUrl)}
+            style={{ width: 120, height: 90, objectFit: "cover", borderRadius: 6, cursor: "pointer" }}
+          />
+          <button
+            onClick={() => handleDeleteGalleryItem(g._id)}
+            style={{ position: "absolute", top: 2, right: 2, background: "#c00", color: "#fff", border: "none", borderRadius: 4, fontSize: 11, cursor: "pointer" }}
+          >
+            ✕
+          </button>
         </div>
+      ))}
+    </div>
+  </div>
+))}
       </section>
 
       {/* FAQS */}
@@ -460,6 +643,78 @@ export default function ManageHotelPage() {
           </div>
         ))}
       </section>
+
+      {/* REVIEWS */}
+      <section style={{ marginTop: 32 }}>
+        <h2>Reviews</h2>
+        {reviews.length === 0 ? (
+          <p style={{ color: "#888" }}>No reviews yet.</p>
+        ) : (
+          reviews.map((r) => (
+            <div key={r._id} style={{ border: "1px solid #e5e5e5", borderRadius: 8, padding: 12, marginBottom: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <strong>{r.guestName || "Guest"}</strong>
+                <span
+                  style={{
+                    fontSize: 12,
+                    padding: "2px 8px",
+                    borderRadius: 12,
+                    background: r.isApproved ? "#e6f7e6" : "#fff3cd",
+                    color: r.isApproved ? "#237804" : "#8a6d00",
+                  }}
+                >
+                  {r.isApproved ? "Approved (public)" : "Pending approval"}
+                </span>
+              </div>
+              <p style={{ margin: "6px 0" }}>{"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}</p>
+              <p style={{ margin: "6px 0" }}>{r.comment}</p>
+
+              {r.adminReply && (
+                <p style={{ margin: "6px 0", padding: 8, background: "#f5f5f5", borderRadius: 6 }}>
+                  <strong>Your reply:</strong> {r.adminReply}
+                </p>
+              )}
+
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                {!r.isApproved && (
+                  <button onClick={() => handleApproveReview(r._id)} style={btnPrimary}>
+                    Approve
+                  </button>
+                )}
+                <button onClick={() => handleDeleteReview(r._id)} style={linkDanger}>
+                  Delete
+                </button>
+              </div>
+
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <input
+                  value={replyDrafts[r._id] || ""}
+                  onChange={(e) => setReplyDrafts((prev) => ({ ...prev, [r._id]: e.target.value }))}
+                  placeholder={r.adminReply ? "Update your reply..." : "Write a reply..."}
+                  style={{ ...inputStyle, flex: 1 }}
+                />
+                <button onClick={() => handleReplyToReview(r._id)} style={btnPrimary}>
+                  {r.adminReply ? "Update Reply" : "Reply"}
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </section>
+
+      {enlargedImage && (
+  <div
+    onClick={() => setEnlargedImage(null)}
+    style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      zIndex: 1000, cursor: "pointer",
+    }}
+  >
+    {/* eslint-disable-next-line @next/next/no-img-element */}
+    <img src={enlargedImage} alt="Enlarged" style={{ maxWidth: "90%", maxHeight: "90%", borderRadius: 8 }} />
+  </div>
+)}
     </RequireAdmin>
   );
 }

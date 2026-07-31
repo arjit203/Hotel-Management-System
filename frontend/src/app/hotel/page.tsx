@@ -5,6 +5,7 @@ import GalleryGrid from "@/components/GalleryGrid";
 import FaqAccordion from "@/components/FaqAccordion";
 import MapPlaceholder from "@/components/MapPlaceholder";
 import RoomCard from "@/modules/hotel/components/RoomCard";
+import ReviewForm from "@/modules/hotel/components/ReviewForm";
 import { getTheHotel } from "@/lib/hotel";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -89,6 +90,7 @@ export default async function HotelPage() {
             </div>
           ))
         )}
+        <ReviewForm hotelId={hotel._id} />
       </section>
 
       {faqs.length > 0 && (

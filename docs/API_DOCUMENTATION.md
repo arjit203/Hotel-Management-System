@@ -157,10 +157,13 @@ All routes below require `authenticate('admin')`; most also require `requireRole
 | `PUT /:hotelId` | super_admin, branch_admin | Update hotel |
 | `DELETE /:hotelId` | super_admin, branch_admin | Soft-delete (deactivate) hotel — blocked if active rooms exist |
 | `POST /:hotelId/rooms` | super_admin, branch_admin | Create room |
+| `GET /rooms/:roomId` | super_admin, branch_admin, staff | Get a single room's full details (used by Edit Room form) |
 | `PUT /rooms/:roomId` | super_admin, branch_admin | Update room |
 | `DELETE /rooms/:roomId` | super_admin, branch_admin | Soft-delete room — blocked if active/upcoming bookings exist |
 | `PUT /rooms/:roomId/availability` | super_admin, branch_admin | Set/override blocked-room-count for a specific date |
 | `GET /rooms/:roomId/availability` | super_admin, branch_admin, staff | List availability overrides |
+| `POST /upload-image?folder=` | super_admin, branch_admin | Upload an image to Cloudinary, returns `{ url, publicId, ... }` |
+| `DELETE /upload-image` | super_admin, branch_admin | Delete an image from Cloudinary by `publicId` |
 | `POST /:hotelId/gallery` | super_admin, branch_admin | Add gallery image |
 | `DELETE /gallery/:itemId` | super_admin, branch_admin | Remove gallery image |
 | `POST /:hotelId/offers` | super_admin, branch_admin | Create offer |
@@ -170,6 +173,21 @@ All routes below require `authenticate('admin')`; most also require `requireRole
 | `DELETE /faqs/:faqId` | super_admin, branch_admin | Delete FAQ |
 | `GET /bookings?hotelId=&status=` | super_admin, branch_admin, staff | List bookings (filterable) |
 | `PUT /bookings/:bookingId/status` | super_admin, branch_admin | Update booking status (pending/confirmed/checked_in/checked_out/cancelled) |
+
+### `POST /api/v1/admin/hotels/upload-image?folder=rooms`
+Protected, `super_admin`/`branch_admin`. Multipart form-data, field name **`image`** (single file). `folder` query param is optional and namespaces the asset in Cloudinary (e.g. `rooms`, `gallery`, `offers`, `hotel-cover`) — defaults to `misc`.
+Accepted types: JPEG, PNG, WEBP, AVIF. Max size: `MAX_IMAGE_UPLOAD_MB` env var (default 5MB).
+**Response 201:**
+```json
+{ "success": true, "message": "Image uploaded.", "data": { "url": "https://res.cloudinary.com/.../room-1.jpg", "publicId": "7vachan/hotel/rooms/abc123", "width": 1600, "height": 1067, "format": "jpg", "bytes": 284213 } }
+```
+Use the returned `url` as the value for `imageUrl` (Gallery/Offer) or an entry in `images[]` (Room) in the existing create/update endpoints — those bodies are unchanged. Keep the `publicId` client-side if you want to allow deleting that image later.
+**Errors:** `400` no file / disallowed type / oversized · `500` Cloudinary not configured on server · `502` upload failed
+
+### `DELETE /api/v1/admin/hotels/upload-image`
+Protected, `super_admin`/`branch_admin`. **Body:** `{ "publicId": "7vachan/hotel/rooms/abc123" }`.
+**Response 200:** `{ "success": true, "message": "Image deleted." }`
+**Errors:** `400` missing publicId · `500` Cloudinary not configured · `502` delete failed
 
 ### Validation Rules (Hotel/Room creation)
 - `slug`: lowercase, alphanumeric + hyphens only, unique per hotel (rooms) / globally (hotels)

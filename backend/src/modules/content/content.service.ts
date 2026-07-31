@@ -3,6 +3,7 @@ import { Review, ReviewableType } from "./models/review.model";
 import { GalleryItem, GalleryOwnerType } from "./models/gallery.model";
 import { Faq, FaqApplicableTo } from "./models/faq.model";
 import { Offer, OfferApplicableTo } from "./models/offer.model";
+import { ApiError } from "../../utils/apiError.util";
 
 // ---------- REVIEWS ----------
 export async function getApprovedReviews(reviewableType: ReviewableType, reviewableId: string) {
@@ -29,6 +30,31 @@ export async function createReview(input: {
     userId: input.userId ? new Types.ObjectId(input.userId) : null,
     reviewableId: new Types.ObjectId(input.reviewableId),
   });
+}
+
+// ---------- REVIEWS (admin moderation) ----------
+// All reviews (approved AND pending) for the admin panel's Reviews section —
+// the public getApprovedReviews() above only returns already-approved ones.
+export async function getAllReviewsForAdmin(reviewableType: ReviewableType, reviewableId: string) {
+  return Review.find({ reviewableType, reviewableId }).sort({ createdAt: -1 });
+}
+
+export async function approveReview(reviewId: string) {
+  const review = await Review.findByIdAndUpdate(reviewId, { isApproved: true }, { new: true });
+  if (!review) throw new ApiError(404, "Review not found.");
+  return review;
+}
+
+export async function replyToReview(reviewId: string, reply: string) {
+  const review = await Review.findByIdAndUpdate(reviewId, { adminReply: reply }, { new: true });
+  if (!review) throw new ApiError(404, "Review not found.");
+  return review;
+}
+
+export async function deleteReview(reviewId: string) {
+  const review = await Review.findByIdAndDelete(reviewId);
+  if (!review) throw new ApiError(404, "Review not found.");
+  return review;
 }
 
 // ---------- GALLERY ----------

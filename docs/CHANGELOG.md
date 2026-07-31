@@ -4,6 +4,98 @@ Format: newest entries on top. Categories: Added / Changed / Fixed / Security / 
 
 ---
 
+## [2026-07-31 (c)] — Fix: Email verification always failed on first click (StrictMode double-effect bug)
+
+### Fixed
+- `frontend/src/app/verify-email/[token]/page.tsx` — `useEffect` fired the verify API call twice in development, because `next.config.js` has `reactStrictMode: true` (intentional React 18 dev behavior — mounts effects twice to surface side-effect bugs). The backend's verification token is single-use (`emailVerificationToken` is cleared immediately after a successful verify in `auth.service.ts`'s `verifyUserEmail`), so the first call succeeded but the second call — same token, now already cleared — always failed with "Verification link is invalid or has expired." Since the effect had no guard, the second (failing) response overwrote the first (successful) one, and the user always saw the failure message regardless of whether verification actually succeeded.
+- Fix: added a `useRef` guard so the verify request only ever fires once per page load, regardless of StrictMode's double-invocation.
+
+### Notes
+- No backend change — the single-use-token behavior is correct and intentional; the bug was purely in how the frontend called it.
+- This means any account created before this fix, where the person saw "invalid or expired" on their first click, is likely **already verified** on the backend despite the error shown — worth confirming via `GET /auth/user/me` or the admin's user list rather than assuming those signups failed.
+- Verified: `next build` — 0 errors, all 9 routes compile.
+
+---
+
+## [2026-07-31 (b)] — Customer Login/Signup (frontend) + Review system completion (write form, guest+logged-in support)
+
+### Added
+- **Frontend — Customer auth (new):** `frontend/src/lib/userAuth.ts` (token/user storage, separate from admin-panel's — different actor type/JWT), `frontend/src/components/Header.tsx` (site-wide header, top-right Login/Signup buttons, swaps to "Hi, {name}" + Logout when signed in), `frontend/src/app/login/page.tsx`, `frontend/src/app/signup/page.tsx`, `frontend/src/app/verify-email/[token]/page.tsx` (handles the verification link the backend already emails via `EMAIL_VERIFICATION_EXPIRY_HOURS` — this link previously had no corresponding frontend page). All wired to the **already-existing** backend endpoints (`/auth/user/signup`, `/auth/user/login`, `/auth/user/verify-email/:token`) — no backend auth changes needed, only frontend never called them.
+- `frontend/src/app/layout.tsx` — now renders `<Header />` above `{children}` site-wide.
+- **Review write form** (`frontend/src/modules/hotel/components/ReviewForm.tsx`) is now actually rendered on the hotel page (`app/hotel/page.tsx`) — previously the component existed but nothing imported/rendered it, so there was no way to submit a review at all, only view existing ones.
+- Reviews support **both** logged-in customers and guests, per explicit decision: `ReviewForm` checks for a stored user token — if present, sends it as a Bearer token and shows "Posting as {name}" (skips asking for a name); if absent, shows the "Your Name" field for a guest submission. Backend (`optionalAuthenticate` on the reviews route, `guestName` fallback in `createHotelReview`) already supported both paths from the prior session.
+
+### Notes
+- No backend changes in this entry — confirmed via route/controller/schema review that guest+logged-in review support, admin review moderation (list/approve/reply/delete), and full user signup/login/verify-email/forgot-password were already built; this entry closes the remaining frontend gap (no way to sign up, log in, or submit a review at all).
+- Verified: `tsc --noEmit` (backend) — 0 errors. `next build` (admin-panel) — 0 errors. `next build` (frontend, using a temporary tsconfig copy to route around the separately-flagged `ignoreDeprecations` bug) — 0 errors, all 9 routes compile including the 3 new ones.
+- Email verification and password reset both depend on SMTP being configured in `backend/.env` (falls back to console-logging the email content in dev if unset, per the Auth module's existing behavior) — nothing new here, just a reminder since it now has a real frontend entry point.
+
+---
+
+## [2026-07-31] — Room Amenities field, Edit Room form, Gallery category grouping
+
+### Added
+- **Backend:** `GET /api/v1/admin/hotels/rooms/:roomId` (new) — wires the already-existing `hotelService.getRoomById()` (previously unused by any route) to an admin endpoint. Needed so the admin panel's new Edit Room form can pre-fill current values. Roles: `super_admin`, `branch_admin`, `staff` (view-only parity with the existing availability GET route).
+- **Admin Panel — Room create form:** new "Amenities" input (comma-separated text, split into a `string[]` on submit) — backend already supported `amenities` on `Room` (`room.model.ts`, `createRoomSchema`), the admin form simply never exposed it.
+- **Admin Panel — Room edit form** (new, on the existing "Manage Room" page at `/hotels/[hotelId]/rooms/[roomId]`): pre-filled via the new GET endpoint above, saves via the already-existing `PUT /api/v1/admin/hotels/rooms/:roomId`. Covers Category, Name, Slug (with a warning about changing a live room's public URL), Description, Base Price, Max Occupancy, Total Rooms, Amenities. Previously this page only supported availability-blocking; there was no way to edit a room's own fields after creation without calling the API directly.
+- **Public site — Gallery grouping by category:** `frontend/src/components/GalleryGrid.tsx` now groups images by `category` (e.g. "exterior", "room", "food") with a subheading per group, instead of one flat unlabeled grid. `category` was already saved to the database via the admin Gallery form and returned by the API, but no frontend code ever read or displayed it. `frontend/src/lib/hotel.ts`'s `HotelDetailsData` type updated to include `category` on gallery items (was previously typed narrower than the actual API response).
+
+### Changed
+- `admin-panel/src/lib/api.ts` — `formatApiError()` moved here from the hotel-detail page (`[hotelId]/page.tsx`) and exported, so the new room-edit page can reuse it instead of duplicating it. No behavior change to existing callers.
+
+### Notes
+- No schema changes; no breaking changes to any existing endpoint.
+- Verified: `tsc --noEmit` (backend) — 0 errors. `next build` (admin-panel) — 0 errors, all 7 routes compile. Frontend verified via a temporary tsconfig copy (see below) — 0 errors in edited files.
+- **Separate, pre-existing issue found (not caused by this or any prior change in this session):** `frontend/tsconfig.json` has `"ignoreDeprecations": "6.0"`, which is not a valid value for the installed TypeScript version (5.9.3 — only `"5.0"` is currently valid) and makes `next build` fail immediately in the frontend workspace, unrelated to any source file. Flagged for a decision — not fixed here since it wasn't part of this request and touches a config file outside this session's scope.
+
+---
+
+## [2026-07-30 (c)] — Admin Panel: Surface field-level validation errors + auto-slug (Hotel → Rooms/Offers/FAQs/Gallery forms)
+
+### Fixed
+- `admin-panel/src/app/hotels/[hotelId]/page.tsx` — every form on this page (Room/Offer/FAQ/Gallery create+delete) called `alert(res.message)` on failure, which only ever showed the generic `"Validation failed"` string and discarded the actual per-field reason the API already returns in `res.errors` (e.g. `slug: Invalid`). This made it impossible to tell *which* field was wrong or why. Added a `formatApiError(res)` helper that renders `field: message` for each validation error when present, falling back to `res.message` for non-validation failures (409 conflicts, 403s, etc.). Applied consistently across all 8 alert call sites on this page.
+
+### Added
+- Room creation form: **Slug now auto-fills from Name** using a `slugify()` helper (lowercase, spaces → hyphens, strips anything outside `[a-z0-9-]`) — matches the backend's slug regex (`hotel.validation.ts`) exactly, so a correctly-typed Name can no longer produce an invalid slug. A `slugEditedManually` flag ensures that once the admin edits the Slug field by hand, further Name edits don't silently overwrite their choice. Helper text added under the Slug field explaining the allowed format.
+
+### Notes
+- Root cause of the reported error: the admin had typed `A s` into Slug (uppercase + space) — backend rejects this per `/^[a-z0-9-]+$/`. Auto-slug generation prevents this class of error going forward; the improved error message would also have made the original cause immediately obvious.
+- No backend route, schema, or API contract changed — this is an admin-panel-only UX fix.
+- Verified: `next build` succeeds with zero type errors across the admin-panel app after this change.
+
+---
+
+## [2026-07-30 (b)] — Fix: Cloudinary env vars not picked up at boot (import-order bug)
+
+### Fixed
+- `backend/src/config/cloudinary.ts` was reading `process.env.CLOUDINARY_*` **at module-import time**, but `server.ts` calls `dotenv.config()` *after* its own imports resolve (imports always run before later statements in the same file) — so Cloudinary was configured with empty values on every boot regardless of what was actually in `.env`, and the "not configured" warning printed even when the env vars were set correctly.
+- Fix: `cloudinary.config()` and the "is it configured" check now happen **lazily**, inside `configureCloudinary()` / `isCloudinaryConfigured()`, called only when an upload/delete actually runs (well after `dotenv.config()` has executed) — mirrors the existing lazy pattern already used in `config/db.ts`'s `connectDB()`.
+- No API contract, schema, or route changed — this is an internal correctness fix confined to files added in the `[2026-07-30]` entry above.
+
+---
+
+## [2026-07-30] — Cloudinary Image Upload Integration (Hotel Module Completion phase)
+
+### Added
+- `backend/src/config/cloudinary.ts` — Cloudinary SDK configuration (shared, not Hotel-specific; reusable by future Hall/Restaurant modules).
+- `backend/src/utils/cloudinary.util.ts` — shared `uploadImageBuffer(buffer, folder)` / `deleteImageByPublicId(publicId)` helpers.
+- `backend/src/middlewares/upload.middleware.ts` — multer memory-storage middleware (image mimetype + size validation); files are never written to local disk.
+- `POST /api/v1/admin/hotels/upload-image?folder=` — admin-only (`super_admin`/`branch_admin`), uploads an image to Cloudinary, returns `{ url, publicId, width, height, format, bytes }`.
+- `DELETE /api/v1/admin/hotels/upload-image` — admin-only, deletes an image from Cloudinary by `publicId`.
+- `AI_INSTRUCTIONS.md` §21 "How to Handle Media/Image Uploads" — Cloudinary is now the documented standard media provider (was previously missing from both `RULES.md` and `AI_INSTRUCTIONS.md`, flagged and corrected in this session).
+- New env vars: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `MAX_IMAGE_UPLOAD_MB` (optional, default 5).
+- New dependency: `cloudinary@^2.5.1` (backend). `multer` was already present in `package.json` since initial scaffold but had zero usages until now.
+
+### Changed
+- `backend/src/middlewares/error.middleware.ts` — additive change only: now normalizes Multer upload errors (previously fell through as generic `500`) to a proper `400` with the specific message (e.g. disallowed file type, oversized file). No existing error-handling behavior for other error types was altered.
+
+### Notes
+- **No existing Hotel/Room/Gallery/Offer schema or endpoint was changed.** These continue to accept `imageUrl`/`images` as plain string(s), exactly as before. The new upload endpoint is a separate, additive step: admin panel uploads the file first, gets back a Cloudinary `url`, then passes that string into the existing create/update calls unchanged.
+- This closes a real documentation gap: the original Hotel Module Completion brief referenced "Image Upload using existing Cloudinary integration," but no Cloudinary integration existed in the codebase prior to this entry (confirmed via full codebase search — only unused `multer` was present). `RULES.md` was **not** modified (frozen, requires the explicit "update RULES.md" phrase per its own governance clause) — flagged to the owner for a decision.
+- Verified: `npm install` (backend) succeeds with the new dependency; `tsc --noEmit` passes with zero errors across the full backend after these changes.
+
+---
+
 ## [2026-07-25 (c)] — Hotel Frontend Simplification (single-property, Option A)
 
 ### Changed

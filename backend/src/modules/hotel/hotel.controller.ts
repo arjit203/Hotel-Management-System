@@ -2,6 +2,9 @@ import { Request, Response, NextFunction } from "express";
 import * as hotelService from "./hotel.service";
 import * as bookingService from "./booking.service";
 import * as contentService from "../content/content.service";
+import { User } from "../auth/models/user.model";
+import { uploadImageBuffer, deleteImageByPublicId } from "../../utils/cloudinary.util";
+import { ApiError } from "../../utils/apiError.util";
 import {
   createHotelSchema,
   updateHotelSchema,
@@ -11,6 +14,7 @@ import {
   availabilityQuerySchema,
   createBookingSchema,
   createReviewSchema,
+  replyReviewSchema,
 } from "./hotel.validation";
 
 function handleZodError(res: Response, error: any) {
@@ -99,9 +103,19 @@ export async function createHotelReview(req: Request, res: Response, next: NextF
   if (!parsed.success) return handleZodError(res, parsed.error);
 
   try {
-    const actor = (req as any).actor; // set by authenticate('user') middleware on this route
+    const actor = (req as any).actor; // set by optionalAuthenticate('user') — may be undefined for guests
+    let guestName = parsed.data.guestName;
+    if (actor?.id) {
+      // Logged-in user: prefer their account name over anything submitted client-side.
+      const user = await User.findById(actor.id).select("name");
+      guestName = user?.name || guestName;
+    }
+    if (!guestName) {
+      throw new ApiError(400, "Please provide your name.");
+    }
     const review = await contentService.createReview({
       userId: actor?.id,
+      guestName,
       reviewableType: "hotel",
       reviewableId: req.params.hotelId,
       rating: parsed.data.rating,
@@ -112,6 +126,51 @@ export async function createHotelReview(req: Request, res: Response, next: NextF
       message: "Review submitted. It will appear after admin approval.",
       data: review,
     });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ================== ADMIN: REVIEWS ==================
+// Reviews are shared/polymorphic (per content module), but exposed here under
+// the Hotel admin namespace since only the Hotel vertical exists today —
+// Hall/Restaurant admin routes can call the same contentService functions
+// later without duplicating this logic.
+
+export async function adminListReviews(req: Request, res: Response, next: NextFunction) {
+  try {
+    const reviews = await contentService.getAllReviewsForAdmin("hotel", req.params.hotelId);
+    res.status(200).json({ success: true, data: reviews });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function adminApproveReview(req: Request, res: Response, next: NextFunction) {
+  try {
+    const review = await contentService.approveReview(req.params.reviewId);
+    res.status(200).json({ success: true, message: "Review approved.", data: review });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function adminReplyToReview(req: Request, res: Response, next: NextFunction) {
+  const parsed = replyReviewSchema.safeParse(req.body);
+  if (!parsed.success) return handleZodError(res, parsed.error);
+
+  try {
+    const review = await contentService.replyToReview(req.params.reviewId, parsed.data.reply);
+    res.status(200).json({ success: true, message: "Reply saved.", data: review });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function adminDeleteReview(req: Request, res: Response, next: NextFunction) {
+  try {
+    await contentService.deleteReview(req.params.reviewId);
+    res.status(200).json({ success: true, message: "Review deleted." });
   } catch (err) {
     next(err);
   }
@@ -204,6 +263,19 @@ export async function adminCreateRoom(req: Request, res: Response, next: NextFun
   }
 }
 
+// Fetch a single room by ID — used by the admin panel's "Edit Room" form to
+// pre-fill current values. hotelService.getRoomById already existed (used
+// internally elsewhere) but had no controller/route exposing it; this is a
+// pure wiring addition, no service-layer logic changed.
+export async function adminGetRoom(req: Request, res: Response, next: NextFunction) {
+  try {
+    const room = await hotelService.getRoomById(req.params.roomId);
+    res.status(200).json({ success: true, data: room });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function adminUpdateRoom(req: Request, res: Response, next: NextFunction) {
   const parsed = updateRoomSchema.safeParse(req.body);
   if (!parsed.success) return handleZodError(res, parsed.error);
@@ -279,6 +351,43 @@ export async function adminDeleteGalleryItem(req: Request, res: Response, next: 
   try {
     await contentService.deleteGalleryItem(req.params.itemId);
     res.status(200).json({ success: true, message: "Gallery item deleted." });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ================== ADMIN: MEDIA (CLOUDINARY) ==================
+// Generic image upload used by Hotel/Room/Gallery/Offer admin forms.
+// Flow: admin uploads a file here first, gets back { url, publicId }, then
+// sends that `url` string in the existing create/update Hotel/Room/Gallery/
+// Offer request bodies (those endpoints are unchanged — they already accept
+// imageUrl/images as plain strings, see hotel.model.ts / room.model.ts /
+// gallery.model.ts / offer.model.ts).
+
+export async function adminUploadImage(req: Request, res: Response, next: NextFunction) {
+  try {
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ success: false, message: "No image file provided (field name: 'image')." });
+    }
+    // folder query param lets the admin panel namespace the asset, e.g.
+    // ?folder=rooms | gallery | offers | hotel-cover. Falls back to "misc".
+    const folder = `7vachan/hotel/${(req.query.folder as string) || "misc"}`;
+    const result = await uploadImageBuffer(file.buffer, folder);
+    res.status(201).json({ success: true, message: "Image uploaded.", data: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function adminDeleteImage(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { publicId } = req.body;
+    if (!publicId) {
+      throw new ApiError(400, "publicId is required.");
+    }
+    await deleteImageByPublicId(publicId);
+    res.status(200).json({ success: true, message: "Image deleted." });
   } catch (err) {
     next(err);
   }

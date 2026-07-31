@@ -1,6 +1,7 @@
 import { Router } from "express";
 import * as hotelController from "./hotel.controller";
 import { authenticate, optionalAuthenticate, requireRole } from "../../middlewares/auth.middleware";
+import { uploadImage } from "../../middlewares/upload.middleware";
 
 // Admins allowed to manage hotel content — Super Admin (branchId=null) or the
 // Branch Admin for that property. Staff can view but not mutate (per typical
@@ -18,10 +19,13 @@ publicHotelRouter.get("/:slug/rooms", hotelController.listRooms);
 publicHotelRouter.get("/:slug/rooms/:roomSlug", hotelController.getRoomDetails);
 publicHotelRouter.get("/rooms/:roomId/availability", hotelController.checkRoomAvailability);
 
-// Reviews — posting requires a logged-in user (not guests), per common practice.
+// Reviews — guest reviews allowed (no login required), per explicit owner
+// decision. optionalAuthenticate attaches a user if a valid token is present
+// (their account name is used), but never blocks the request — matching the
+// same guest-checkout pattern already used for hotel bookings.
 publicHotelRouter.post(
   "/:hotelId/reviews",
-  authenticate("user"),
+  optionalAuthenticate("user"),
   hotelController.createHotelReview
 );
 
@@ -58,11 +62,12 @@ adminHotelRouter.post(
   requireRole(...HOTEL_MANAGER_ROLES),
   hotelController.adminCreateRoom
 );
-adminHotelRouter.put(
+adminHotelRouter.get(
   "/rooms/:roomId",
-  requireRole(...HOTEL_MANAGER_ROLES),
-  hotelController.adminUpdateRoom
+  requireRole(...HOTEL_MANAGER_ROLES, "staff"),
+  hotelController.adminGetRoom
 );
+adminHotelRouter.put("/rooms/:roomId", requireRole(...HOTEL_MANAGER_ROLES), hotelController.adminUpdateRoom);
 adminHotelRouter.delete(
   "/rooms/:roomId",
   requireRole(...HOTEL_MANAGER_ROLES),
@@ -79,6 +84,19 @@ adminHotelRouter.get(
   "/rooms/:roomId/availability",
   requireRole(...HOTEL_MANAGER_ROLES, "staff"),
   hotelController.adminListAvailability
+);
+
+// -- Media upload (Cloudinary) — generic, used by Hotel/Room/Gallery/Offer forms --
+adminHotelRouter.post(
+  "/upload-image",
+  requireRole(...HOTEL_MANAGER_ROLES),
+  uploadImage.single("image"),
+  hotelController.adminUploadImage
+);
+adminHotelRouter.delete(
+  "/upload-image",
+  requireRole(...HOTEL_MANAGER_ROLES),
+  hotelController.adminDeleteImage
 );
 
 // -- Gallery management --
@@ -132,4 +150,26 @@ adminHotelRouter.put(
   "/bookings/:bookingId/status",
   requireRole(...HOTEL_MANAGER_ROLES),
   hotelController.adminUpdateBookingStatus
+);
+
+// -- Review management --
+adminHotelRouter.get(
+  "/:hotelId/reviews",
+  requireRole(...HOTEL_MANAGER_ROLES, "staff"),
+  hotelController.adminListReviews
+);
+adminHotelRouter.put(
+  "/reviews/:reviewId/approve",
+  requireRole(...HOTEL_MANAGER_ROLES),
+  hotelController.adminApproveReview
+);
+adminHotelRouter.put(
+  "/reviews/:reviewId/reply",
+  requireRole(...HOTEL_MANAGER_ROLES),
+  hotelController.adminReplyToReview
+);
+adminHotelRouter.delete(
+  "/reviews/:reviewId",
+  requireRole(...HOTEL_MANAGER_ROLES),
+  hotelController.adminDeleteReview
 );

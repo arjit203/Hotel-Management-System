@@ -74,6 +74,16 @@ export const createBookingSchema = z
 export const createReviewSchema = z.object({
   rating: z.number().int().min(1).max(5),
   comment: z.string().min(3).max(1000),
+  // Optional here because a logged-in user's name is looked up server-side
+  // instead; required in practice for guest submissions (enforced in the
+  // controller, not the schema, since "required only if no login" isn't
+  // expressible as a static schema rule).
+  guestName: z.string().min(2).max(100).optional(),
+});
+
+// ---------- REVIEW REPLY (admin) ----------
+export const replyReviewSchema = z.object({
+  reply: z.string().min(1).max(1000),
 });
 
 export type CreateHotelInput = z.infer<typeof createHotelSchema>;

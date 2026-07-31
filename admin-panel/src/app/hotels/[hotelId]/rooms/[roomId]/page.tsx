@@ -4,13 +4,24 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import RequireAdmin from "@/components/RequireAdmin";
-import { adminApi } from "@/lib/api";
+import { adminApi, formatApiError } from "@/lib/api";
 
 interface AvailabilityOverride {
   _id: string;
   date: string;
   blockedCount: number;
   reason?: string;
+}
+
+interface RoomDetails {
+  categoryName: string;
+  name: string;
+  slug: string;
+  description: string;
+  basePrice: number;
+  maxOccupancy: number;
+  totalRooms: number;
+  amenities: string[];
 }
 
 export default function ManageRoomPage() {
@@ -22,6 +33,65 @@ export default function ManageRoomPage() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ date: "", blockedCount: "0", reason: "" });
 
+  // Edit Room Details — pre-filled from GET /admin/hotels/rooms/:roomId,
+  // saved via the existing PUT /admin/hotels/rooms/:roomId (updateRoomSchema
+  // is a partial of createRoomSchema, so any subset of fields can be sent).
+  const [editForm, setEditForm] = useState({
+    categoryName: "Deluxe",
+    name: "",
+    slug: "",
+    description: "",
+    basePrice: "",
+    maxOccupancy: "",
+    totalRooms: "",
+    amenities: "",
+  });
+  const [loadingRoom, setLoadingRoom] = useState(true);
+  const [savingRoom, setSavingRoom] = useState(false);
+
+  async function loadRoom() {
+    setLoadingRoom(true);
+    const res = await adminApi.get<RoomDetails>(`/admin/hotels/rooms/${roomId}`);
+    if (res.success && res.data) {
+      const r = res.data;
+      setEditForm({
+        categoryName: r.categoryName,
+        name: r.name,
+        slug: r.slug,
+        description: r.description,
+        basePrice: String(r.basePrice),
+        maxOccupancy: String(r.maxOccupancy),
+        totalRooms: String(r.totalRooms),
+        amenities: (r.amenities || []).join(", "),
+      });
+    }
+    setLoadingRoom(false);
+  }
+
+  async function handleUpdateRoom(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingRoom(true);
+    const res = await adminApi.put(`/admin/hotels/rooms/${roomId}`, {
+      categoryName: editForm.categoryName,
+      name: editForm.name,
+      slug: editForm.slug,
+      description: editForm.description,
+      basePrice: Number(editForm.basePrice),
+      maxOccupancy: Number(editForm.maxOccupancy),
+      totalRooms: Number(editForm.totalRooms),
+      amenities: editForm.amenities
+        .split(",")
+        .map((a) => a.trim())
+        .filter(Boolean),
+    });
+    setSavingRoom(false);
+    if (!res.success) {
+      alert(formatApiError(res));
+      return;
+    }
+    alert("Room updated successfully.");
+  }
+
   async function loadOverrides() {
     setLoading(true);
     const res = await adminApi.get<AvailabilityOverride[]>(`/admin/hotels/rooms/${roomId}/availability`);
@@ -31,6 +101,7 @@ export default function ManageRoomPage() {
 
   useEffect(() => {
     loadOverrides();
+    loadRoom();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId]);
 
@@ -42,7 +113,7 @@ export default function ManageRoomPage() {
       reason: form.reason || undefined,
     });
     if (!res.success) {
-      alert(res.message);
+      alert(formatApiError(res));
       return;
     }
     setForm({ date: "", blockedCount: "0", reason: "" });
@@ -54,7 +125,113 @@ export default function ManageRoomPage() {
       <p>
         <Link href={`/hotels/${hotelId}`}>← Back to Hotel</Link>
       </p>
-      <h1>Manage Room Availability</h1>
+      <h1>Manage Room</h1>
+
+      {/* EDIT ROOM DETAILS */}
+      <h2>Room Details</h2>
+      {loadingRoom ? (
+        <p>Loading room...</p>
+      ) : (
+        <form
+          onSubmit={handleUpdateRoom}
+          style={{ border: "1px solid #e5e5e5", padding: 16, borderRadius: 8, maxWidth: 420, margin: "16px 0" }}
+        >
+          <label style={{ display: "block", marginBottom: 10 }}>
+            Category
+            <select
+              value={editForm.categoryName}
+              onChange={(e) => setEditForm({ ...editForm, categoryName: e.target.value })}
+              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+            >
+              <option>Deluxe</option>
+              <option>Executive</option>
+              <option>Luxury</option>
+              <option>Suite</option>
+            </select>
+          </label>
+          <label style={{ display: "block", marginBottom: 10 }}>
+            Name
+            <input
+              required
+              value={editForm.name}
+              onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+            />
+          </label>
+          <label style={{ display: "block", marginBottom: 10 }}>
+            Slug
+            <input
+              required
+              value={editForm.slug}
+              onChange={(e) => setEditForm({ ...editForm, slug: e.target.value })}
+              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+            />
+            <small style={{ color: "#888" }}>
+              Changing this changes the room's public URL — existing links/bookmarks to the old
+              URL will break. Leave as-is unless you specifically need to change it.
+            </small>
+          </label>
+          <label style={{ display: "block", marginBottom: 10 }}>
+            Description
+            <textarea
+              required
+              value={editForm.description}
+              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+            />
+          </label>
+          <label style={{ display: "block", marginBottom: 10 }}>
+            Base Price (₹/night)
+            <input
+              required
+              type="number"
+              value={editForm.basePrice}
+              onChange={(e) => setEditForm({ ...editForm, basePrice: e.target.value })}
+              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+            />
+          </label>
+          <label style={{ display: "block", marginBottom: 10 }}>
+            Max Occupancy
+            <input
+              required
+              type="number"
+              value={editForm.maxOccupancy}
+              onChange={(e) => setEditForm({ ...editForm, maxOccupancy: e.target.value })}
+              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+            />
+          </label>
+          <label style={{ display: "block", marginBottom: 10 }}>
+            Total Rooms
+            <input
+              required
+              type="number"
+              value={editForm.totalRooms}
+              onChange={(e) => setEditForm({ ...editForm, totalRooms: e.target.value })}
+              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+            />
+          </label>
+          <label style={{ display: "block", marginBottom: 10 }}>
+            Amenities
+            <input
+              value={editForm.amenities}
+              onChange={(e) => setEditForm({ ...editForm, amenities: e.target.value })}
+              placeholder="e.g. AC, Free WiFi, Mini Bar"
+              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+            />
+            <small style={{ color: "#888" }}>Comma-separated list.</small>
+          </label>
+          <button
+            type="submit"
+            disabled={savingRoom}
+            style={{ background: "#111", color: "#fff", border: "none", padding: "8px 16px", borderRadius: 6 }}
+          >
+            {savingRoom ? "Saving..." : "Save Changes"}
+          </button>
+        </form>
+      )}
+
+      {/* AVAILABILITY */}
+      <h2 style={{ marginTop: 32 }}>Room Availability</h2>
       <p style={{ color: "#666" }}>
         Block units of this room category for maintenance/hold on specific dates. Real-time
         bookable availability is automatically computed as: total rooms − blocked − overlapping

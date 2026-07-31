@@ -24,7 +24,7 @@ export interface HotelDetailsData {
     maxOccupancy: number;
     images: string[];
   }[];
-  gallery: { _id: string; imageUrl: string; title?: string }[];
+  gallery: { _id: string; imageUrl: string; title?: string; category: string }[];
   faqs: { _id: string; question: string; answer: string }[];
   offers: { _id: string; title: string; description?: string }[];
   reviewSummary: { average: number; count: number };

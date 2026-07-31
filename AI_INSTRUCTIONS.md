@@ -119,6 +119,15 @@ If any of these files are missing or not provided in context, the AI must explic
 - Never regenerate a whole file when a targeted patch/diff will do.
 - Before generating anything, check whether equivalent functionality already exists in PROJECT_DOCUMENTATION.md/FOLDER_STRUCTURE.md — reuse/extend it instead of duplicating.
 
+## 21. How to Handle Media/Image Uploads
+- **Cloudinary is the standard media storage provider for all verticals** (Hotel now; Hall/Restaurant later) — added in this session since it was previously undocumented despite being required by admin panel image-upload features.
+- Files are uploaded via `multer` memory storage only — never written to local disk, never committed, never served from the backend filesystem.
+- Upload/delete logic lives once in `backend/src/utils/cloudinary.util.ts` (`uploadImageBuffer`, `deleteImageByPublicId`) and Cloudinary SDK config lives once in `backend/src/config/cloudinary.ts` — future verticals must import these, not duplicate them.
+- Only admins (`requireRole` per module's manager roles) may upload/delete images; no public upload endpoint is ever exposed.
+- Models continue to store the returned Cloudinary `secure_url` as a plain string in existing `imageUrl`/`images` fields — this AI must NOT restructure those schemas to store upload metadata (publicId, width, height) inline unless explicitly asked; if deletion-by-publicId is needed later, extend the schema additively (new optional field) rather than replacing the string field.
+- Required env vars: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` (see PROJECT_DOCUMENTATION.md). Never hardcode these or print real values in docs/chat.
+- Uploaded images get an automatic `quality: auto:good, fetch_format: auto` transformation applied server-side for performance — do not remove this without an explicit performance-related reason, since it directly supports the project's "Image Lazy Loading / Loading Speed" performance goals.
+
 ---
 
 *These instructions are permanent and apply to all future prompts for this project.*
