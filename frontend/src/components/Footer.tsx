@@ -3,100 +3,140 @@ import { Phone, Mail, MapPin, Instagram, Facebook, Twitter, Youtube } from "luci
 import { getTheHotel } from "@/lib/hotel";
 import NewsletterForm from "@/components/NewsletterForm";
 
-// Server Component — fetches hotel contact details directly (same pattern as
-// any other page here), so every page gets accurate contact info in the
-// footer without prop-drilling from each page.
+const EXPLORE_LINKS = [
+  { href: "/hotel/rooms", label: "Rooms & Suites" },
+  { href: "/hotel/offers", label: "Offers" },
+  { href: "/hotel/gallery", label: "Gallery" },
+  { href: "/hotel/amenities", label: "Amenities" },
+  { href: "/hotel/about", label: "About" },
+  { href: "/hotel/contact", label: "Contact" },
+];
+
+const SOCIALS = [
+  { icon: Instagram, label: "Instagram" },
+  { icon: Facebook, label: "Facebook" },
+  { icon: Twitter, label: "Twitter" },
+  { icon: Youtube, label: "YouTube" },
+];
+
+/**
+ * Compact footer.
+ *
+ * Rebuilt from a 5-column, ~700px-tall block (which included a full reservation
+ * CTA band and a duplicated link tree) into a single 3-column row plus a legal
+ * bar — roughly 250px on desktop.
+ *
+ * What was cut and why:
+ *  - The "Your suite is waiting" CTA band: the header already carries a
+ *    persistent Book Now, and every room card has its own CTA. It was the single
+ *    largest contributor to footer height.
+ *  - The duplicated Explore/Your Stay columns: merged into one two-column link
+ *    list, since both were navigating to the same nine pages already in the nav.
+ *  - The "Reception open 24 hours" line and the long brand paragraph: neither
+ *    earns permanent space on every page.
+ *
+ * Still a Server Component, still sourcing contact details from getTheHotel(),
+ * so no page has to prop-drill them.
+ */
 export default async function Footer() {
   const data = await getTheHotel();
   const hotel = data?.hotel;
 
   return (
-    <footer className="bg-ink text-cream/80 mt-24">
-      <div className="mx-auto max-w-7xl px-5 sm:px-8 py-16 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-10">
-        <div className="lg:col-span-2">
-          <Link href="/" className="font-display text-2xl text-cream">
-            7 <span className="text-gold">Vachan</span>
+    <footer className="relative overflow-hidden border-t border-cream/10 bg-ink text-cream/65">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -left-1/4 -top-1/2 h-[300px] w-[560px] rounded-full bg-gold/[0.06] blur-[110px]"
+      />
+
+      {/* ── Main row ── */}
+      {/* py-12 + a ~132px tallest column + the 50px legal bar lands the whole
+          footer at ~275px on desktop, inside the 220–280px target. */}
+      <div className="container-luxe relative grid grid-cols-1 gap-10 py-12 sm:grid-cols-2 lg:grid-cols-12 lg:gap-8">
+        {/* Brand + contact */}
+        <div className="lg:col-span-5">
+          <Link href="/" className="inline-block">
+            <span className="font-display text-2xl leading-none text-cream">
+              7 <span className="text-gold">Vachan</span>
+            </span>
           </Link>
-          <p className="mt-4 text-sm leading-relaxed max-w-xs">
-            {hotel?.description ||
-              "A premium hospitality experience — luxury rooms, warm service, and unforgettable stays."}
-          </p>
-          <div className="flex gap-4 mt-6">
-            <a href="#" aria-label="Instagram" className="hover:text-gold transition-colors">
-              <Instagram size={18} />
-            </a>
-            <a href="#" aria-label="Facebook" className="hover:text-gold transition-colors">
-              <Facebook size={18} />
-            </a>
-            <a href="#" aria-label="Twitter" className="hover:text-gold transition-colors">
-              <Twitter size={18} />
-            </a>
-            <a href="#" aria-label="YouTube" className="hover:text-gold transition-colors">
-              <Youtube size={18} />
-            </a>
-          </div>
-        </div>
 
-        <div>
-          <h4 className="text-cream font-semibold mb-4 text-sm tracking-wide uppercase">Quick Links</h4>
-          <ul className="space-y-2 text-sm">
-            <li><Link href="/hotel" className="hover:text-gold transition-colors">Hotel</Link></li>
-            <li><Link href="/hotel/about" className="hover:text-gold transition-colors">About Us</Link></li>
-            <li><Link href="/hotel/gallery" className="hover:text-gold transition-colors">Gallery</Link></li>
-            <li><Link href="/hotel/contact" className="hover:text-gold transition-colors">Contact</Link></li>
-          </ul>
-        </div>
-
-        <div>
-          <h4 className="text-cream font-semibold mb-4 text-sm tracking-wide uppercase">Hotel</h4>
-          <ul className="space-y-2 text-sm">
-            <li><Link href="/hotel/rooms" className="hover:text-gold transition-colors">Rooms &amp; Suites</Link></li>
-            <li><Link href="/hotel/amenities" className="hover:text-gold transition-colors">Amenities</Link></li>
-            <li><Link href="/hotel/offers" className="hover:text-gold transition-colors">Offers</Link></li>
-            <li><Link href="/hotel/reviews" className="hover:text-gold transition-colors">Reviews</Link></li>
-            <li><Link href="/hotel/faqs" className="hover:text-gold transition-colors">FAQs</Link></li>
-            <li><Link href="/my-bookings" className="hover:text-gold transition-colors">My Bookings</Link></li>
-          </ul>
-        </div>
-
-        <div>
-          <h4 className="text-cream font-semibold mb-4 text-sm tracking-wide uppercase">Contact</h4>
-          <ul className="space-y-3 text-sm">
-            <li className="flex items-start gap-2">
-              <MapPin size={16} className="shrink-0 mt-0.5 text-gold" />
-              <span>{hotel?.address || "Patna, Bihar, India"}</span>
+          <ul className="mt-5 space-y-2.5 text-sm font-light">
+            <li className="flex items-start gap-2.5">
+              <MapPin size={14} className="mt-1 shrink-0 text-gold" />
+              <span className="text-cream/60">{hotel?.address || "Satna, Madhya Pradesh, India"}</span>
             </li>
-            <li className="flex items-center gap-2">
-              <Phone size={16} className="text-gold" />
-              <a href={`tel:${hotel?.contactPhone || ""}`} className="hover:text-gold transition-colors">
+            <li className="flex flex-wrap items-center gap-x-5 gap-y-2">
+              <a
+                href={`tel:${hotel?.contactPhone || ""}`}
+                className="flex items-center gap-2.5 text-cream/60 transition-colors hover:text-gold"
+              >
+                <Phone size={14} className="shrink-0 text-gold" />
                 {hotel?.contactPhone || "+91 00000 00000"}
               </a>
-            </li>
-            <li className="flex items-center gap-2">
-              <Mail size={16} className="text-gold" />
-              <a href={`mailto:${hotel?.contactEmail || ""}`} className="hover:text-gold transition-colors">
+              <a
+                href={`mailto:${hotel?.contactEmail || ""}`}
+                className="flex items-center gap-2.5 text-cream/60 transition-colors hover:text-gold"
+              >
+                <Mail size={14} className="shrink-0 text-gold" />
                 {hotel?.contactEmail || "stay@7vachan.com"}
               </a>
             </li>
           </ul>
         </div>
-      </div>
 
-      {/* Newsletter strip */}
-      <div className="border-t border-cream/10">
-        <div className="mx-auto max-w-7xl px-5 sm:px-8 py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-sm text-cream/70">Subscribe for exclusive offers and updates.</p>
+        {/* Links — two tight columns, no headings needed at this size */}
+        <nav className="lg:col-span-3" aria-label="Footer">
+          <ul className="grid grid-cols-2 gap-x-6 gap-y-2.5 text-sm font-light">
+            {EXPLORE_LINKS.map((link) => (
+              <li key={link.href}>
+                <Link
+                  href={link.href}
+                  className="text-cream/60 transition-colors duration-300 hover:text-gold"
+                >
+                  {link.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        {/* Newsletter + social */}
+        <div className="lg:col-span-4">
+          <p className="mb-3 text-xs uppercase tracking-luxe text-gold">Private Offers</p>
           <NewsletterForm />
+
+          <div className="mt-6 flex gap-2.5">
+            {SOCIALS.map(({ icon: Icon, label }) => (
+              <a
+                key={label}
+                href="#"
+                aria-label={label}
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-cream/15
+                           text-cream/55 transition-all duration-400 ease-luxe
+                           hover:border-gold hover:bg-gold hover:text-ink"
+              >
+                <Icon size={14} strokeWidth={1.75} />
+              </a>
+            ))}
+          </div>
         </div>
       </div>
 
-      <div className="border-t border-cream/10">
-        <div className="mx-auto max-w-7xl px-5 sm:px-8 py-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-cream/50">
+      {/* ── Legal bar: one clean row ── */}
+      <div className="relative border-t border-cream/10">
+        <div className="container-luxe flex flex-col items-center justify-between gap-2 py-5 text-xs font-light text-cream/40 sm:flex-row">
           <p>© {new Date().getFullYear()} 7 Vachan. All rights reserved.</p>
-          <div className="flex gap-4">
-            <Link href="#" className="hover:text-gold transition-colors">Privacy Policy</Link>
-            <Link href="#" className="hover:text-gold transition-colors">Terms &amp; Conditions</Link>
-            <Link href="#" className="hover:text-gold transition-colors">Cancellation Policy</Link>
+          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1">
+            <Link href="#" className="transition-colors hover:text-gold">
+              Privacy
+            </Link>
+            <Link href="#" className="transition-colors hover:text-gold">
+              Terms
+            </Link>
+            <Link href="#" className="transition-colors hover:text-gold">
+              Cancellation
+            </Link>
           </div>
         </div>
       </div>

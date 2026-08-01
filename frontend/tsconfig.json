@@ -15,14 +15,12 @@
     "jsx": "preserve",
     "incremental": true,
     "plugins": [{ "name": "next" }],
-    "ignoreDeprecations": "6.0",
-    "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
-      "@components/*": ["src/components/*"],
-      "@modules/*": ["src/modules/*"],
-      "@services/*": ["src/services/*"],
-      "@utils/*": ["src/utils/*"]
+      "@/*": ["./src/*"],
+      "@components/*": ["./src/components/*"],
+      "@modules/*": ["./src/modules/*"],
+      "@services/*": ["./src/services/*"],
+      "@utils/*": ["./src/utils/*"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

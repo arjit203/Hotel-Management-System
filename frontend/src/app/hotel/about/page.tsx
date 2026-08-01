@@ -4,13 +4,36 @@ import Link from "next/link";
 import { Award, Sparkles, HeartHandshake, ArrowRight } from "lucide-react";
 import { getTheHotel } from "@/lib/hotel";
 import StarRating from "@/components/StarRating";
-import Breadcrumbs from "@/components/Breadcrumbs";
+import PageHeader from "@/components/PageHeader";
+import Reveal from "@/components/motion/Reveal";
+import TextReveal from "@/components/motion/TextReveal";
+import Parallax from "@/components/motion/Parallax";
+import LuxeImage from "@/components/motion/LuxeImage";
+import { Stagger, StaggerItem } from "@/components/motion/Stagger";
 
 export const metadata: Metadata = {
   title: "About Us",
   description: "The story, values, and promise behind 7 Vachan.",
   alternates: { canonical: "/hotel/about" },
 };
+
+const VALUES = [
+  {
+    icon: Sparkles,
+    title: "Our Vision",
+    desc: "To be the most trusted name in hospitality — where every guest feels genuinely at home.",
+  },
+  {
+    icon: Award,
+    title: "Our Standard",
+    desc: "Premium comfort, meticulous cleanliness, and attention to detail in every room.",
+  },
+  {
+    icon: HeartHandshake,
+    title: "Our Promise",
+    desc: "Warm, personal service — treating every guest like family, every single time.",
+  },
+];
 
 export default async function AboutPage() {
   const data = await getTheHotel();
@@ -21,57 +44,95 @@ export default async function AboutPage() {
 
   return (
     <main>
-      <Breadcrumbs items={[{ label: "Home", href: "/" }, { label: "Hotel", href: "/hotel" }, { label: "About" }]} />
-      <section className="bg-ink text-cream py-20 px-5 sm:px-8 text-center">
-        <p className="section-eyebrow justify-center flex">Our Story</p>
-        <h1 className="font-display text-4xl sm:text-5xl text-cream">About {hotel.name}</h1>
-        <div className="flex justify-center mt-3">
-          <StarRating rating={hotel.starRating} size={18} />
+      <div className="container-luxe pt-16 sm:pt-20">
+        <PageHeader
+          eyebrow="Our Story"
+          title={`About ${hotel.name}`}
+          align="left"
+          crumbs={[{ label: "Home", href: "/" }, { label: "Hotel", href: "/hotel" }, { label: "About" }]}
+        />
+      </div>
+
+      {/* ── Narrative + imagery ── */}
+      <section className="container-luxe pb-8">
+        <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-12 lg:gap-16">
+          <div className="lg:col-span-6">
+            <Reveal>
+              <div className="mb-7 flex items-center gap-3">
+                <StarRating rating={hotel.starRating} size={15} />
+                <span className="text-[10px] uppercase tracking-eyebrow text-warm-400">
+                  {hotel.starRating}-Star Hospitality
+                </span>
+              </div>
+
+              <p className="lead">{hotel.description}</p>
+
+              <p className="body-muted mt-5">
+                Rooted in the promise of &ldquo;7 Vachan&rdquo; — seven vows of hospitality — every
+                stay here is built on trust, comfort, and genuine care for our guests.
+              </p>
+
+              <div className="mt-10 flex flex-wrap items-center gap-4">
+                <Link href="/hotel/booking" className="btn-primary group">
+                  Book Your Stay <ArrowRight size={14} className="btn-arrow" />
+                </Link>
+                <Link href="/hotel/rooms" className="link-arrow">
+                  See our rooms <ArrowRight size={14} />
+                </Link>
+              </div>
+            </Reveal>
+          </div>
+
+          <div className="lg:col-span-6">
+            <Reveal direction="left" duration={0.9} scale>
+              <div className="media h-[360px] rounded-airy sm:h-[460px] lg:h-[540px]">
+                {heroImage ? (
+                  <Parallax strength={8} className="h-full w-full">
+                    <LuxeImage
+                      src={heroImage}
+                      alt={hotel.name}
+                      wrapperClassName="h-full w-full"
+                      width={1200}
+                      sizes="(max-width: 1024px) 100vw, 50vw"
+                      priority
+                    />
+                  </Parallax>
+                ) : (
+                  <div className="h-full w-full bg-gradient-to-br from-cream-dark to-cream-deep" />
+                )}
+              </div>
+            </Reveal>
+          </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-5 sm:px-8 py-16 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-        <div>
-          <p className="text-ink/70 leading-relaxed text-lg">{hotel.description}</p>
-          <p className="text-ink/60 leading-relaxed mt-4">
-            Rooted in the promise of &ldquo;7 Vachan&rdquo; — seven vows of hospitality — every stay here is built
-            on trust, comfort, and genuine care for our guests.
-          </p>
-          <Link href="/hotel/booking" className="btn-primary mt-8 inline-flex">
-            Book Your Stay <ArrowRight size={16} />
-          </Link>
-        </div>
-        <div className="rounded-3xl overflow-hidden h-72 sm:h-96 bg-ink/5">
-          {heroImage && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={heroImage} alt={hotel.name} className="w-full h-full object-cover" />
-          )}
-        </div>
-      </section>
+      {/* ── Values ── */}
+      <section className="section mt-8 bg-cream-dark">
+        <div className="container-luxe">
+          <div className="mx-auto mb-14 max-w-2xl text-center">
+            <Reveal duration={0.6}>
+              <p className="section-eyebrow flex justify-center">What We Stand For</p>
+            </Reveal>
+            <TextReveal as="h2" text="Seven vows, one standard" className="section-title" delay={0.05} />
+          </div>
 
-      <section className="bg-cream-dark py-20">
-        <div className="mx-auto max-w-7xl px-5 sm:px-8 grid grid-cols-1 sm:grid-cols-3 gap-10 text-center">
-          <div>
-            <Sparkles size={26} className="mx-auto text-gold mb-4" />
-            <h3 className="font-display text-xl text-ink mb-2">Our Vision</h3>
-            <p className="text-ink/60 text-sm leading-relaxed">
-              To be the most trusted name in hospitality — where every guest feels genuinely at home.
-            </p>
-          </div>
-          <div>
-            <Award size={26} className="mx-auto text-gold mb-4" />
-            <h3 className="font-display text-xl text-ink mb-2">Our Standard</h3>
-            <p className="text-ink/60 text-sm leading-relaxed">
-              Premium comfort, meticulous cleanliness, and attention to detail in every room.
-            </p>
-          </div>
-          <div>
-            <HeartHandshake size={26} className="mx-auto text-gold mb-4" />
-            <h3 className="font-display text-xl text-ink mb-2">Our Promise</h3>
-            <p className="text-ink/60 text-sm leading-relaxed">
-              Warm, personal service — treating every guest like family, every single time.
-            </p>
-          </div>
+          <Stagger className="grid grid-cols-1 gap-6 sm:grid-cols-3 lg:gap-8" stagger={0.1}>
+            {VALUES.map(({ icon: Icon, title, desc }) => (
+              <StaggerItem key={title} className="flex">
+                <div className="card-luxe card-hover group flex w-full flex-col items-center px-8 py-12 text-center">
+                  <span className="mb-6 flex h-16 w-16 items-center justify-center rounded-full border border-gold/25 transition-all duration-600 ease-luxe group-hover:border-gold/60 group-hover:bg-gold/[0.07]">
+                    <Icon
+                      size={22}
+                      strokeWidth={1.5}
+                      className="text-gold transition-transform duration-600 ease-luxe group-hover:scale-110"
+                    />
+                  </span>
+                  <h3 className="card-title">{title}</h3>
+                  <p className="body-muted mt-3">{desc}</p>
+                </div>
+              </StaggerItem>
+            ))}
+          </Stagger>
         </div>
       </section>
     </main>

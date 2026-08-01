@@ -2,27 +2,382 @@
 @tailwind components;
 @tailwind utilities;
 
-html {
-  scroll-behavior: smooth;
-}
+/* ============================================================
+   7 Vachan — luxury design system
+   Presentation layer only. Every class here is consumed by the
+   existing pages/components; none of them change markup contracts.
+   ============================================================ */
 
-body {
-  color: #12110f;
-  background: #faf7f2;
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    /* Header is sticky/overlaying — offset in-page anchor jumps so headings
+       don't land underneath it. */
+    scroll-padding-top: 6rem;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    color: #14120f;
+    background: #faf7f2;
+    /* 16px / 1.7 base. Jost runs optically small, so 15px body copy reads as
+       ~14px — 16px is the floor for comfortable desktop reading. */
+    font-size: 1rem;
+    line-height: 1.7;
+    font-feature-settings: "kern" 1, "liga" 1;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Serif display type wants slightly tighter optical spacing than the
+     browser default, and never wants synthetic bolding. */
+  h1, h2, h3, h4 {
+    font-synthesis-weight: none;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  ::selection {
+    background: #b08d57;
+    color: #faf7f2;
+  }
+
+  /* Gold focus ring — visible for keyboard users, invisible for mouse users. */
+  :focus-visible {
+    outline: 2px solid #b08d57;
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  /* Refined scrollbar (WebKit) — thin, warm, unobtrusive. */
+  ::-webkit-scrollbar {
+    width: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #f2ebe0;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #d6c7ad;
+    border-radius: 999px;
+    border: 3px solid #f2ebe0;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #b08d57;
+  }
 }
 
 @layer components {
-  /* Shared section heading style used across every public Hotel page */
+  /* ---------- Layout rhythm ----------
+     One container and one vertical-rhythm scale used site-wide, so every
+     section breathes identically instead of each page picking its own padding. */
+  .container-luxe {
+    @apply mx-auto w-full max-w-content px-6 sm:px-8 lg:px-12;
+  }
+  .section {
+    @apply py-20 sm:py-24 lg:py-32;
+  }
+  .section-tight {
+    @apply py-14 sm:py-16 lg:py-20;
+  }
+
+  /* ---------- Typography ----------
+     One scale, used everywhere. `.section-eyebrow` / `.section-title` keep their
+     existing names (referenced by every page) — only the styling is upgraded, so
+     all pages inherit the hierarchy without markup changes.
+
+     Small-text floor: nothing in body flow goes below 12px, and 12px is reserved
+     for uppercase labels with wide tracking (which read a full step larger than
+     their nominal size). Running text never goes below 15px. */
   .section-eyebrow {
-    @apply text-gold text-xs sm:text-sm tracking-[0.25em] uppercase font-semibold mb-3;
+    @apply inline-flex items-center gap-3 text-gold text-xs tracking-eyebrow uppercase font-medium mb-5;
   }
+  /* Hairline flourish before eyebrow text — a small luxury signature. */
+  .section-eyebrow::before {
+    content: "";
+    @apply block w-8 sm:w-10 h-px bg-gold/50;
+  }
+  /* Centred eyebrows get the rule on both sides. */
+  .section-eyebrow.justify-center::after {
+    content: "";
+    @apply block w-8 sm:w-10 h-px bg-gold/50;
+  }
+
   .section-title {
-    @apply font-display text-3xl sm:text-4xl md:text-5xl text-ink leading-tight;
+    @apply font-display font-normal text-display-md text-ink;
   }
+  .page-title {
+    @apply font-display font-normal text-display-lg text-ink;
+  }
+  .hero-title {
+    @apply font-display font-normal text-display-xl text-cream;
+  }
+  .card-title {
+    @apply font-display font-medium text-[1.375rem] sm:text-2xl leading-snug text-ink;
+  }
+  /* Intro paragraph under a heading. */
+  .lead {
+    @apply text-[1.0625rem] sm:text-lg leading-[1.75] text-warm-600 font-light;
+  }
+  /* Supporting body copy inside cards and columns. 15px floor. */
+  .body-muted {
+    @apply text-[0.9375rem] leading-[1.7] text-warm-500 font-light;
+  }
+  /* Uppercase micro-label. 12px is the floor, and only ever with wide tracking. */
+  .meta {
+    @apply text-xs uppercase tracking-luxe text-warm-500;
+  }
+  /* Price figure — serif numerals read as "rate card", not "database field". */
+  .price {
+    @apply font-display font-medium text-ink tabular-nums;
+  }
+
+  /* ---------- Buttons ----------
+     Shared anatomy: pill, generous padding, wide tracking, gold sheen that
+     wipes across on hover, and an arrow that steps forward. `.btn-primary` and
+     `.btn-outline` keep their names (used across every page). */
+  /* Shared anatomy. Declared as a grouped selector rather than via
+     `@apply btn-base`, because @apply copies utilities only — it does NOT carry
+     a class's ::before rule or its raw declarations (like `isolation`), so the
+     sheen would silently never render on the variant classes. */
+  .btn-base,
+  .btn-primary,
+  .btn-outline,
+  .btn-gold,
+  .btn-ghost-light {
+    @apply relative inline-flex items-center justify-center gap-2.5 overflow-hidden rounded-full
+           px-8 py-4 text-sm font-medium uppercase tracking-[0.14em]
+           transition-all duration-400 ease-luxe will-change-transform;
+    /* Keeps the sheen's negative z-index inside the button: above the button's
+       own background, below its label — without asking every caller to wrap raw
+       text in a <span>. */
+    isolation: isolate;
+  }
+
+  /* The sheen: a gold panel that wipes in from the left beneath the label. */
+  .btn-base::before,
+  .btn-primary::before,
+  .btn-outline::before,
+  .btn-gold::before,
+  .btn-ghost-light::before {
+    content: "";
+    @apply absolute inset-0 -z-10 bg-gold origin-left scale-x-0
+           transition-transform duration-500 ease-luxe;
+  }
+  .btn-base:hover::before,
+  .btn-primary:hover::before,
+  .btn-outline:hover::before,
+  .btn-gold:hover::before,
+  .btn-ghost-light:hover::before {
+    @apply scale-x-100;
+  }
+
+  /* Variant skins. Each states the label colour it needs once the gold sheen has
+     wiped across, so contrast holds in both states. */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 bg-ink text-cream px-6 py-3 rounded-full font-medium tracking-wide transition-colors hover:bg-gold hover:text-ink;
+    @apply bg-ink text-cream hover:text-ink hover:shadow-gold active:scale-[0.98];
   }
   .btn-outline {
-    @apply inline-flex items-center justify-center gap-2 border border-ink/20 text-ink px-6 py-3 rounded-full font-medium tracking-wide transition-colors hover:border-gold hover:text-gold;
+    @apply border border-ink/15 text-ink hover:border-gold hover:shadow-luxury active:scale-[0.98];
+  }
+  .btn-gold {
+    @apply bg-gold text-ink hover:shadow-gold active:scale-[0.98];
+  }
+  /* For use over dark imagery (hero, dark sections). */
+  .btn-ghost-light {
+    @apply border border-cream/30 text-cream hover:border-gold hover:text-ink active:scale-[0.98];
+  }
+  .btn-gold::before {
+    @apply bg-gold-light;
+  }
+
+  /* Arrow micro-interaction: pair with `group` on the button. */
+  .btn-arrow {
+    @apply transition-transform duration-400 ease-luxe group-hover:translate-x-1;
+  }
+
+  /* Text link whose arrow steps forward on hover.
+     Self-contained: it styles its own icon via a descendant selector, so callers
+     don't need a `group` class (and `group` cannot be @apply'd anyway). */
+  .link-arrow {
+    @apply inline-flex items-center gap-2 text-[0.8125rem] font-medium uppercase
+           tracking-luxe text-gold-dark transition-colors duration-300 hover:text-gold;
+  }
+  .link-arrow svg {
+    @apply transition-transform duration-400 ease-luxe;
+  }
+  .link-arrow:hover svg {
+    @apply translate-x-1;
+  }
+
+  /* Animated underline for nav items.
+     Title Case, not uppercase — per the navbar reference. Uppercase + wide
+     tracking on nine links made the bar read as a toolbar; sentence-case at
+     15px reads as a hotel menu and is easier to scan. */
+  .nav-link {
+    @apply relative text-[0.9375rem] font-light transition-colors duration-300;
+  }
+  .nav-link::after {
+    content: "";
+    @apply absolute -bottom-1.5 left-0 h-px w-full origin-left scale-x-0 bg-gold
+           transition-transform duration-400 ease-luxe;
+  }
+  .nav-link:hover::after,
+  .nav-link[data-active="true"]::after {
+    @apply scale-x-100;
+  }
+
+  /* ---------- Surfaces ---------- */
+  .card-luxe {
+    @apply relative bg-white rounded-luxe border border-ink/[0.06] shadow-luxury
+           transition-all duration-600 ease-luxe;
+  }
+  .card-hover {
+    @apply hover:-translate-y-1.5 hover:shadow-lift hover:border-gold/25;
+  }
+  /* Frosted panel — used for the booking widget and overlays on imagery. */
+  .glass {
+    @apply bg-white/85 backdrop-blur-xl border border-white/60;
+  }
+  .glass-dark {
+    @apply bg-ink/45 backdrop-blur-md border border-cream/15;
+  }
+  /* Hairline rule that fades out at both ends. */
+  .rule-fade {
+    @apply h-px w-full bg-gradient-to-r from-transparent via-ink/15 to-transparent;
+  }
+  .rule-fade-light {
+    @apply h-px w-full bg-gradient-to-r from-transparent via-cream/20 to-transparent;
+  }
+
+  /* ---------- Imagery ----------
+     `.media` clips the zoom; `.media-zoom` is the child that scales. Pair the
+     parent with `group`. Transform-only, so it stays on the compositor. */
+  .media {
+    @apply relative overflow-hidden bg-cream-dark;
+  }
+  .media-zoom {
+    @apply h-full w-full object-cover transition-transform duration-900 ease-luxe
+           group-hover:scale-[1.06] will-change-transform;
+  }
+  /* Legibility scrim for text over photography. */
+  .scrim {
+    @apply pointer-events-none absolute inset-0 bg-gradient-to-t
+           from-ink/85 via-ink/20 to-transparent;
+  }
+  .scrim-soft {
+    @apply pointer-events-none absolute inset-0 bg-gradient-to-t
+           from-ink/60 via-transparent to-transparent
+           opacity-0 transition-opacity duration-600 ease-luxe group-hover:opacity-100;
+  }
+
+  /* ---------- Loading ---------- */
+  .skeleton {
+    @apply relative overflow-hidden bg-cream-dark;
+  }
+  .skeleton::after {
+    content: "";
+    @apply absolute inset-0 -translate-x-full animate-shimmer
+           bg-gradient-to-r from-transparent via-white/55 to-transparent;
+  }
+
+  /* ---------- Form controls ---------- */
+  .field {
+    @apply w-full bg-white rounded-xl border border-ink/10 px-4 py-3 text-sm text-ink
+           placeholder:text-warm-400 transition-colors duration-300
+           focus:border-gold focus:outline-none focus:ring-0;
+  }
+  .field-label {
+    @apply block text-[11px] font-medium uppercase tracking-luxe text-warm-500 mb-2;
+  }
+}
+
+@layer utilities {
+  /* Fixed-header offset for anchored sections. */
+  .anchor-offset {
+    scroll-margin-top: 6rem;
+  }
+  /* Opt-in GPU hinting for elements we animate on scroll. */
+  .gpu {
+    transform: translate3d(0, 0, 0);
+    backface-visibility: hidden;
+  }
+}
+
+/* ============================================================
+   Print — used by the booking confirmation's "Print / Save as PDF".
+   Strips the site chrome so the invoice prints as a standalone document, and
+   forces backgrounds/borders to render (browsers drop them by default).
+   ============================================================ */
+@media print {
+  @page {
+    margin: 14mm;
+  }
+
+  /* Site chrome and any interactive control never belong on paper. */
+  header,
+  footer,
+  nav,
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+    font-size: 11pt;
+  }
+
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Keep the invoice's rules and tints visible on paper. */
+  #booking-invoice {
+    border: 1px solid #ddd !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Never split a charge line across pages. */
+  #booking-invoice li,
+  #booking-invoice dl {
+    break-inside: avoid;
+  }
+
+  /* Reveal link targets that would otherwise be lost in print. */
+  a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 9pt;
+    color: #555;
+  }
+}
+
+/* ============================================================
+   Accessibility: honour prefers-reduced-motion.
+   Framer Motion components check useReducedMotion() in JS; this covers the
+   CSS-driven animations (ken burns, shimmer, scroll hint, hover zoom).
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .media-zoom {
+    transform: none !important;
   }
 }

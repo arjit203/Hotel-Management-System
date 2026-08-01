@@ -4,6 +4,50 @@ Format: newest entries on top. Categories: Added / Changed / Fixed / Security / 
 
 ---
 
+## [2026-08-02] — Phase 3.8: Luxury design system, motion layer & UX refinement (frontend only)
+
+**No backend, API, database, business-logic, payment, routing, or admin-panel changes.** Every API call, request shape, query parameter and destination route is byte-for-byte unchanged. This entry is presentation, accessibility and UX only.
+
+### Added
+- **Design tokens** (`frontend/tailwind.config.js`): fluid display type scale (`display-sm/md/lg/xl` via `clamp()`), `tracking-eyebrow`/`tracking-luxe`, `shadow-lift`/`shadow-gold`, `rounded-luxe`/`rounded-airy`, `ease-luxe` easing, `max-w-content`, and `ken-burns`/`shimmer`/`scroll-hint` keyframes. New `ink.soft`, `gold.pale`, `cream.deep` shades added **additively** — no existing token value was repurposed.
+- **Typography pairing** (`frontend/src/app/layout.tsx`): Cormorant Garamond (display) + Jost (body) via `next/font/google`, exposed as `--font-display` / `--font-sans`. See the reversal note below.
+- **Motion layer** (`frontend/src/components/motion/`, new folder): `Reveal`, `Stagger`/`StaggerItem`/`StaggerScaleItem`, `TextReveal` (word-mask headline reveal), `Parallax`, `LuxeImage` (skeleton → fade-in, hover zoom), `PageTransition` (route entrance), `ScrollProgress`, `AnimatedNumber`, and a shared `variants.ts` timing vocabulary. All respect `prefers-reduced-motion`; all animate only `opacity`/`transform`.
+- **`docs/DESIGN_SYSTEM.md`** (new) — the design system's reference document: font pairing, colour tokens with measured contrast ratios, type scale, layout rhythm, component classes, the motion vocabulary and its rules, imagery handling, and a checklist for building the Marriage Hall / Restaurant front-ends against the same system. Cross-referenced from `CLAUDE.md` and `PROJECT_DOCUMENTATION.md`.
+- **Shared UI**: `components/PageHeader.tsx` (one header treatment for every sub-page, emits breadcrumb JSON-LD), `components/Skeleton.tsx` (route-level loading placeholders), and `loading.tsx` for `/hotel/rooms`, `/hotel/gallery`, `/hotel/rooms/[roomSlug]` (Next convention files — **no new routes**).
+- **Auth experience** (`frontend/src/components/auth/`, new folder): `AuthShell` (full-screen split layout with Ken-Burns property photography), `FloatingField` (floating-label underline input, CSS-driven), `SocialPlaceholders`, `LoginForm`, `SignupForm`. Adds password visibility toggle, Remember Me, an inline forgot-password mode, and a live password-rule checklist mirroring `auth.validation.ts`.
+- **Booking confirmation invoice**: letterhead, stay summary, per-room charge lines, advance/balance breakdown, `InvoiceActions` (Print / Save as PDF, Email a copy, Copy reference), `BookingSuccessMark` (drawn-ring success animation), and a `@media print` stylesheet so the page prints as a standalone document.
+- `frontend/.env.example` gains no new **required** vars; `NEXT_PUBLIC_HERO_VIDEO_URL` is read by `Hero.tsx` as an **optional** background-video source (the hero works fully without it).
+
+### Changed
+- **Contrast (accessibility fix)**: the `warm` palette was `#a1978b`/`#8a7f72`/`#6f6558`, measuring **2.4:1 and 3.6:1** against the cream background — both **fail WCAG AA** for body text. Darkened to `#6f6558`/`#5c5449`/`#4a433a` (**5.3:1 / 6.5:1 / 8.1:1**). Fixed at the token level, so every consumer improved at once.
+- **Type scale**: body base set to 16px/1.7; `.lead`, `.body-muted`, `.card-title`, button text (14px) and nav text (14px) all increased; `.field-label` 10px → 11px.
+- **Footer**: rebuilt from a 5-column ~700px block into a 3-column row plus a one-line legal bar (**~275px desktop**). Removed the full-width reservation CTA band and the duplicated link tree.
+- **Header**: fixed-position with auto-hide on scroll-down / reveal on scroll-up, transparent over the home hero only, height shrinks on scroll, breakpoint for the full nav moved `lg` → `xl` (nine links plus a CTA was cramped below that), animated underlines, full-screen mobile drawer with scroll lock.
+- **Breadcrumbs**: the visible grey trail is off by default; the component's job is now the `BreadcrumbList` JSON-LD, which is preserved everywhere (SEO requirement, `AI_INSTRUCTIONS.md` §9). Pages pass `crumbs` to `PageHeader`. Pass `visual` to render a trail.
+- **Rebuilt presentation** (logic untouched): `Hero` (hand-built crossfade + Ken Burns, replacing the Swiper slider — Swiper is still used by `Testimonials`), `QuickBookingWidget` (frosted panel, guest stepper), `RoomCard` (single stretched link, hover zoom, counting rate), `RoomSearch` (drawer filters, skeletons during search), `GalleryGrid`/`GalleryPreview` (editorial mosaic, keyboard-navigable lightbox), `FaqAccordion` (height-animated), `RoomImageGallery` (crossfade, full-screen view), `Testimonials`, `ReviewsList`, `StarRating` (true partial fills instead of rounding), `MapPlaceholder`, `NewsletterForm`, `Footer`, all nine `/hotel/*` pages, `BookingForm` (continuous animated step rail, per-step transitions), `/login`, `/signup`, `/my-bookings`, `/verify-email/[token]`, `ContactForm`, `ReviewForm`, `RoomAvailabilityCheck`.
+- `lib/userAuth.ts`: `setUserToken`/`setStoredUser` accept a `remember` flag choosing `localStorage` (persist) vs `sessionStorage` (clear on close); reads check both. **This is a client-side storage choice only** — token issuance and lifetime remain entirely server-side (`JWT_EXPIRES_IN`). Also hardened `getStoredUser()` against a corrupted entry throwing.
+- `lib/hotel.ts`: `HotelDetailsData.hotel` gains optional `checkInTime`/`checkOutTime`. The API has always returned these (`hotel.model.ts` defines both with defaults); the type was simply narrower than the response.
+- `ReviewForm` no longer renders its own card — the Reviews page already wraps it, which produced a double frame.
+
+### Fixed
+- **`frontend/tsconfig.json` — `"ignoreDeprecations": "6.0"` made `next build` fail outright** with `Invalid value for '--ignoreDeprecations'` under the project's TypeScript 5.5. This is the defect the 2026-07-31 (b) entry worked around with a temporary tsconfig copy. Root cause: newer editor TypeScript deprecates `baseUrl` and suggests that flag, but TS 5.5 rejects the value. Fixed properly by removing `baseUrl` and making `paths` self-relative (`./src/*`), which both TS versions accept. **The frontend now builds without any workaround.**
+- Buttons: `@apply btn-base` silently dropped the `::before` sheen and `isolation`, because `@apply` copies utilities only — not a class's pseudo-element rules or raw declarations. Rewritten as a grouped selector.
+
+### Security
+- No change to authentication, authorization, payment verification or any server-side validation. Social sign-in buttons are rendered **disabled** rather than wired to a non-existent OAuth flow.
+
+### Notes / Known Limitations (flagged, not silently worked around)
+- **Reference material**: this phase was specified in writing only. A video reference and sample images were mentioned but never reached the session, so the motion and login/signup styling follow the written brief rather than a supplied reference.
+- **`DATABASE_SCHEMA.md` and `FOLDER_STRUCTURE.md` do not exist in the repository**, despite `AI_INSTRUCTIONS.md` §0 listing both as mandatory pre-reads. Stated rather than assumed. `ENVIRONMENT_VARIABLES.md`, `PAYMENT_GUIDE.md`, `TESTING_GUIDE.md` and `DEPLOYMENT_GUIDE.md` are likewise absent.
+- **"Download Invoice (PDF)" is served by `window.print()`**, not a generated PDF file. There is no invoice endpoint server-side, and a client-side generator (jsPDF/html2canvas) is ~200KB of JS on a render-once page, which conflicts with the performance requirement. Every desktop browser offers "Save as PDF" as a print destination, so one honestly-labelled button covers both. A true PDF needs a backend endpoint.
+- **"Email Invoice" is a `mailto:`, not a server-side resend.** The backend emails the confirmation exactly once inside `verifyPayment()` (`booking.service.ts`) and exposes no resend/invoice route. A real resend requires a new endpoint — out of scope.
+- **Newsletter signup still has no backend.** It validates and acknowledges locally; it does not persist. Unchanged from the previous phase, but now explicit in the component.
+- **Contact form still submits via WhatsApp** — no contact endpoint exists. Unchanged; the button now says so.
+- **Bundle cost**: `framer-motion` adds roughly 40–50KB gzip and, because reveals are used site-wide, it loads on nearly every route. First Load JS is now 142–188KB per page (shared chunk 87.3KB). A `LazyMotion` + `m` + `domAnimation` conversion would cut roughly 13KB from every page — the only blocker is `layoutId`, which has already been removed from `GalleryGrid` in preparation. **Started this phase, interrupted, not completed.** Recommended as the first task of the next pass.
+- **Not verified in a browser.** `next build` passes with 0 errors across all 19 routes and types check clean, but no runtime, visual, cross-browser or Lighthouse verification was performed in this session. The responsive behaviour is written to the breakpoints, not observed at them. See the testing checklist handed over with this phase.
+
+---
+
 ## [2026-08-01] — Phase 3.7: Hotel Public Website (multi-page, premium UI)
 
 ### Added

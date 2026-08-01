@@ -1,7 +1,11 @@
 import { notFound } from "next/navigation";
-import { CheckCircle2 } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import CancelBookingButton from "@/modules/hotel/components/CancelBookingButton";
+import InvoiceActions from "@/modules/hotel/components/InvoiceActions";
+import BookingSuccessMark from "@/modules/hotel/components/BookingSuccessMark";
 import Breadcrumbs from "@/components/Breadcrumbs";
+import { getTheHotel } from "@/lib/hotel";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000/api/v1";
 
@@ -9,24 +13,53 @@ interface BookingData {
   bookingReference: string;
   guestName: string;
   guestEmail: string;
+  guestPhone?: string;
   checkInDate: string;
   checkOutDate: string;
   numGuests: number;
-  rooms: { roomName: string; categoryName: string; numRooms: number; pricePerNight: number; subtotal: number }[];
+  rooms: {
+    roomName: string;
+    categoryName: string;
+    numRooms: number;
+    pricePerNight: number;
+    subtotal: number;
+  }[];
   totalAmount: number;
+  advancePaid?: number;
   balanceDue: number;
   status: string;
+  specialRequest?: string;
+  createdAt?: string;
+
+  // ── Tax fields: not currently returned by the API ──
+  // The invoice reference shows a "GST (12%)" line, but the backend does not
+  // compute tax anywhere: booking.service.ts sets
+  //   totalAmount = Σ(basePrice × nights × numRooms)
+  // and Razorpay charges the advance off that untaxed figure. Deriving 12% in
+  // the browser would print an invoice whose Total does not match what was
+  // actually charged — on a tax document, not a styling detail. Hardcoding the
+  // rate is also explicitly disallowed (AI_INSTRUCTIONS.md §15: tax rate must be
+  // data-driven/admin-configurable).
+  //
+  // So the row is wired but optional: the moment the backend adds these fields
+  // to the booking model and includes them in totalAmount, it renders itself
+  // with no frontend change.
+  taxLabel?: string;
+  taxAmount?: number;
+  subtotal?: number;
 }
 
+// Muted, on-brand status chips — the previous saturated green/amber/red pills
+// were the loudest thing on a page that should feel calm and settled.
 const STATUS_STYLES: Record<string, string> = {
-  pending: "bg-amber-100 text-amber-700",
-  confirmed: "bg-green-100 text-green-700",
-  checked_in: "bg-blue-100 text-blue-700",
-  checked_out: "bg-slate-100 text-slate-700",
-  completed: "bg-slate-100 text-slate-700",
-  cancelled: "bg-red-100 text-red-700",
-  refund_pending: "bg-amber-100 text-amber-700",
-  refunded: "bg-green-100 text-green-700",
+  pending: "border-amber-300/60 bg-amber-50 text-amber-800",
+  confirmed: "border-gold/40 bg-gold/10 text-gold-dark",
+  checked_in: "border-sky-300/60 bg-sky-50 text-sky-800",
+  checked_out: "border-ink/15 bg-ink/[0.04] text-ink/70",
+  completed: "border-ink/15 bg-ink/[0.04] text-ink/70",
+  cancelled: "border-red-300/60 bg-red-50 text-red-700",
+  refund_pending: "border-amber-300/60 bg-amber-50 text-amber-800",
+  refunded: "border-ink/15 bg-ink/[0.04] text-ink/70",
 };
 
 async function getBooking(reference: string): Promise<BookingData | null> {
@@ -41,6 +74,17 @@ async function getBooking(reference: string): Promise<BookingData | null> {
   }
 }
 
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+const money = (n: number) => `₹${n.toLocaleString("en-IN")}`;
+
 export default async function BookingConfirmationPage({
   params,
 }: {
@@ -49,50 +93,224 @@ export default async function BookingConfirmationPage({
   const booking = await getBooking(params.reference);
   if (!booking) return notFound();
 
-  return (
-    <main className="mx-auto max-w-xl px-5 sm:px-8 py-16 text-center">
-      <Breadcrumbs
-        items={[{ label: "Home", href: "/" }, { label: "Booking", href: "/hotel/booking" }, { label: "Confirmation" }]}
-      />
-      <CheckCircle2 size={48} className="mx-auto text-green-600 mb-4" />
-      <h1 className="font-display text-3xl text-ink">Booking Confirmed</h1>
-      <p className="text-ink/60 mt-2">
-        Reference: <strong className="text-ink">{booking.bookingReference}</strong>
-      </p>
+  // Hotel details for the invoice letterhead — reuses the same fetch every other
+  // page uses; no new API dependency.
+  const hotelData = await getTheHotel();
+  const hotel = hotelData?.hotel;
 
-      <div className="bg-white rounded-2xl shadow-luxury border border-ink/5 p-6 text-left mt-8 space-y-2 text-sm">
-        <p><strong className="text-ink">Guest:</strong> <span className="text-ink/70">{booking.guestName}</span></p>
-        <p><strong className="text-ink">Check-in:</strong> <span className="text-ink/70">{new Date(booking.checkInDate).toDateString()}</span></p>
-        <p><strong className="text-ink">Check-out:</strong> <span className="text-ink/70">{new Date(booking.checkOutDate).toDateString()}</span></p>
-        <div>
-          <strong className="text-ink">Rooms:</strong>
-          <ul className="mt-1 ml-4 list-disc text-ink/70">
-            {booking.rooms.map((r, i) => (
-              <li key={i}>{r.numRooms} × {r.roomName} (₹{r.pricePerNight}/night)</li>
-            ))}
-          </ul>
-        </div>
-        <p><strong className="text-ink">Guests:</strong> <span className="text-ink/70">{booking.numGuests}</span></p>
-        <p><strong className="text-ink">Total Amount:</strong> <span className="text-ink/70">₹{booking.totalAmount}</span></p>
-        <p className="flex items-center gap-2">
-          <strong className="text-ink">Status:</strong>
-          <span className={`px-3 py-1 rounded-full text-xs font-semibold capitalize ${STATUS_STYLES[booking.status] || "bg-ink/10 text-ink/60"}`}>
-            {booking.status.replace("_", " ")}
-          </span>
+  const nights = Math.max(
+    1,
+    Math.round(
+      (new Date(booking.checkOutDate).getTime() - new Date(booking.checkInDate).getTime()) /
+        86_400_000
+    )
+  );
+  const advancePaid = booking.advancePaid ?? 0;
+  const isCancellable =
+    ["pending", "confirmed"].includes(booking.status) && new Date(booking.checkInDate) > new Date();
+
+  return (
+    <main className="container-luxe max-w-3xl pb-24 pt-16 sm:pt-20">
+      <Breadcrumbs
+        items={[
+          { label: "Home", href: "/" },
+          { label: "Booking", href: "/hotel/booking" },
+          { label: "Confirmation" },
+        ]}
+      />
+
+      {/* ── Success header ── */}
+      <header className="text-center">
+        <BookingSuccessMark />
+        <p className="section-eyebrow mt-7 flex justify-center">
+          {booking.status === "confirmed" ? "Reservation Confirmed" : "Reservation Received"}
         </p>
+        <h1 className="page-title">Thank you, {booking.guestName.split(" ")[0]}</h1>
+        <p className="lead mx-auto mt-5 max-w-md">
+          {booking.status === "confirmed"
+            ? "Your stay is confirmed. We've sent the details to your email."
+            : "Your booking is saved. It will confirm once payment is complete."}
+        </p>
+      </header>
+
+      {/* ── Invoice document ──
+          Laid out to the supplied invoice reference: wordmark + INVOICE rule,
+          a meta row, Guest/Hotel columns, a line-item table, then totals. */}
+      <article
+        id="booking-invoice"
+        className="mt-12 overflow-hidden rounded-luxe border border-ink/[0.08] border-l-[3px] border-l-gold bg-white shadow-luxury"
+      >
+        {/* Letterhead */}
+        <div className="flex flex-wrap items-start justify-between gap-6 px-8 pb-6 pt-9 sm:px-10">
+          <div>
+            <p className="font-display text-[1.75rem] leading-none text-ink">
+              7 <span className="text-gold">Vachan</span>
+            </p>
+            <p className="mt-1.5 text-[11px] uppercase tracking-eyebrow text-warm-400">
+              Hotel &amp; Stays
+            </p>
+          </div>
+          <p className="font-display text-[1.75rem] uppercase tracking-wide text-ink">Invoice</p>
+        </div>
+
+        {/* Meta row */}
+        <div className="flex flex-wrap gap-x-10 gap-y-3 border-y border-ink/[0.08] px-8 py-4 sm:px-10">
+          {[
+            { label: "Invoice No.", value: `INV-${booking.bookingReference}` },
+            { label: "Booking Reference", value: booking.bookingReference },
+            {
+              label: "Date",
+              value: booking.createdAt ? formatDate(booking.createdAt) : formatDate(booking.checkInDate),
+            },
+          ].map((item) => (
+            <p key={item.label} className="flex items-baseline gap-2.5 text-sm">
+              <span className="text-xs text-warm-500">{item.label}</span>
+              <span className="font-medium text-ink">{item.value}</span>
+            </p>
+          ))}
+        </div>
+
+        {/* Guest + hotel details */}
+        <div className="grid grid-cols-1 gap-8 px-8 py-7 sm:grid-cols-2 sm:px-10">
+          <div>
+            <p className="mb-3 text-sm font-semibold text-ink">Guest Details</p>
+            <p className="text-sm font-light text-warm-600">{booking.guestName}</p>
+            {booking.guestPhone && (
+              <p className="text-sm font-light text-warm-600">{booking.guestPhone}</p>
+            )}
+            <p className="break-all text-sm font-light text-warm-600">{booking.guestEmail}</p>
+          </div>
+          {hotel && (
+            <div>
+              <p className="mb-3 text-sm font-semibold text-ink">Hotel Details</p>
+              <p className="text-sm font-light text-warm-600">{hotel.name}</p>
+              <p className="text-sm font-light text-warm-600">{hotel.address}</p>
+              <p className="break-all text-sm font-light text-warm-600">
+                {hotel.contactEmail} | {hotel.contactPhone}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Line items. Scrolls horizontally on narrow screens rather than
+            squashing the columns into unreadable slivers. */}
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] border-collapse text-sm">
+            <thead>
+              <tr className="bg-cream-dark/60 text-left">
+                {["Item", "Description", "Check-in", "Check-out", "Nights"].map((h) => (
+                  <th key={h} className="px-4 py-3.5 font-medium text-ink first:pl-8 sm:first:pl-10">
+                    {h}
+                  </th>
+                ))}
+                <th className="px-4 py-3.5 text-right font-medium text-ink sm:pr-10">Amount (₹)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {booking.rooms.map((room, i) => (
+                <tr key={i} className="border-b border-ink/[0.07]">
+                  <td className="px-4 py-4 text-ink first:pl-8 sm:first:pl-10">{room.roomName}</td>
+                  <td className="px-4 py-4 font-light text-warm-600">
+                    {room.numRooms} {room.numRooms === 1 ? "Room" : "Rooms"} x {nights}{" "}
+                    {nights === 1 ? "Night" : "Nights"}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-4 font-light text-warm-600">
+                    {formatDate(booking.checkInDate)}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-4 font-light text-warm-600">
+                    {formatDate(booking.checkOutDate)}
+                  </td>
+                  <td className="px-4 py-4 font-light tabular-nums text-warm-600">{nights}</td>
+                  <td className="whitespace-nowrap px-4 py-4 text-right tabular-nums text-ink sm:pr-10">
+                    {money(room.subtotal)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Totals */}
+        <div className="flex justify-end px-8 py-7 sm:px-10">
+          <dl className="w-full max-w-sm space-y-3 text-sm">
+            <div className="flex items-center justify-between">
+              <dt className="font-light text-warm-600">Subtotal</dt>
+              <dd className="tabular-nums text-ink">{money(booking.subtotal ?? booking.totalAmount)}</dd>
+            </div>
+
+            {/* Renders only when the API actually supplies tax — see BookingData. */}
+            {typeof booking.taxAmount === "number" && booking.taxAmount > 0 && (
+              <div className="flex items-center justify-between">
+                <dt className="font-light text-warm-600">{booking.taxLabel || "Tax"}</dt>
+                <dd className="tabular-nums text-ink">{money(booking.taxAmount)}</dd>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between border-t border-ink/[0.12] pt-3">
+              <dt className="font-semibold text-ink">Total Amount</dt>
+              <dd className="price text-xl">{money(booking.totalAmount)}</dd>
+            </div>
+
+            {advancePaid > 0 && (
+              <div className="flex items-center justify-between">
+                <dt className="font-light text-warm-600">Advance paid</dt>
+                <dd className="tabular-nums text-gold-dark">− {money(advancePaid)}</dd>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between border-t border-ink/[0.08] pt-3">
+              <dt className="font-medium text-ink">Balance due at property</dt>
+              <dd className="price text-lg">{money(booking.balanceDue)}</dd>
+            </div>
+          </dl>
+        </div>
+
+        {/* Status + any special request */}
+        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-ink/[0.08] bg-cream/50 px-8 py-5 sm:px-10">
+          <span
+            className={`inline-flex rounded-full border px-4 py-1.5 text-xs font-medium uppercase tracking-luxe ${
+              STATUS_STYLES[booking.status] || "border-ink/15 bg-ink/[0.04] text-ink/70"
+            }`}
+          >
+            {booking.status.replace(/_/g, " ")}
+          </span>
+          <span className="text-xs font-light text-warm-500">
+            Guests: {booking.numGuests}
+            {hotel?.checkInTime ? ` · Check-in from ${hotel.checkInTime}` : ""}
+            {hotel?.checkOutTime ? ` · Check-out by ${hotel.checkOutTime}` : ""}
+          </span>
+          {booking.specialRequest && (
+            <span className="w-full text-xs font-light italic text-warm-500">
+              Special request: &ldquo;{booking.specialRequest}&rdquo;
+            </span>
+          )}
+        </div>
+      </article>
+
+      {/* ── Actions ── */}
+      <div className="mt-9">
+        <InvoiceActions
+          bookingReference={booking.bookingReference}
+          guestEmail={booking.guestEmail}
+          hotelName={hotel?.name || "7 Vachan"}
+        />
       </div>
 
-      <p className="text-ink/50 text-sm mt-6">
-        A confirmation email has been sent to {booking.guestEmail}. Please keep your booking reference
-        handy at check-in.
+      <p className="no-print mt-7 text-center text-sm font-light text-warm-500">
+        A confirmation email has been sent to {booking.guestEmail}. Please keep your reference handy
+        at check-in.
       </p>
 
-      {["pending", "confirmed"].includes(booking.status) &&
-        new Date(booking.checkInDate) > new Date() && (
-          <div className="mt-6">
-            <CancelBookingButton bookingReference={booking.bookingReference} requireEmailPrompt={true} />
-          </div>
+      {/* ── Secondary actions ── */}
+      <div className="no-print mt-10 flex flex-col items-center gap-5 border-t border-ink/[0.08] pt-9">
+        <Link href="/my-bookings" className="link-arrow">
+          View all my bookings <ArrowRight size={14} />
+        </Link>
+
+        {isCancellable && (
+          <CancelBookingButton bookingReference={booking.bookingReference} requireEmailPrompt={true} />
         )}
+      </div>
     </main>
   );
 }

@@ -2,17 +2,25 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { SlidersHorizontal, Search, RotateCcw } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { SlidersHorizontal, Search, RotateCcw, X } from "lucide-react";
 import RoomCard, { RoomSummary } from "@/modules/hotel/components/RoomCard";
+import { SkeletonGrid } from "@/components/Skeleton";
+import { Stagger, StaggerItem } from "@/components/motion/Stagger";
+import { EASE_LUXE } from "@/components/motion/variants";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000/api/v1";
 const PAGE_SIZE = 6;
 
-// Feature 3 (Phase 3.6), restyled + paginated for Phase 3.7's dedicated
-// /hotel/rooms page. Renders the initial server-fetched `initialRooms` until
-// the guest searches, then swaps to filtered/sorted results from the search
-// endpoint. Pagination is client-side (the search API returns the full
-// filtered set) — no backend change needed for this, per Phase 3.7 scope.
+/**
+ * Room search + filters + client-side pagination.
+ *
+ * Search behaviour, endpoint and query params are unchanged. Presentation
+ * changes: the filter panel is a proper collapsible drawer on mobile (animated
+ * height) and an always-open card on desktop, results fade out and shimmering
+ * skeletons take their place while a search is in flight (rather than the grid
+ * sitting stale under a "Searching…" label), and the result grid staggers in.
+ */
 export default function RoomSearch({
   hotelSlug,
   initialRooms,
@@ -48,9 +56,10 @@ export default function RoomSearch({
     if (f.sortBy) params.set("sortBy", f.sortBy);
 
     try {
-      const res = await fetch(`${API_BASE_URL}/hotels/${hotelSlug}/rooms/search?${params.toString()}`, {
-        cache: "no-store",
-      });
+      const res = await fetch(
+        `${API_BASE_URL}/hotels/${hotelSlug}/rooms/search?${params.toString()}`,
+        { cache: "no-store" }
+      );
       const json = await res.json();
       if (json.success) {
         setRooms(json.data);
@@ -62,8 +71,8 @@ export default function RoomSearch({
     }
   }
 
-  // If the guest arrived from the Quick Booking Widget with dates/guests in
-  // the URL, run the search automatically on first load.
+  // If the guest arrived from the Quick Booking Widget with dates/guests in the
+  // URL, run the search automatically on first load.
   useEffect(() => {
     if (searchParams.get("checkInDate") || searchParams.get("guests")) {
       runSearch(filters);
@@ -73,6 +82,7 @@ export default function RoomSearch({
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
+    setShowFilters(false);
     runSearch(filters);
   }
 
@@ -94,137 +104,211 @@ export default function RoomSearch({
 
   const totalPages = Math.max(1, Math.ceil(rooms.length / PAGE_SIZE));
   const pageRooms = rooms.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const today = new Date().toISOString().split("T")[0];
 
-  const inputClass =
-    "w-full text-sm px-3 py-2.5 rounded-xl border border-ink/10 focus:outline-none focus:border-gold bg-white";
+  const fieldClass =
+    "w-full bg-transparent border-0 border-b border-ink/12 py-2.5 text-sm font-light text-ink placeholder:text-warm-400 transition-colors duration-300 focus:border-gold focus:outline-none focus:ring-0";
+
+  const filterFields = (
+    <>
+      <label className="block">
+        <span className="field-label">Arrival</span>
+        <input
+          type="date"
+          min={today}
+          value={filters.checkInDate}
+          onChange={(e) => setFilters({ ...filters, checkInDate: e.target.value })}
+          className={fieldClass}
+        />
+      </label>
+      <label className="block">
+        <span className="field-label">Departure</span>
+        <input
+          type="date"
+          min={filters.checkInDate || today}
+          value={filters.checkOutDate}
+          onChange={(e) => setFilters({ ...filters, checkOutDate: e.target.value })}
+          className={fieldClass}
+        />
+      </label>
+      <label className="block">
+        <span className="field-label">Guests</span>
+        <input
+          type="number"
+          min={1}
+          placeholder="Any"
+          value={filters.guests}
+          onChange={(e) => setFilters({ ...filters, guests: e.target.value })}
+          className={fieldClass}
+        />
+      </label>
+      <label className="block">
+        <span className="field-label">Min Rate</span>
+        <input
+          type="number"
+          min={0}
+          placeholder="₹0"
+          value={filters.minPrice}
+          onChange={(e) => setFilters({ ...filters, minPrice: e.target.value })}
+          className={fieldClass}
+        />
+      </label>
+      <label className="block">
+        <span className="field-label">Max Rate</span>
+        <input
+          type="number"
+          min={0}
+          placeholder="Any"
+          value={filters.maxPrice}
+          onChange={(e) => setFilters({ ...filters, maxPrice: e.target.value })}
+          className={fieldClass}
+        />
+      </label>
+      <label className="block">
+        <span className="field-label">Category</span>
+        <select
+          value={filters.roomType}
+          onChange={(e) => setFilters({ ...filters, roomType: e.target.value })}
+          className={fieldClass}
+        >
+          <option value="">Any</option>
+          <option>Deluxe</option>
+          <option>Executive</option>
+          <option>Luxury</option>
+          <option>Suite</option>
+        </select>
+      </label>
+      <label className="block">
+        <span className="field-label">Sort By</span>
+        <select
+          value={filters.sortBy}
+          onChange={(e) => setFilters({ ...filters, sortBy: e.target.value })}
+          className={fieldClass}
+        >
+          <option value="newest">Newest</option>
+          <option value="price">Rate</option>
+          <option value="popularity">Popularity</option>
+        </select>
+      </label>
+    </>
+  );
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-5">
-        <p className="text-ink/60 text-sm">{rooms.length} room type(s) found</p>
+      {/* ── Result count + mobile filter toggle ── */}
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <p className="text-[10px] uppercase tracking-luxe text-warm-500">
+          {rooms.length} {rooms.length === 1 ? "Room Type" : "Room Types"}
+          {hasSearched && " Matching"}
+        </p>
         <button
           onClick={() => setShowFilters((v) => !v)}
-          className="lg:hidden inline-flex items-center gap-1.5 text-sm text-ink border border-ink/15 rounded-full px-4 py-2"
+          className="inline-flex items-center gap-2 rounded-full border border-ink/12 px-5 py-2.5 text-[10px] uppercase tracking-luxe text-ink transition-colors duration-400 hover:border-gold hover:text-gold lg:hidden"
+          aria-expanded={showFilters}
         >
-          <SlidersHorizontal size={15} /> Filters
+          {showFilters ? <X size={13} /> : <SlidersHorizontal size={13} />}
+          {showFilters ? "Close" : "Filters"}
         </button>
       </div>
 
-      <form
-        onSubmit={handleSearch}
-        className={`${showFilters ? "grid" : "hidden"} lg:grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 bg-white border border-ink/5 rounded-2xl p-5 mb-10 shadow-luxury items-end`}
-      >
-        <label className="text-xs text-ink/50">
-          Check-in
-          <input
-            type="date"
-            value={filters.checkInDate}
-            onChange={(e) => setFilters({ ...filters, checkInDate: e.target.value })}
-            className={inputClass}
-          />
-        </label>
-        <label className="text-xs text-ink/50">
-          Check-out
-          <input
-            type="date"
-            value={filters.checkOutDate}
-            onChange={(e) => setFilters({ ...filters, checkOutDate: e.target.value })}
-            className={inputClass}
-          />
-        </label>
-        <label className="text-xs text-ink/50">
-          Guests
-          <input
-            type="number"
-            min={1}
-            value={filters.guests}
-            onChange={(e) => setFilters({ ...filters, guests: e.target.value })}
-            className={inputClass}
-          />
-        </label>
-        <label className="text-xs text-ink/50">
-          Min Price
-          <input
-            type="number"
-            min={0}
-            value={filters.minPrice}
-            onChange={(e) => setFilters({ ...filters, minPrice: e.target.value })}
-            className={inputClass}
-          />
-        </label>
-        <label className="text-xs text-ink/50">
-          Max Price
-          <input
-            type="number"
-            min={0}
-            value={filters.maxPrice}
-            onChange={(e) => setFilters({ ...filters, maxPrice: e.target.value })}
-            className={inputClass}
-          />
-        </label>
-        <label className="text-xs text-ink/50">
-          Room Type
-          <select
-            value={filters.roomType}
-            onChange={(e) => setFilters({ ...filters, roomType: e.target.value })}
-            className={inputClass}
-          >
-            <option value="">Any</option>
-            <option>Deluxe</option>
-            <option>Executive</option>
-            <option>Luxury</option>
-            <option>Suite</option>
-          </select>
-        </label>
-        <label className="text-xs text-ink/50">
-          Sort By
-          <select
-            value={filters.sortBy}
-            onChange={(e) => setFilters({ ...filters, sortBy: e.target.value })}
-            className={inputClass}
-          >
-            <option value="newest">Newest</option>
-            <option value="price">Price</option>
-            <option value="popularity">Popularity</option>
-          </select>
-        </label>
+      {/* ── Filters: animated drawer on mobile, static card on desktop ── */}
+      <div className="mb-12">
+        {/* Mobile */}
+        <AnimatePresence initial={false}>
+          {showFilters && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.45, ease: EASE_LUXE }}
+              className="overflow-hidden lg:hidden"
+            >
+              <form
+                onSubmit={handleSearch}
+                className="grid grid-cols-2 gap-x-5 gap-y-6 rounded-luxe border border-ink/[0.07] bg-white p-6 shadow-luxury"
+              >
+                {filterFields}
+                <div className="col-span-2 flex flex-wrap gap-3 pt-2">
+                  <button type="submit" disabled={searching} className="btn-primary group flex-1 disabled:opacity-60">
+                    <Search size={14} /> {searching ? "Searching…" : "Search"}
+                  </button>
+                  {hasSearched && (
+                    <button type="button" onClick={handleReset} className="btn-outline group">
+                      <RotateCcw size={14} /> Reset
+                    </button>
+                  )}
+                </div>
+              </form>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        <div className="col-span-2 sm:col-span-3 lg:col-span-7 flex gap-3 pt-1">
-          <button type="submit" disabled={searching} className="btn-primary text-sm">
-            <Search size={15} /> {searching ? "Searching..." : "Search"}
-          </button>
+        {/* Desktop */}
+        <form
+          onSubmit={handleSearch}
+          className="hidden items-end gap-6 rounded-luxe border border-ink/[0.07] bg-white p-7 shadow-luxury lg:grid lg:grid-cols-8"
+        >
+          {filterFields}
+          <div className="flex flex-col gap-2">
+            <button type="submit" disabled={searching} className="btn-primary group !px-5 disabled:opacity-60">
+              <Search size={14} /> {searching ? "…" : "Search"}
+            </button>
+            {hasSearched && (
+              <button
+                type="button"
+                onClick={handleReset}
+                className="inline-flex items-center justify-center gap-1.5 text-[10px] uppercase tracking-luxe text-warm-500 transition-colors hover:text-gold"
+              >
+                <RotateCcw size={12} /> Reset
+              </button>
+            )}
+          </div>
+        </form>
+      </div>
+
+      {/* ── Results ── */}
+      {searching ? (
+        <SkeletonGrid count={3} />
+      ) : pageRooms.length === 0 ? (
+        <div className="py-20 text-center">
+          <p className="section-title !text-2xl">No rooms match those dates</p>
+          <p className="body-muted mx-auto mt-3 max-w-sm">
+            Try widening your dates or clearing a filter — or call us and we&apos;ll find something.
+          </p>
           {hasSearched && (
-            <button type="button" onClick={handleReset} className="btn-outline text-sm">
-              <RotateCcw size={15} /> Reset
+            <button onClick={handleReset} className="btn-outline group mt-8">
+              <RotateCcw size={14} /> Clear Filters
             </button>
           )}
         </div>
-      </form>
-
-      {pageRooms.length === 0 ? (
-        <p className="text-center text-ink/50 py-16">No rooms match your search.</p>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-          {pageRooms.map((room) => (
-            <RoomCard key={room._id} room={room} />
+        <Stagger key={`${page}-${rooms.length}`} className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+          {pageRooms.map((room, i) => (
+            <StaggerItem key={room._id} className="flex">
+              <RoomCard room={room} priority={i < 2} />
+            </StaggerItem>
           ))}
-        </div>
+        </Stagger>
       )}
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 mt-12">
+      {/* ── Pagination ── */}
+      {!searching && totalPages > 1 && (
+        <nav aria-label="Rooms pagination" className="mt-14 flex items-center justify-center gap-2">
           {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
             <button
               key={p}
               onClick={() => setPage(p)}
-              className={`w-9 h-9 rounded-full text-sm font-medium transition-colors ${
-                p === page ? "bg-ink text-cream" : "bg-white text-ink/60 border border-ink/10 hover:border-gold"
+              aria-current={p === page ? "page" : undefined}
+              className={`h-10 w-10 rounded-full text-xs font-medium tabular-nums transition-all duration-400 ease-luxe ${
+                p === page
+                  ? "bg-ink text-cream"
+                  : "border border-ink/10 text-warm-500 hover:border-gold hover:text-gold"
               }`}
             >
               {p}
             </button>
           ))}
-        </div>
+        </nav>
       )}
     </div>
   );

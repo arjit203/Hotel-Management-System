@@ -1,10 +1,11 @@
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { Star } from "lucide-react";
 import { getTheHotel } from "@/lib/hotel";
 import ReviewsList from "@/modules/hotel/components/ReviewsList";
 import ReviewForm from "@/modules/hotel/components/ReviewForm";
-import Breadcrumbs from "@/components/Breadcrumbs";
+import StarRating from "@/components/StarRating";
+import PageHeader from "@/components/PageHeader";
+import Reveal from "@/components/motion/Reveal";
 
 export const metadata: Metadata = {
   title: "Guest Reviews",
@@ -19,31 +20,44 @@ export default async function ReviewsPage() {
   const { hotel, reviews, reviewSummary } = data;
 
   return (
-    <main className="mx-auto max-w-6xl px-5 sm:px-8 py-16">
-      <Breadcrumbs items={[{ label: "Home", href: "/" }, { label: "Hotel", href: "/hotel" }, { label: "Reviews" }]} />
-      <div className="text-center max-w-2xl mx-auto mb-4">
-        <p className="section-eyebrow justify-center flex">Guest Stories</p>
-        <h1 className="section-title">Reviews</h1>
-      </div>
+    <main>
+      <div className="container-luxe max-w-6xl pb-24 pt-16 sm:pt-20">
+        <PageHeader
+          eyebrow="Guest Stories"
+          title="Reviews"
+          lead="Unedited, in our guests' own words."
+          crumbs={[{ label: "Home", href: "/" }, { label: "Hotel", href: "/hotel" }, { label: "Reviews" }]}
+        />
 
-      {reviewSummary.count > 0 && (
-        <div className="flex items-center justify-center gap-2 mb-12 text-ink/70">
-          <div className="flex gap-0.5">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <Star key={i} size={18} className={i <= Math.round(reviewSummary.average) ? "text-gold fill-gold" : "text-ink/15"} />
-            ))}
-          </div>
-          <span className="font-semibold">{reviewSummary.average}</span>
-          <span className="text-sm">({reviewSummary.count} reviews)</span>
+        {/* ── Aggregate score ── */}
+        {reviewSummary.count > 0 && (
+          <Reveal className="mb-16">
+            <div className="mx-auto flex max-w-md flex-col items-center rounded-luxe border border-ink/[0.07] bg-white px-10 py-9 text-center shadow-luxury">
+              <p className="price text-5xl leading-none">{reviewSummary.average.toFixed(1)}</p>
+              <div className="mt-4">
+                <StarRating rating={reviewSummary.average} size={16} />
+              </div>
+              <p className="mt-4 text-[10px] uppercase tracking-eyebrow text-warm-400">
+                {reviewSummary.count} {reviewSummary.count === 1 ? "Review" : "Reviews"}
+              </p>
+            </div>
+          </Reveal>
+        )}
+
+        <div className="mb-20">
+          <ReviewsList reviews={reviews} />
         </div>
-      )}
 
-      <div className="mb-14">
-        <ReviewsList reviews={reviews} />
-      </div>
-
-      <div className="max-w-2xl mx-auto">
-        <ReviewForm hotelId={hotel._id} />
+        {/* ── Write a review ── */}
+        <Reveal delay={0.1}>
+          <div className="mx-auto max-w-2xl rounded-luxe border border-ink/[0.07] bg-white p-8 shadow-luxury sm:p-10">
+            <div className="mb-8 text-center">
+              <p className="section-eyebrow flex justify-center">Your Turn</p>
+              <h2 className="section-title !text-[1.75rem]">Share your stay</h2>
+            </div>
+            <ReviewForm hotelId={hotel._id} />
+          </div>
+        </Reveal>
       </div>
     </main>
   );

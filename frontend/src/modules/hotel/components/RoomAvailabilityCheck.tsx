@@ -1,15 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarCheck } from "lucide-react";
+import { CalendarCheck, Loader2, Check, X } from "lucide-react";
 import { api } from "@/lib/api";
 
+/**
+ * Inline availability check on the room detail page.
+ * Presentation only — same endpoint, same request, same validation.
+ */
 export default function RoomAvailabilityCheck({ roomId }: { roomId: string }) {
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
   const [result, setResult] = useState<{ availableCount: number } | null>(null);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState("");
+
+  const today = new Date().toISOString().split("T")[0];
 
   async function handleCheck(e: React.FormEvent) {
     e.preventDefault();
@@ -31,40 +37,66 @@ export default function RoomAvailabilityCheck({ roomId }: { roomId: string }) {
     setResult(res.data);
   }
 
+  const fieldClass =
+    "block w-full border-0 border-b border-ink/15 bg-transparent py-2 text-sm font-light text-ink transition-colors duration-300 focus:border-gold focus:outline-none focus:ring-0";
+
   return (
-    <div className="bg-cream-dark rounded-2xl p-5 mt-6">
-      <p className="flex items-center gap-2 text-sm font-semibold text-ink mb-3">
-        <CalendarCheck size={16} className="text-gold" /> Check Availability
+    <div className="mt-8 rounded-luxe border border-ink/[0.07] bg-cream-dark/70 p-6">
+      <p className="mb-5 flex items-center gap-2.5 text-xs uppercase tracking-luxe text-ink">
+        <CalendarCheck size={15} className="text-gold" /> Check Availability
       </p>
-      <form onSubmit={handleCheck} className="flex flex-wrap gap-3 items-end">
-        <label className="text-xs text-ink/50">
-          Check-in
+
+      <form onSubmit={handleCheck} className="flex flex-wrap items-end gap-5">
+        <label className="min-w-[7.5rem] flex-1">
+          <span className="field-label">Arrival</span>
           <input
             type="date"
+            min={today}
             value={checkIn}
             onChange={(e) => setCheckIn(e.target.value)}
-            className="block mt-1 px-3 py-2 rounded-lg border border-ink/10 text-sm focus:outline-none focus:border-gold"
+            className={fieldClass}
           />
         </label>
-        <label className="text-xs text-ink/50">
-          Check-out
+        <label className="min-w-[7.5rem] flex-1">
+          <span className="field-label">Departure</span>
           <input
             type="date"
+            min={checkIn || today}
             value={checkOut}
             onChange={(e) => setCheckOut(e.target.value)}
-            className="block mt-1 px-3 py-2 rounded-lg border border-ink/10 text-sm focus:outline-none focus:border-gold"
+            className={fieldClass}
           />
         </label>
-        <button type="submit" disabled={checking} className="btn-outline text-sm">
-          {checking ? "Checking..." : "Check"}
+        <button type="submit" disabled={checking} className="btn-outline group !px-6 !py-3 disabled:opacity-60">
+          {checking ? <Loader2 size={14} className="animate-spin" /> : null}
+          {checking ? "Checking" : "Check"}
         </button>
       </form>
-      {error && <p className="text-red-600 text-xs mt-3">{error}</p>}
+
+      {error && (
+        <p role="alert" className="mt-4 text-sm font-light text-red-700">
+          {error}
+        </p>
+      )}
+
       {result && (
-        <p className={`text-sm mt-3 font-medium ${result.availableCount > 0 ? "text-green-700" : "text-red-600"}`}>
-          {result.availableCount > 0
-            ? `✓ ${result.availableCount} room(s) available for these dates.`
-            : "No rooms available for these dates."}
+        <p
+          className={`mt-4 flex items-center gap-2 text-sm font-light ${
+            result.availableCount > 0 ? "text-gold-dark" : "text-red-700"
+          }`}
+        >
+          {result.availableCount > 0 ? (
+            <>
+              <Check size={15} className="shrink-0" />
+              {result.availableCount} {result.availableCount === 1 ? "room" : "rooms"} available for
+              these dates.
+            </>
+          ) : (
+            <>
+              <X size={15} className="shrink-0" />
+              No rooms available for these dates.
+            </>
+          )}
         </p>
       )}
     </div>

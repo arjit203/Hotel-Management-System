@@ -1,4 +1,7 @@
 import { ShieldCheck, Sparkles, Clock, HeartHandshake } from "lucide-react";
+import Reveal from "@/components/motion/Reveal";
+import TextReveal from "@/components/motion/TextReveal";
+import { Stagger, StaggerItem } from "@/components/motion/Stagger";
 
 const POINTS = [
   {
@@ -25,25 +28,51 @@ const POINTS = [
 
 export default function WhyChooseUs() {
   return (
-    <section className="bg-ink text-cream py-20">
-      <div className="mx-auto max-w-7xl px-5 sm:px-8">
-        <div className="text-center max-w-2xl mx-auto mb-14">
-          <p className="section-eyebrow justify-center flex">Our Promise</p>
-          <h2 className="font-display text-3xl sm:text-4xl md:text-5xl text-cream leading-tight">
-            Why Guests Choose 7 Vachan
-          </h2>
+    <section className="section relative overflow-hidden bg-ink text-cream">
+      {/* Warm light bloom + a hairline grid of gold rules for depth. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute left-1/2 top-0 h-[380px] w-[880px] -translate-x-1/2 rounded-full bg-gold/[0.08] blur-[130px]"
+      />
+
+      <div className="container-luxe relative">
+        <div className="mx-auto mb-16 max-w-2xl text-center sm:mb-20">
+          <Reveal duration={0.6}>
+            <p className="section-eyebrow flex justify-center">Our Promise</p>
+          </Reveal>
+          <TextReveal
+            as="h2"
+            text="Why guests return"
+            className="font-display text-display-md font-normal text-cream"
+            delay={0.05}
+          />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10">
+
+        <Stagger
+          className="grid grid-cols-1 gap-px overflow-hidden rounded-luxe border border-cream/10 bg-cream/10 sm:grid-cols-2 lg:grid-cols-4"
+          stagger={0.1}
+        >
           {POINTS.map(({ icon: Icon, title, desc }) => (
-            <div key={title} className="text-center">
-              <div className="w-14 h-14 mx-auto rounded-full bg-gold/10 flex items-center justify-center mb-5">
-                <Icon size={24} className="text-gold" />
+            <StaggerItem key={title}>
+              {/* Hairline-divided cells: the 1px gaps come from the parent's
+                  gap-px over a tinted background, so there are no double borders. */}
+              <div className="group h-full bg-ink px-8 py-12 text-center transition-colors duration-600 ease-luxe hover:bg-ink-light">
+                <span
+                  className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full border border-gold/25
+                             transition-all duration-600 ease-luxe group-hover:border-gold/60 group-hover:bg-gold/10"
+                >
+                  <Icon
+                    size={22}
+                    strokeWidth={1.5}
+                    className="text-gold transition-transform duration-600 ease-luxe group-hover:scale-110"
+                  />
+                </span>
+                <h3 className="font-display text-xl font-medium text-cream">{title}</h3>
+                <p className="mt-3 text-sm font-light leading-relaxed text-cream/55">{desc}</p>
               </div>
-              <h3 className="font-display text-lg text-cream mb-2">{title}</h3>
-              <p className="text-cream/60 text-sm leading-relaxed">{desc}</p>
-            </div>
+            </StaggerItem>
           ))}
-        </div>
+        </Stagger>
       </div>
     </section>
   );

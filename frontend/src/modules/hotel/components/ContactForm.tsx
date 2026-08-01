@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Send } from "lucide-react";
+import { MessageCircle } from "lucide-react";
 
-// No dedicated "contact form submission" backend endpoint exists in this
-// phase's scope (Phase 3.7 is frontend-only, "use only existing APIs").
-// Submitting opens a pre-filled WhatsApp chat to the hotel's number instead
-// of silently doing nothing or requiring an unbuilt backend endpoint — fully
-// functional today, and doubles as the brief's "WhatsApp CTA" requirement.
+// No dedicated "contact form submission" backend endpoint exists (still true —
+// the Hotel module's API surface has no contact route). Submitting opens a
+// pre-filled WhatsApp chat to the hotel's number instead of silently doing
+// nothing or requiring an unbuilt endpoint — fully functional today, and doubles
+// as the brief's WhatsApp CTA. The button says so explicitly so the guest is
+// never surprised by which app opens.
 export default function ContactForm({ whatsappNumber }: { whatsappNumber: string }) {
   const [form, setForm] = useState({ name: "", email: "", phone: "", message: "" });
 
@@ -17,48 +18,66 @@ export default function ContactForm({ whatsappNumber }: { whatsappNumber: string
     window.open(`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(text)}`, "_blank");
   }
 
+  const fieldClass =
+    "block w-full border-0 border-b border-ink/12 bg-transparent py-2.5 text-base font-light text-ink placeholder:text-warm-400 transition-colors duration-300 focus:border-gold focus:outline-none focus:ring-0";
+
   return (
-    <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-luxury border border-ink/5 p-6 sm:p-8 space-y-4">
-      <label className="block text-sm text-ink/60">
-        Full Name
+    <form onSubmit={handleSubmit} className="card-luxe space-y-7 p-7 sm:p-9">
+      <label className="block">
+        <span className="field-label">Full Name</span>
         <input
           required
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
-          className="block w-full mt-1 px-3 py-2.5 rounded-xl border border-ink/10 focus:outline-none focus:border-gold text-ink"
+          autoComplete="name"
+          className={fieldClass}
         />
       </label>
-      <label className="block text-sm text-ink/60">
-        Email
-        <input
-          required
-          type="email"
-          value={form.email}
-          onChange={(e) => setForm({ ...form, email: e.target.value })}
-          className="block w-full mt-1 px-3 py-2.5 rounded-xl border border-ink/10 focus:outline-none focus:border-gold text-ink"
-        />
-      </label>
-      <label className="block text-sm text-ink/60">
-        Phone (optional)
-        <input
-          value={form.phone}
-          onChange={(e) => setForm({ ...form, phone: e.target.value })}
-          className="block w-full mt-1 px-3 py-2.5 rounded-xl border border-ink/10 focus:outline-none focus:border-gold text-ink"
-        />
-      </label>
-      <label className="block text-sm text-ink/60">
-        Message
+
+      <div className="grid grid-cols-1 gap-7 sm:grid-cols-2">
+        <label className="block">
+          <span className="field-label">Email</span>
+          <input
+            required
+            type="email"
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+            autoComplete="email"
+            className={fieldClass}
+          />
+        </label>
+        <label className="block">
+          <span className="field-label">Phone (optional)</span>
+          <input
+            type="tel"
+            value={form.phone}
+            onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            autoComplete="tel"
+            className={fieldClass}
+          />
+        </label>
+      </div>
+
+      <label className="block">
+        <span className="field-label">Message</span>
         <textarea
           required
           rows={4}
           value={form.message}
           onChange={(e) => setForm({ ...form, message: e.target.value })}
-          className="block w-full mt-1 px-3 py-2.5 rounded-xl border border-ink/10 focus:outline-none focus:border-gold text-ink"
+          placeholder="How can we help?"
+          className={`${fieldClass} resize-none`}
         />
       </label>
-      <button type="submit" className="btn-primary text-sm w-full sm:w-auto">
-        <Send size={16} /> Send Message
-      </button>
+
+      <div>
+        <button type="submit" className="btn-primary group w-full sm:w-auto">
+          <MessageCircle size={15} /> Send Via WhatsApp
+        </button>
+        <p className="mt-3 text-xs font-light text-warm-500">
+          Opens WhatsApp with your message ready to send.
+        </p>
+      </div>
     </form>
   );
 }

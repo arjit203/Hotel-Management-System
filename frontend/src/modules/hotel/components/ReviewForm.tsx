@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Star, X, ImagePlus } from "lucide-react";
+import { Star, X, ImagePlus, Check, AlertCircle, Loader2, ArrowRight } from "lucide-react";
 import { getStoredUser, getUserToken, StoredUser } from "@/lib/userAuth";
+import { cldImage, IMAGE_WIDTHS } from "@/lib/imageUrl";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000/api/v1";
 
@@ -69,6 +70,9 @@ export default function ReviewForm({ hotelId }: { hotelId: string }) {
     setImages((prev) => prev.filter((u) => u !== url));
   }
 
+  const fieldClass =
+    "block w-full border-0 border-b border-ink/12 bg-transparent py-2.5 text-base font-light text-ink transition-colors duration-300 focus:border-gold focus:outline-none focus:ring-0";
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (rating === 0) {
@@ -102,108 +106,142 @@ export default function ReviewForm({ hotelId }: { hotelId: string }) {
 
   if (submitted) {
     return (
-      <p className="p-4 bg-green-50 rounded-xl text-green-700 my-4 text-sm">
-        Thanks! Your review has been submitted and will appear after admin approval.
-      </p>
+      <div className="py-6 text-center">
+        <span className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-gold/12">
+          <Check size={22} strokeWidth={1.5} className="text-gold" />
+        </span>
+        <p className="card-title">Thank you</p>
+        <p className="body-muted mx-auto mt-3 max-w-sm">
+          Your review has been submitted and will appear once approved.
+        </p>
+      </div>
     );
   }
 
+  // No card wrapper here on purpose — the Reviews page already places this
+  // inside a card, and nesting two would produce a double frame.
   return (
-    <form onSubmit={handleSubmit} className="bg-white border border-ink/5 shadow-luxury rounded-2xl p-6 sm:p-8">
-      <h4 className="font-display text-xl text-ink mb-5">Write a Review</h4>
-
+    <form onSubmit={handleSubmit} className="space-y-7">
       {user ? (
-        <p className="text-sm text-ink/60 mb-4">
-          Posting as <strong className="text-ink">{user.name}</strong>
+        <p className="text-sm font-light text-warm-600">
+          Posting as <span className="text-ink">{user.name}</span>
         </p>
       ) : (
-        <label className="block mb-4 text-sm text-ink/60">
-          Your Name
+        <label className="block">
+          <span className="field-label">Your Name</span>
           <input
             required
             value={guestName}
             onChange={(e) => setGuestName(e.target.value)}
-            className="block w-full mt-1 px-3 py-2.5 rounded-xl border border-ink/10 focus:outline-none focus:border-gold text-ink"
+            autoComplete="name"
+            className={fieldClass}
           />
         </label>
       )}
 
-      <label className="block mb-4 text-sm text-ink/60">
-        Your Rating
-        <div className="flex gap-1 mt-1">
+      <div>
+        <span className="field-label">Your Rating</span>
+        <div className="flex gap-1.5" onMouseLeave={() => setHoverRating(0)}>
           {[1, 2, 3, 4, 5].map((star) => (
             <button
               type="button"
               key={star}
               onClick={() => setRating(star)}
               onMouseEnter={() => setHoverRating(star)}
-              onMouseLeave={() => setHoverRating(0)}
+              aria-label={`${star} ${star === 1 ? "star" : "stars"}`}
+              aria-pressed={rating === star}
+              className="p-0.5 transition-transform duration-300 ease-luxe hover:scale-110"
             >
               <Star
-                size={26}
-                className={star <= (hoverRating || rating) ? "text-gold fill-gold" : "text-ink/15"}
+                size={28}
+                strokeWidth={1.5}
+                className={
+                  star <= (hoverRating || rating)
+                    ? "fill-gold text-gold transition-colors"
+                    : "text-ink/20 transition-colors"
+                }
               />
             </button>
           ))}
         </div>
-      </label>
+      </div>
 
-      <label className="block mb-4 text-sm text-ink/60">
-        Your Review
+      <label className="block">
+        <span className="field-label">Your Review</span>
         <textarea
           required
           minLength={3}
           rows={4}
           value={comment}
           onChange={(e) => setComment(e.target.value)}
-          className="block w-full mt-1 px-3 py-2.5 rounded-xl border border-ink/10 focus:outline-none focus:border-gold text-ink"
+          placeholder="What made your stay memorable?"
+          className={`${fieldClass} resize-none placeholder:text-warm-400`}
         />
       </label>
 
-      <label className="block mb-4 text-sm text-ink/60">
-        Photos (optional, up to {MAX_IMAGES})
-        <div className="mt-1">
-          <label className="inline-flex items-center gap-2 cursor-pointer text-sm text-gold border border-gold/40 rounded-full px-4 py-2 hover:bg-gold/5">
-            <ImagePlus size={16} />
-            Add Photo
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleImageSelect}
-              disabled={uploadingImage || images.length >= MAX_IMAGES}
-              className="hidden"
-            />
-          </label>
-        </div>
-      </label>
+      <div>
+        <span className="field-label">Photos (optional, up to {MAX_IMAGES})</span>
+        <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-gold/40 px-5 py-2.5 text-xs uppercase tracking-luxe text-gold-dark transition-colors duration-400 hover:border-gold hover:bg-gold/[0.07]">
+          <ImagePlus size={15} />
+          Add Photo
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleImageSelect}
+            disabled={uploadingImage || images.length >= MAX_IMAGES}
+            className="hidden"
+          />
+        </label>
+      </div>
 
       {(images.length > 0 || uploadingImage) && (
-        <div className="grid grid-cols-4 sm:grid-cols-5 gap-2 mb-4">
+        <div className="grid grid-cols-4 gap-2.5 sm:grid-cols-5">
           {images.map((url) => (
-            <div key={url} className="relative">
+            <div key={url} className="group relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt="Review photo" className="w-full h-16 object-cover rounded-lg" />
+              <img
+                src={cldImage(url, { width: IMAGE_WIDTHS.thumb })}
+                alt="Review photo"
+                loading="lazy"
+                decoding="async"
+                className="h-20 w-full rounded-xl object-cover"
+              />
               <button
                 type="button"
                 onClick={() => removeImage(url)}
-                className="absolute -top-1.5 -right-1.5 bg-ink text-cream rounded-full p-0.5"
+                aria-label="Remove photo"
+                className="absolute -right-2 -top-2 rounded-full bg-ink p-1 text-cream transition-colors hover:bg-red-600"
               >
-                <X size={12} />
+                <X size={11} />
               </button>
             </div>
           ))}
           {uploadingImage && (
-            <div className="h-16 flex items-center justify-center text-xs text-ink/40 border border-dashed border-ink/20 rounded-lg">
-              Uploading...
-            </div>
+            <div className="skeleton flex h-20 items-center justify-center rounded-xl" aria-label="Uploading" />
           )}
         </div>
       )}
 
-      {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
+      {error && (
+        <p
+          role="alert"
+          className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-light text-red-700"
+        >
+          <AlertCircle size={16} className="mt-0.5 shrink-0" />
+          {error}
+        </p>
+      )}
 
-      <button type="submit" disabled={submitting} className="btn-primary text-sm">
-        {submitting ? "Submitting..." : "Submit Review"}
+      <button type="submit" disabled={submitting} className="btn-primary group w-full disabled:opacity-60">
+        {submitting ? (
+          <>
+            <Loader2 size={15} className="animate-spin" /> Submitting
+          </>
+        ) : (
+          <>
+            Submit Review <ArrowRight size={14} className="btn-arrow" />
+          </>
+        )}
       </button>
     </form>
   );

@@ -94,6 +94,7 @@ Complete customer-facing and admin-facing hotel functionality: listing, details,
 
 ### Dependencies
 No new npm packages required at initial build — Hotel module used only what Auth/scaffold already installed (`mongoose`, `zod`, `express`, `nodemailer`).
+- **`framer-motion`** (`^12.43.0`, frontend only, added [2026-08-02]) — the motion layer for the public site (scroll reveals, headline masks, parallax, route transitions, animated accordions/lightboxes). Justification per `AI_INSTRUCTIONS.md` §19: the brief explicitly specified Framer Motion, and the required behaviours (`whileInView` orchestration, `AnimatePresence` exit transitions, spring-smoothed scroll values, staggered variants) are not reasonably reproducible with CSS transitions alone. Cost is ~40–50KB gzip on nearly every route; see the CHANGELOG note on the pending `LazyMotion` reduction. No backend or admin-panel dependency was added.
 - **`cloudinary`** (`^2.5.1`, added [2026-07-30] session) — image upload/transform/delete for Hotel/Room/Gallery/Offer images. `multer` (already in scaffold's `package.json` since initial setup but previously unused) now used for in-memory file handling ahead of the Cloudinary upload. No `@types/cloudinary` needed — the SDK ships its own types.
 
 ### Environment Variables Added
@@ -110,6 +111,18 @@ No new npm packages required at initial build — Hotel module used only what Au
 - `frontend/src/modules/hotel/components/` — `HotelCard`, `RoomCard`, `BookingForm`
 - `frontend/src/components/` — new shared, vertical-agnostic components: `StarRating`, `FaqAccordion`, `GalleryGrid`, `MapPlaceholder`
 - `frontend/src/app/hotel/` — Next.js App Router pages: `/hotel`, `/hotel/about`, `/hotel/rooms`, `/hotel/rooms/[roomSlug]`, `/hotel/gallery`, `/hotel/offers`, `/hotel/amenities`, `/hotel/reviews`, `/hotel/faqs`, `/hotel/contact`, `/hotel/booking`, `/hotel/booking/confirmation/[reference]` — **[Phase 3.7, 2026-08-01]** split out from a single `/hotel` page into a full multi-page premium website; see CHANGELOG.md for the complete list of new pages/components. No backend/database changes were made for this phase.
+- `frontend/src/components/motion/` — **[Phase 3.8, 2026-08-02]** shared, vertical-agnostic motion primitives (`Reveal`, `Stagger`, `TextReveal`, `Parallax`, `LuxeImage`, `PageTransition`, `ScrollProgress`, `AnimatedNumber`, `variants.ts`). Built to be reused by Hall/Restaurant — do not duplicate per vertical. All honour `prefers-reduced-motion` and animate only `opacity`/`transform`.
+- `frontend/src/components/auth/` — **[Phase 3.8]** customer auth presentation (`AuthShell`, `FloatingField`, `SocialPlaceholders`, `LoginForm`, `SignupForm`). Presentation only; all calls go to the existing `/auth/user/*` endpoints.
+- `frontend/src/components/{PageHeader,Skeleton}.tsx` — **[Phase 3.8]** the single page-header treatment (also emits breadcrumb JSON-LD) and shared loading placeholders.
+
+### Design System (frontend, Phase 3.8)
+**→ Full reference: `docs/DESIGN_SYSTEM.md`. Read it before building the Marriage Hall or Restaurant front-end** — those verticals must reuse this system (tokens, `.btn-*`/`.card-luxe` classes, and `components/motion/*`) rather than fork it, per `AI_INSTRUCTIONS.md` §6/§15. That document ends with a per-vertical checklist.
+
+The public site's visual language is defined in exactly two places and must not be re-invented per page:
+- `frontend/tailwind.config.js` — colour tokens (`ink`/`gold`/`cream`/`warm`), the fluid `display-*` type scale, `ease-luxe`, shadows, radii, keyframes.
+- `frontend/src/app/globals.css` — `.container-luxe`/`.section` rhythm, `.section-eyebrow`/`.section-title`/`.page-title`/`.card-title`/`.lead`/`.body-muted`/`.meta` typography, the `.btn-*` family, `.card-luxe`/`.glass`/`.media`/`.skeleton`/`.field` surfaces, the print stylesheet, and the reduced-motion block.
+
+Contrast rule: `warm-400` is the lightest colour permitted for body text (5.3:1 on cream). Anything lighter fails WCAG AA and must not be introduced.
 
 ### Full Endpoint List
 See `API_DOCUMENTATION.md`.

@@ -1,5 +1,8 @@
 import Link from "next/link";
-import { Tag, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
+import Reveal from "@/components/motion/Reveal";
+import TextReveal from "@/components/motion/TextReveal";
+import { Stagger, StaggerItem } from "@/components/motion/Stagger";
 
 interface Offer {
   _id: string;
@@ -11,28 +14,51 @@ export default function OffersPreview({ offers }: { offers: Offer[] }) {
   if (offers.length === 0) return null;
 
   return (
-    <section className="bg-cream-dark py-20">
-      <div className="mx-auto max-w-7xl px-5 sm:px-8">
-        <div className="text-center max-w-2xl mx-auto mb-12">
-          <p className="section-eyebrow justify-center flex">Special Packages</p>
-          <h2 className="section-title">Exclusive Offers</h2>
+    <section className="section bg-cream-dark">
+      <div className="container-luxe">
+        <div className="mx-auto mb-14 max-w-2xl text-center">
+          <Reveal duration={0.6}>
+            <p className="section-eyebrow flex justify-center">Special Packages</p>
+          </Reveal>
+          <TextReveal as="h2" text="Exclusive offers" className="section-title" delay={0.05} />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-          {offers.slice(0, 3).map((offer) => (
-            <div key={offer._id} className="bg-white rounded-2xl p-8 shadow-luxury border border-ink/5">
-              <Tag size={22} className="text-gold mb-4" />
-              <h3 className="font-display text-xl text-ink mb-2">{offer.title}</h3>
-              {offer.description && <p className="text-ink/60 text-sm leading-relaxed">{offer.description}</p>}
-            </div>
+        <Stagger className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 lg:gap-8">
+          {offers.slice(0, 3).map((offer, i) => (
+            <StaggerItem key={offer._id} className="flex">
+              <article className="card-luxe card-hover group flex w-full flex-col overflow-hidden p-9">
+                {/* Oversized index numeral — an editorial cue that reads as
+                    curated rather than as a list of database rows. */}
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute right-6 top-4 font-display text-7xl leading-none text-gold/10
+                             transition-all duration-700 ease-luxe group-hover:text-gold/20"
+                >
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+
+                <span className="mb-6 h-px w-12 bg-gold transition-all duration-600 ease-luxe group-hover:w-20" />
+
+                <h3 className="card-title relative">{offer.title}</h3>
+
+                {offer.description && <p className="body-muted mt-4 flex-1">{offer.description}</p>}
+
+                {/* `group-hover` too, so the arrow also steps forward when the
+                    whole offer card is hovered — not only the link itself. */}
+                <Link href="/hotel/booking" className="link-arrow mt-8">
+                  Reserve this offer
+                  <ArrowRight size={14} className="group-hover:translate-x-1" />
+                </Link>
+              </article>
+            </StaggerItem>
           ))}
-        </div>
+        </Stagger>
 
-        <div className="text-center mt-12">
-          <Link href="/hotel/offers" className="btn-primary">
-            View All Offers <ArrowRight size={16} />
+        <Reveal delay={0.1} className="mt-14 text-center">
+          <Link href="/hotel/offers" className="btn-primary group">
+            View All Offers <ArrowRight size={14} className="btn-arrow" />
           </Link>
-        </div>
+        </Reveal>
       </div>
     </section>
   );
