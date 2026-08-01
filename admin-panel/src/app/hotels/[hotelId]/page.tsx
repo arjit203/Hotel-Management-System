@@ -25,6 +25,7 @@ interface HotelData {
   address: string;
   contactPhone: string;
   contactEmail: string;
+  starRating?: number;
 }
 interface RoomData {
   _id: string;
@@ -75,6 +76,13 @@ export default function ManageHotelPage() {
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
+  const [showEditHotel, setShowEditHotel] = useState(false);
+const [hotelForm, setHotelForm] = useState({
+  name: "", description: "", address: "", contactPhone: "", contactEmail: "",
+  starRating: "", metaTitle: "", metaDescription: "",
+});
+const [savingHotel, setSavingHotel] = useState(false);
+
   const [showRoomForm, setShowRoomForm] = useState(false);
   const [roomForm, setRoomForm] = useState({
     categoryName: "Deluxe",
@@ -86,6 +94,11 @@ export default function ManageHotelPage() {
     totalRooms: "1",
     amenities: "",
   });
+  const [roomImages, setRoomImages] = useState<string[]>([]);
+  const [uploadingRoomImage, setUploadingRoomImage] = useState(false);
+  
+  const [roomImageUploadMethod, setRoomImageUploadMethod] = useState<"file" | "camera" | "url">("file");
+  const [roomImageUrlInput, setRoomImageUrlInput] = useState("");
 
   const [offerForm, setOfferForm] = useState({ title: "", description: "", validFrom: "", validTo: "" });
   const [faqForm, setFaqForm] = useState({ question: "", answer: "" });
@@ -127,6 +140,56 @@ export default function ManageHotelPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hotelId]);
 
+  function handleOpenEditHotel() {
+  if (!hotel) return;
+  setHotelForm({
+    name: hotel.name, description: hotel.description, address: hotel.address,
+    contactPhone: hotel.contactPhone, contactEmail: hotel.contactEmail,
+    starRating: hotel.starRating ? String(hotel.starRating) : "",
+    metaTitle: "", metaDescription: "",
+  });
+  setShowEditHotel(true);
+}
+
+async function handleUpdateHotel(e: React.FormEvent) {
+  e.preventDefault();
+  setSavingHotel(true);
+  const res = await adminApi.put(`/admin/hotels/${hotelId}`, {
+    name: hotelForm.name, description: hotelForm.description, address: hotelForm.address,
+    contactPhone: hotelForm.contactPhone, contactEmail: hotelForm.contactEmail,
+    starRating: hotelForm.starRating ? Number(hotelForm.starRating) : undefined,
+    metaTitle: hotelForm.metaTitle || undefined, metaDescription: hotelForm.metaDescription || undefined,
+  });
+  setSavingHotel(false);
+  if (!res.success) { alert(formatApiError(res)); return; }
+  setShowEditHotel(false);
+  loadAll();
+}
+async function handleRoomImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+  const file = e.target.files?.[0];
+  e.target.value = "";
+  if (!file) return;
+  setUploadingRoomImage(true);
+  const res = await adminApi.upload(file, "rooms");
+  setUploadingRoomImage(false);
+  if (!res.success || !res.data) {
+    alert(formatApiError(res));
+    return;
+  }
+  setRoomImages((prev) => [...prev, res.data!.url]);
+}
+
+function handleAddRoomImageUrl() {
+  const url = roomImageUrlInput.trim();
+  if (!url) return;
+  setRoomImages((prev) => [...prev, url]);
+  setRoomImageUrlInput("");
+}
+
+function removeRoomImage(url: string) {
+  setRoomImages((prev) => prev.filter((u) => u !== url));
+}
+
   async function handleCreateRoom(e: React.FormEvent) {
     e.preventDefault();
     const res = await adminApi.post(`/admin/hotels/${hotelId}/rooms`, {
@@ -138,12 +201,16 @@ export default function ManageHotelPage() {
         .split(",")
         .map((a) => a.trim())
         .filter(Boolean),
+      images: roomImages,
     });
     if (!res.success) {
       alert(formatApiError(res));
       return;
     }
     setShowRoomForm(false);
+    
+    setRoomImages([]);
+
     setRoomForm({
       categoryName: "Deluxe",
       name: "",
@@ -297,9 +364,47 @@ async function handleAddGalleryItem(e: React.FormEvent) {
       <p>
         <Link href="/hotels">← Back to Hotels</Link>
       </p>
-      <h1>{hotel.name}</h1>
-      <p style={{ color: "#666" }}>{hotel.address}</p>
+<div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+  <div>
+    <h1>{hotel.name}</h1>
+    <p style={{ color: "#666" }}>{hotel.address}</p>
+  </div>
+  <button onClick={handleOpenEditHotel} style={btnPrimary}>
+    {showEditHotel ? "Cancel" : "Edit Hotel Details"}
+  </button>
+</div>
 
+{showEditHotel && (
+  <form onSubmit={handleUpdateHotel} style={formBox}>
+    <label style={labelStyle}>Hotel Name
+      <input required value={hotelForm.name} onChange={(e) => setHotelForm({ ...hotelForm, name: e.target.value })} style={inputStyle} />
+    </label>
+    <label style={labelStyle}>Description
+      <textarea required value={hotelForm.description} onChange={(e) => setHotelForm({ ...hotelForm, description: e.target.value })} style={inputStyle} />
+    </label>
+    <label style={labelStyle}>Address
+      <input required value={hotelForm.address} onChange={(e) => setHotelForm({ ...hotelForm, address: e.target.value })} style={inputStyle} />
+    </label>
+    <label style={labelStyle}>Contact Phone
+      <input required value={hotelForm.contactPhone} onChange={(e) => setHotelForm({ ...hotelForm, contactPhone: e.target.value })} style={inputStyle} />
+    </label>
+    <label style={labelStyle}>Contact Email
+      <input required type="email" value={hotelForm.contactEmail} onChange={(e) => setHotelForm({ ...hotelForm, contactEmail: e.target.value })} style={inputStyle} />
+    </label>
+    <label style={labelStyle}>Star Rating (1-5)
+      <input type="number" min={1} max={5} value={hotelForm.starRating} onChange={(e) => setHotelForm({ ...hotelForm, starRating: e.target.value })} style={inputStyle} />
+    </label>
+    <label style={labelStyle}>Meta Title (SEO, optional)
+      <input value={hotelForm.metaTitle} onChange={(e) => setHotelForm({ ...hotelForm, metaTitle: e.target.value })} style={inputStyle} />
+    </label>
+    <label style={labelStyle}>Meta Description (SEO, optional)
+      <textarea value={hotelForm.metaDescription} onChange={(e) => setHotelForm({ ...hotelForm, metaDescription: e.target.value })} style={inputStyle} />
+    </label>
+    <button type="submit" disabled={savingHotel} style={btnPrimary}>
+      {savingHotel ? "Saving..." : "Save Changes"}
+    </button>
+  </form>
+)}
       {/* ROOMS */}
       <section style={{ marginTop: 32 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -385,6 +490,107 @@ async function handleAddGalleryItem(e: React.FormEvent) {
               />
               <small style={{ color: "#888" }}>Comma-separated list.</small>
             </label>
+            
+            
+            <label style={labelStyle}>
+              Add Room Image Via
+              <div style={{ display: "flex", gap: 16, marginTop: 4, marginBottom: 8 }}>
+                <label style={{ fontWeight: "normal" }}>
+                  <input
+                    type="radio"
+                    name="roomImageUploadMethod"
+                    checked={roomImageUploadMethod === "file"}
+                    onChange={() => setRoomImageUploadMethod("file")}
+                  />{" "}
+                  Upload File
+                </label>
+                <label style={{ fontWeight: "normal" }}>
+                  <input
+                    type="radio"
+                    name="roomImageUploadMethod"
+                    checked={roomImageUploadMethod === "camera"}
+                    onChange={() => setRoomImageUploadMethod("camera")}
+                  />{" "}
+                  Take Photo
+                </label>
+                <label style={{ fontWeight: "normal" }}>
+                  <input
+                    type="radio"
+                    name="roomImageUploadMethod"
+                    checked={roomImageUploadMethod === "url"}
+                    onChange={() => setRoomImageUploadMethod("url")}
+                  />{" "}
+                  Image URL
+                </label>
+              </div>
+            </label>
+
+            {roomImageUploadMethod === "url" ? (
+              <label style={labelStyle}>
+                Image URL
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input
+                    value={roomImageUrlInput}
+                    onChange={(e) => setRoomImageUrlInput(e.target.value)}
+                    placeholder="https://example.com/photo.jpg"
+                    style={{ ...inputStyle, flex: 1 }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddRoomImageUrl}
+                    disabled={!roomImageUrlInput.trim()}
+                    style={{ ...btnPrimary, whiteSpace: "nowrap" }}
+                  >
+                    Add
+                  </button>
+                </div>
+              </label>
+            ) : (
+              <label style={labelStyle}>
+                {roomImageUploadMethod === "camera" ? "Take Photo" : "Image File"}
+                <input
+                  key={roomImageUploadMethod}
+                  type="file"
+                  accept="image/*"
+                  capture={roomImageUploadMethod === "camera" ? "environment" : undefined}
+                  onChange={handleRoomImageSelect}
+                  disabled={uploadingRoomImage}
+                  style={inputStyle}
+                />
+              </label>
+            )}
+
+
+            {(roomImages.length > 0 || uploadingRoomImage) && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+                {roomImages.map((url) => (
+                  <div key={url} style={{ position: "relative" }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={url}
+                      alt=""
+                      style={{ width: 70, height: 70, objectFit: "cover", borderRadius: 6 }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeRoomImage(url)}
+                      style={{
+                        position: "absolute", top: 2, right: 2, background: "#c00", color: "#fff",
+                        border: "none", borderRadius: 4, fontSize: 11, cursor: "pointer",
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                {uploadingRoomImage && (
+                  <div style={{ width: 70, height: 70, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#888", border: "1px dashed #ccc", borderRadius: 6 }}>
+                    Uploading...
+                  </div>
+                )}
+              </div>
+            )}
+
             <button type="submit" style={btnPrimary}>
               Create Room
             </button>
@@ -422,6 +628,7 @@ async function handleAddGalleryItem(e: React.FormEvent) {
         </table>
       </section>
 
+ 
       {/* OFFERS */}
       <section style={{ marginTop: 32 }}>
         <h2>Offers</h2>

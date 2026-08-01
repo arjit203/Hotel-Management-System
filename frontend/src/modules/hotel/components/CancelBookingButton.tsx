@@ -51,7 +51,7 @@ export default function CancelBookingButton({
   }
 
   if (done) {
-    return <p style={{ color: "#1a7f37", fontWeight: 600 }}>Booking cancelled.</p>;
+    return <p className="text-green-700 font-semibold text-sm">Booking cancelled.</p>;
   }
 
   return (
@@ -59,18 +59,11 @@ export default function CancelBookingButton({
       <button
         onClick={handleCancel}
         disabled={cancelling}
-        style={{
-          background: "none",
-          border: "1px solid #c00",
-          color: "#c00",
-          padding: "6px 14px",
-          borderRadius: 6,
-          cursor: "pointer",
-        }}
+        className="border border-red-600 text-red-600 text-sm px-4 py-2 rounded-full hover:bg-red-50 transition-colors"
       >
         {cancelling ? "Cancelling..." : "Cancel Booking"}
       </button>
-      {error && <p style={{ color: "#c00", fontSize: 13, marginTop: 6 }}>{error}</p>}
+      {error && <p className="text-red-600 text-xs mt-2">{error}</p>}
     </div>
   );
 }

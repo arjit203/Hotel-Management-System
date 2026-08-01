@@ -1,24 +1,19 @@
+import { MapPin, ExternalLink } from "lucide-react";
+
 export default function MapPlaceholder({ address }: { address: string }) {
   const mapsQuery = encodeURIComponent(address);
 
   return (
-    <div
-      style={{
-        border: "1px solid #e5e5e5",
-        borderRadius: 8,
-        padding: 24,
-        textAlign: "center",
-        background: "#fafafa",
-      }}
-    >
-      <p style={{ margin: 0, color: "#666" }}>📍 {address}</p>
+    <div className="rounded-3xl border border-ink/10 bg-white p-10 text-center shadow-luxury">
+      <MapPin size={28} className="mx-auto text-gold mb-3" />
+      <p className="text-ink/70">{address}</p>
       <a
         href={`https://www.google.com/maps/search/?api=1&query=${mapsQuery}`}
         target="_blank"
         rel="noopener noreferrer"
-        style={{ display: "inline-block", marginTop: 8, color: "#0066cc" }}
+        className="inline-flex items-center gap-1.5 mt-4 text-gold font-semibold text-sm hover:underline"
       >
-        View on Google Maps →
+        View on Google Maps <ExternalLink size={14} />
       </a>
       {/* NOTE: This is a link-based placeholder per current scope. A real
           embedded <iframe>/JS Maps widget requires GOOGLE_MAPS_API_KEY

@@ -4,6 +4,42 @@ Format: newest entries on top. Categories: Added / Changed / Fixed / Security / 
 
 ---
 
+## [2026-08-01] — Phase 3.7: Hotel Public Website (multi-page, premium UI)
+
+### Added
+- **Design system**: Tailwind palette (`ink`/`gold`/`cream`), reusable classes (`.section-title`, `.btn-primary`, `.btn-outline`) in `globals.css` + `tailwind.config.js`. Premium system-font stack (no external font CDN dependency — more robust than `next/font/google` for production).
+- **New pages** (all under `frontend/src/app/hotel/`, all server components fetching via existing `getTheHotel()`/`getTheHotelRoom()` — **no backend or database changes**):
+  - `/hotel/about` — brand story, vision/standard/promise
+  - `/hotel/rooms` — dedicated listing page (filters, sort, client-side pagination — reuses existing `GET /hotels/:slug/rooms/search`)
+  - `/hotel/gallery` — category tabs + full lightbox (prev/next navigation)
+  - `/hotel/offers`, `/hotel/amenities`, `/hotel/reviews` (paginated + write-review form), `/hotel/faqs` (with search — see Notes), `/hotel/contact` (WhatsApp-based submission — see Notes)
+  - `/hotel/booking` — new primary booking route (`?room=<slug>` preselects a room); replaces the old per-room `/hotel/rooms/:slug/book` route
+  - `/hotel/booking/confirmation/:reference` — moved from `/booking-confirmation/:reference`
+- **Home page (`/`)**: full rebuild — Hero (Swiper image slider + video-banner placeholder), Quick Booking Widget, Featured Rooms, Why Choose Us, Amenities/Offers/Gallery previews, Testimonials (Swiper carousel) + Google Reviews placeholder, Map.
+- **`/hotel`**: restyled from the old single-page monolith into a premium overview hub linking out to the new dedicated sub-pages.
+- **SEO**: `app/sitemap.ts`, `app/robots.ts`, `components/Breadcrumbs.tsx` (renders visible trail + JSON-LD `BreadcrumbList` together, added to every sub-page), `components/HotelSchema.tsx` (JSON-LD `Hotel` schema on `/hotel`), per-page `generateMetadata`/`metadata` (title, description, canonical, Open Graph) across all new pages.
+- **Room Details**: added Related Rooms, a Reviews teaser (hotel-wide — see Notes on per-room review limitation), and a Room Availability checker (`RoomAvailabilityCheck.tsx`, reuses the existing single-room availability endpoint).
+- New shared components: `Footer.tsx`, `NewsletterForm.tsx`, `RoomImageGallery.tsx`, `RoomAvailabilityCheck.tsx`, `ContactForm.tsx`, `ReviewsList.tsx`, `lib/amenityIcons.tsx` (amenity-name → Lucide icon mapping, shared across Amenities Preview and the full Amenities page).
+- `lucide-react@0.383.0` added to `frontend/package.json` (matches the version already used in `admin-panel`) — every icon used was verified against this installed version before use.
+- Redirects (`next.config.js`): `/booking-confirmation/:reference` → `/hotel/booking/confirmation/:reference`, `/hotel/rooms/:roomSlug/book` → `/hotel/booking?room=:roomSlug` (for any old bookmarked/shared links).
+
+### Changed
+- Restyled with Tailwind (previously inline `style={}`): `Header.tsx` (sticky, scroll-aware, mobile drawer), `RoomCard.tsx`, `StarRating.tsx` (now uses Lucide `Star`), `MapPlaceholder.tsx`, `GalleryGrid.tsx` (added category tabs + full lightbox), `FaqAccordion.tsx` (added search), `RoomSearch.tsx` (added client-side pagination + auto-search from Quick Booking Widget's URL params), `ReviewForm.tsx`, `CancelBookingButton.tsx`, `BookingForm.tsx` (added step indicator; logic unchanged).
+- Applied (previously only described in chat, not in the actual codebase): Razorpay Checkout script now loads on-demand inside `BookingForm.tsx` rather than via a `next/script` tag, and `config_id` support was added for custom Razorpay payment configurations.
+
+### Fixed
+- **`Footer.tsx` (new in this phase) initially had an `onSubmit` handler on a `<form>` inside a Server Component (no `"use client"`) — this broke every single page in the app** ("Event handlers cannot be passed to Client Component props"). Fixed by extracting the newsletter form into its own `NewsletterForm.tsx` Client Component. Caught by this session's own build verification before being delivered.
+
+### Notes / Known Limitations (flagged, not silently worked around)
+- **Per-room reviews are not supported by the data model** (reviews are hotel-level — `reviewableType/reviewableId` on `Review`, not room-level). Room Details' "Reviews" section shows the hotel's overall reviews as a teaser with a link to `/hotel/reviews`, rather than fabricating room-specific data. A schema redesign would be needed to properly support this — out of scope per "do not change database."
+- **FAQ "Categories"** (from the original brief) is not implemented — `faq.model.ts` has no category field, and adding one is a database change outside this phase's scope. Search (client-side, over existing question+answer text) is implemented instead, fully supported by existing data.
+- **Contact Form** has no dedicated backend endpoint (none exists in this phase's API surface). Submitting opens a pre-filled WhatsApp chat to the hotel's number (`NEXT_PUBLIC_WHATSAPP_NUMBER`, already reserved in `.env.example`) instead of silently doing nothing or requiring an unbuilt endpoint.
+- **Video Banner** on the Home page's Hero is a placeholder button only (brief explicitly says "placeholder") — no actual video asset/player wired in.
+- **Google Fonts** (`next/font/google`, initially used for `Playfair Display`/`Manrope`) was replaced with a system-font stack after repeated build failures in this session's sandbox due to network restrictions reaching `fonts.googleapis.com`. This is arguably a better production choice regardless (no external font-CDN dependency/latency), but flagging the substitution since it wasn't explicitly requested.
+- Verified throughout: every page's build was checked after being added (`next build`, 0 errors at each step — 19 routes compile cleanly in the final state).
+
+---
+
 ## [2026-07-31 (c)] — Fix: Email verification always failed on first click (StrictMode double-effect bug)
 
 ### Fixed

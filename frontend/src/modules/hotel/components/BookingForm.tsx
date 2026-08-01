@@ -4,10 +4,19 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { RoomSummary } from "./RoomCard";
+import { getUserToken } from "@/lib/userAuth";
+
+interface BookingFormProps {
+  hotelId: string;
+  room: RoomSummary; // the room the guest started booking from — pre-added to the cart
+  allRooms: RoomSummary[]; // every room type at this hotel — lets the guest add more categories
+}
+
+type Step = "dates" | "guest-details" | "summary";
 
 // Loads the Razorpay Checkout script on-demand (not via next/script), so it's
 // guaranteed ready exactly when needed — regardless of page-load timing,
-// network speed, or ad-blockers delaying a preloaded/lazy script tag.
+// network speed, or a preloaded/lazy script tag being delayed.
 function loadRazorpayScript(): Promise<boolean> {
   return new Promise((resolve) => {
     if ((window as any).Razorpay) {
@@ -28,14 +37,6 @@ function loadRazorpayScript(): Promise<boolean> {
     document.body.appendChild(script);
   });
 }
-
-interface BookingFormProps {
-  hotelId: string;
-  room: RoomSummary; // the room the guest started booking from — pre-added to the cart
-  allRooms: RoomSummary[]; // every room type at this hotel — lets the guest add more categories
-}
-
-type Step = "dates" | "guest-details" | "summary";
 
 // One line in the multi-room "cart" (Feature 4, Phase 3.6).
 interface CartLine {
@@ -135,20 +136,25 @@ export default function BookingForm({ hotelId, room, allRooms }: BookingFormProp
     setIsSubmitting(true);
     setError(null);
 
+    const token = getUserToken();
     const res = await api.post<{
       booking: { bookingReference: string };
       razorpayOrder: { id: string; amount: number; currency: string };
-    }>("/hotel-bookings", {
-      hotelId,
-      rooms: cart.map((l) => ({ roomId: l.roomId, numRooms: l.numRooms })),
-      checkInDate,
-      checkOutDate,
-      numGuests,
-      guestName,
-      guestEmail,
-      guestPhone,
-      specialRequest: specialRequest || undefined,
-    });
+    }>(
+      "/hotel-bookings",
+      {
+        hotelId,
+        rooms: cart.map((l) => ({ roomId: l.roomId, numRooms: l.numRooms })),
+        checkInDate,
+        checkOutDate,
+        numGuests,
+        guestName,
+        guestEmail,
+        guestPhone,
+        specialRequest: specialRequest || undefined,
+      },
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+    );
 
     if (!res.success || !res.data) {
       setIsSubmitting(false);
@@ -161,23 +167,23 @@ export default function BookingForm({ hotelId, room, allRooms }: BookingFormProp
     // Feature 1: launch Razorpay Checkout for the advance amount. The
     // booking already exists as 'pending' at this point — Checkout only
     // confirms it once verify-payment succeeds (see onSuccess below).
-  const scriptLoaded = await loadRazorpayScript();
-if (!scriptLoaded || !(window as any).Razorpay) {
-  setIsSubmitting(false);
-  setError("Payment could not be loaded. Please check your internet connection and try again.");
-  return;
-}
-const Razorpay = (window as any).Razorpay;
+    const scriptLoaded = await loadRazorpayScript();
+    if (!scriptLoaded || !(window as any).Razorpay) {
+      setIsSubmitting(false);
+      setError("Payment could not be loaded. Please check your internet connection and try again.");
+      return;
+    }
+    const Razorpay = (window as any).Razorpay;
 
     const rzp = new Razorpay({
-  key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-  config_id: process.env.NEXT_PUBLIC_RAZORPAY_CONFIG_ID,
-  amount: razorpayOrder.amount,
-  currency: razorpayOrder.currency,
-  order_id: razorpayOrder.id,
-  name: "7 Vachan",
-  description: `Advance payment — ${booking.bookingReference}`,
-  prefill: { name: guestName, email: guestEmail, contact: guestPhone },
+      key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+      config_id: process.env.NEXT_PUBLIC_RAZORPAY_CONFIG_ID,
+      amount: razorpayOrder.amount,
+      currency: razorpayOrder.currency,
+      order_id: razorpayOrder.id,
+      name: "7 Vachan",
+      description: `Advance payment — ${booking.bookingReference}`,
+      prefill: { name: guestName, email: guestEmail, contact: guestPhone },
       handler: async function (response: {
         razorpay_order_id: string;
         razorpay_payment_id: string;
@@ -193,7 +199,7 @@ const Razorpay = (window as any).Razorpay;
           );
           return;
         }
-        router.push(`/booking-confirmation/${booking.bookingReference}`);
+        router.push(`/hotel/booking/confirmation/${booking.bookingReference}`);
       },
       modal: {
         // Payment widget closed without completing — booking stays 'pending'
@@ -210,54 +216,77 @@ const Razorpay = (window as any).Razorpay;
   }
 
   const availableToAdd = allRooms.filter((r) => !cart.some((l) => l.roomId === r._id));
+  const inputClass = "block w-full mt-1 px-3 py-2.5 rounded-xl border border-ink/10 focus:outline-none focus:border-gold text-ink text-sm";
+  const labelClass = "block text-sm text-ink/60 mb-3";
+
+  const steps: { key: Step; label: string }[] = [
+    { key: "dates", label: "Dates & Rooms" },
+    { key: "guest-details", label: "Guest Details" },
+    { key: "summary", label: "Confirm" },
+  ];
+  const currentStepIndex = steps.findIndex((s) => s.key === step);
 
   return (
-    <div style={{ border: "1px solid #e5e5e5", borderRadius: 12, padding: 20, maxWidth: 520 }}>
-      <h3 style={{ marginTop: 0 }}>Book Your Stay</h3>
+    <div className="bg-white rounded-2xl shadow-luxury border border-ink/5 p-6 sm:p-8 max-w-lg w-full">
+      {/* Step indicator */}
+      <div className="flex items-center mb-8">
+        {steps.map((s, i) => (
+          <div key={s.key} className="flex items-center flex-1 last:flex-none">
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${
+                i <= currentStepIndex ? "bg-gold text-ink" : "bg-ink/10 text-ink/40"
+              }`}
+            >
+              {i + 1}
+            </div>
+            <span className={`ml-2 text-xs hidden sm:inline ${i <= currentStepIndex ? "text-ink" : "text-ink/40"}`}>
+              {s.label}
+            </span>
+            {i < steps.length - 1 && (
+              <div className={`flex-1 h-0.5 mx-3 ${i < currentStepIndex ? "bg-gold" : "bg-ink/10"}`} />
+            )}
+          </div>
+        ))}
+      </div>
 
-      {error && <p style={{ color: "#c00", background: "#fee", padding: 8, borderRadius: 6 }}>{error}</p>}
+      {error && <p className="text-red-600 bg-red-50 px-4 py-3 rounded-xl text-sm mb-5">{error}</p>}
 
       {step === "dates" && (
         <>
-          <label style={{ display: "block", marginBottom: 8 }}>
-            Check-in
-            <input
-              type="date"
-              value={checkInDate}
-              onChange={(e) => setCheckInDate(e.target.value)}
-              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
-            />
-          </label>
-          <label style={{ display: "block", marginBottom: 8 }}>
-            Check-out
-            <input
-              type="date"
-              value={checkOutDate}
-              onChange={(e) => setCheckOutDate(e.target.value)}
-              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
-            />
-          </label>
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <label className={labelClass}>
+              Check-in
+              <input
+                type="date"
+                value={checkInDate}
+                onChange={(e) => setCheckInDate(e.target.value)}
+                className={inputClass}
+              />
+            </label>
+            <label className={labelClass}>
+              Check-out
+              <input
+                type="date"
+                value={checkOutDate}
+                onChange={(e) => setCheckOutDate(e.target.value)}
+                className={inputClass}
+              />
+            </label>
+          </div>
 
-          <p style={{ fontWeight: 600, marginBottom: 4 }}>Rooms</p>
+          <p className="text-sm font-semibold text-ink mb-2">Rooms</p>
           {cart.map((line) => (
-            <div
-              key={line.roomId}
-              style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}
-            >
-              <span style={{ flex: 1 }}>{line.roomName}</span>
+            <div key={line.roomId} className="flex items-center gap-3 mb-2.5">
+              <span className="flex-1 text-sm text-ink/80">{line.roomName}</span>
               <input
                 type="number"
                 min={1}
                 value={line.numRooms}
                 onChange={(e) => updateLineQty(line.roomId, Number(e.target.value))}
-                style={{ width: 60, padding: 6 }}
+                className="w-16 text-sm px-2 py-1.5 rounded-lg border border-ink/10 focus:outline-none focus:border-gold"
               />
               {cart.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => removeLine(line.roomId)}
-                  style={{ background: "none", border: "none", color: "#c00", cursor: "pointer" }}
-                >
+                <button type="button" onClick={() => removeLine(line.roomId)} className="text-red-600 text-xs">
                   Remove
                 </button>
               )}
@@ -276,7 +305,7 @@ const Razorpay = (window as any).Razorpay;
                   { roomId: r._id, roomName: r.name, basePrice: r.basePrice, maxOccupancy: r.maxOccupancy, numRooms: 1 },
                 ]);
               }}
-              style={{ width: "100%", padding: 6, marginBottom: 12 }}
+              className="w-full text-sm px-3 py-2.5 rounded-xl border border-ink/10 focus:outline-none focus:border-gold mb-4 text-ink/60"
             >
               <option value="">+ Add another room type...</option>
               {availableToAdd.map((r) => (
@@ -287,17 +316,17 @@ const Razorpay = (window as any).Razorpay;
             </select>
           )}
 
-          <label style={{ display: "block", marginBottom: 12 }}>
+          <label className={labelClass}>
             Total Guests
             <input
               type="number"
               min={1}
               value={numGuests}
               onChange={(e) => setNumGuests(Number(e.target.value))}
-              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+              className={inputClass}
             />
           </label>
-          <button onClick={handleCheckAvailability} style={buttonStyle}>
+          <button onClick={handleCheckAvailability} className="btn-primary text-sm w-full justify-center mt-2">
             Check Availability
           </button>
         </>
@@ -305,97 +334,73 @@ const Razorpay = (window as any).Razorpay;
 
       {step === "guest-details" && (
         <>
-          <p style={{ color: "#080" }}>✓ Rooms available for your dates.</p>
-          <label style={{ display: "block", marginBottom: 8 }}>
+          <p className="text-green-700 bg-green-50 px-4 py-2.5 rounded-xl text-sm mb-5">✓ Rooms available for your dates.</p>
+          <label className={labelClass}>
             Full Name
-            <input
-              value={guestName}
-              onChange={(e) => setGuestName(e.target.value)}
-              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
-            />
+            <input value={guestName} onChange={(e) => setGuestName(e.target.value)} className={inputClass} />
           </label>
-          <label style={{ display: "block", marginBottom: 8 }}>
+          <label className={labelClass}>
             Email
             <input
               type="email"
               value={guestEmail}
               onChange={(e) => setGuestEmail(e.target.value)}
-              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+              className={inputClass}
             />
           </label>
-          <label style={{ display: "block", marginBottom: 8 }}>
+          <label className={labelClass}>
             Phone
-            <input
-              value={guestPhone}
-              onChange={(e) => setGuestPhone(e.target.value)}
-              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
-            />
+            <input value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} className={inputClass} />
           </label>
-          <label style={{ display: "block", marginBottom: 12 }}>
+          <label className={labelClass}>
             Special Request (optional)
             <textarea
+              rows={3}
               value={specialRequest}
               onChange={(e) => setSpecialRequest(e.target.value)}
-              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+              className={inputClass}
             />
           </label>
-          <button onClick={() => setStep("dates")} style={secondaryButtonStyle}>
-            Back
-          </button>
-          <button onClick={handleGuestDetailsNext} style={buttonStyle}>
-            Review Booking
-          </button>
+          <div className="flex gap-3 mt-4">
+            <button onClick={() => setStep("dates")} className="btn-outline text-sm flex-1 justify-center">
+              Back
+            </button>
+            <button onClick={handleGuestDetailsNext} className="btn-primary text-sm flex-1 justify-center">
+              Review Booking
+            </button>
+          </div>
         </>
       )}
 
       {step === "summary" && (
         <>
-          <h4>Booking Summary</h4>
-          <ul style={{ paddingLeft: 20 }}>
-            <li>Check-in: {checkInDate}</li>
-            <li>Check-out: {checkOutDate}</li>
-            <li>Nights: {nights}</li>
+          <h4 className="font-display text-lg text-ink mb-4">Booking Summary</h4>
+          <div className="space-y-2 text-sm text-ink/70 bg-cream-dark rounded-xl p-4 mb-5">
+            <p>Check-in: <span className="text-ink font-medium">{checkInDate}</span></p>
+            <p>Check-out: <span className="text-ink font-medium">{checkOutDate}</span></p>
+            <p>Nights: <span className="text-ink font-medium">{nights}</span></p>
             {cart.map((line) => (
-              <li key={line.roomId}>
-                {line.numRooms} × {line.roomName} (₹{line.basePrice}/night)
-              </li>
+              <p key={line.roomId}>
+                {line.numRooms} × {line.roomName} <span className="text-ink font-medium">(₹{line.basePrice}/night)</span>
+              </p>
             ))}
-            <li>Guests: {numGuests}</li>
-            <li>
-              Guest: {guestName} ({guestEmail}, {guestPhone})
-            </li>
-            <li>
-              <strong>Total: ₹{totalAmount}</strong> (payable at property — online payment coming soon)
-            </li>
-          </ul>
-          <button onClick={() => setStep("guest-details")} style={secondaryButtonStyle}>
-            Back
-          </button>
-          <button onClick={handleConfirmBooking} disabled={isSubmitting} style={buttonStyle}>
-            {isSubmitting ? "Confirming..." : "Confirm Booking"}
-          </button>
+            <p>Guests: <span className="text-ink font-medium">{numGuests}</span></p>
+            <p>Guest: <span className="text-ink font-medium">{guestName} ({guestEmail}, {guestPhone})</span></p>
+            <p className="pt-2 border-t border-ink/10 text-base">
+              <strong className="text-ink">Total: ₹{totalAmount}</strong>
+              <span className="text-xs block text-ink/50 mt-1">Advance payment required now; balance payable at property.</span>
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <button onClick={() => setStep("guest-details")} className="btn-outline text-sm flex-1 justify-center">
+              Back
+            </button>
+            <button onClick={handleConfirmBooking} disabled={isSubmitting} className="btn-primary text-sm flex-1 justify-center">
+              {isSubmitting ? "Confirming..." : "Confirm & Pay"}
+            </button>
+          </div>
         </>
       )}
     </div>
   );
 }
-
-const buttonStyle: React.CSSProperties = {
-  background: "#111",
-  color: "#fff",
-  border: "none",
-  padding: "10px 18px",
-  borderRadius: 6,
-  cursor: "pointer",
-  marginRight: 8,
-};
-
-const secondaryButtonStyle: React.CSSProperties = {
-  background: "#eee",
-  color: "#111",
-  border: "none",
-  padding: "10px 18px",
-  borderRadius: 6,
-  cursor: "pointer",
-  marginRight: 8,
-};

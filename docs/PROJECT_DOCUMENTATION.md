@@ -109,7 +109,7 @@ No new npm packages required at initial build — Hotel module used only what Au
 - `backend/src/middlewares/upload.middleware.ts` — [2026-07-30] multer memory-storage middleware (shared, not hotel-specific)
 - `frontend/src/modules/hotel/components/` — `HotelCard`, `RoomCard`, `BookingForm`
 - `frontend/src/components/` — new shared, vertical-agnostic components: `StarRating`, `FaqAccordion`, `GalleryGrid`, `MapPlaceholder`
-- `frontend/src/app/hotels/`, `frontend/src/app/booking-confirmation/` — Next.js App Router pages
+- `frontend/src/app/hotel/` — Next.js App Router pages: `/hotel`, `/hotel/about`, `/hotel/rooms`, `/hotel/rooms/[roomSlug]`, `/hotel/gallery`, `/hotel/offers`, `/hotel/amenities`, `/hotel/reviews`, `/hotel/faqs`, `/hotel/contact`, `/hotel/booking`, `/hotel/booking/confirmation/[reference]` — **[Phase 3.7, 2026-08-01]** split out from a single `/hotel` page into a full multi-page premium website; see CHANGELOG.md for the complete list of new pages/components. No backend/database changes were made for this phase.
 
 ### Full Endpoint List
 See `API_DOCUMENTATION.md`.

@@ -1,4 +1,8 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Users, ArrowRight } from "lucide-react";
 
 export interface RoomSummary {
   _id: string;
@@ -12,44 +16,71 @@ export interface RoomSummary {
 }
 
 export default function RoomCard({ room }: { room: RoomSummary }) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const images = room.images || [];
+
+  useEffect(() => {
+    if (images.length <= 1) return;
+    const interval = setInterval(() => {
+      setActiveIndex((i) => (i + 1) % images.length);
+    }, 4500);
+    return () => clearInterval(interval);
+  }, [images.length]);
+
   return (
-    <div style={{ border: "1px solid #e5e5e5", borderRadius: 12, overflow: "hidden" }}>
-      {room.images?.[0] && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={room.images[0]}
-          alt={room.name}
-          style={{ width: "100%", height: 180, objectFit: "cover" }}
-        />
-      )}
-      <div style={{ padding: 16 }}>
-        <span
-          style={{
-            fontSize: 12,
-            textTransform: "uppercase",
-            color: "#888",
-            letterSpacing: 0.5,
-          }}
-        >
+    <div className="group bg-white rounded-2xl overflow-hidden shadow-luxury border border-ink/5 flex flex-col">
+      <div className="relative h-56 overflow-hidden">
+        {images.length > 0 ? (
+          <div className="relative h-full w-full">
+            {images.map((src, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={i}
+                src={src}
+                alt={room.name}
+                className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${
+                  i === activeIndex ? "opacity-100" : "opacity-0"
+                }`}
+              />
+            ))}
+            {images.length > 1 && (
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+                {images.map((_, i) => (
+                  <span
+                    key={i}
+                    className={`w-1.5 h-1.5 rounded-full transition-colors ${
+                      i === activeIndex ? "bg-white" : "bg-white/40"
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="w-full h-full bg-ink/5" />
+        )}
+        <span className="absolute top-4 left-4 bg-cream/95 text-ink text-xs uppercase tracking-wider px-3 py-1 rounded-full font-semibold">
           {room.categoryName}
         </span>
-        <h4 style={{ margin: "4px 0" }}>{room.name}</h4>
-        <p style={{ color: "#666", fontSize: 14 }}>{room.description.slice(0, 90)}...</p>
-        <p style={{ margin: "8px 0", fontSize: 14 }}>Up to {room.maxOccupancy} guests</p>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <strong>₹{room.basePrice} / night</strong>
+      </div>
+      <div className="p-6 flex flex-col flex-1">
+        <h4 className="font-display text-xl text-ink">{room.name}</h4>
+        <p className="text-ink/60 text-sm mt-2 leading-relaxed flex-1">
+          {room.description.length > 100 ? `${room.description.slice(0, 100)}...` : room.description}
+        </p>
+        <div className="flex items-center gap-1.5 text-ink/50 text-sm mt-3">
+          <Users size={15} /> Up to {room.maxOccupancy} guests
+        </div>
+        <div className="flex items-center justify-between mt-5 pt-5 border-t border-ink/5">
+          <div>
+            <span className="font-display text-2xl text-ink">₹{room.basePrice}</span>
+            <span className="text-ink/50 text-sm"> /night</span>
+          </div>
           <Link
             href={`/hotel/rooms/${room.slug}`}
-            style={{
-              background: "#111",
-              color: "#fff",
-              padding: "8px 14px",
-              borderRadius: 6,
-              textDecoration: "none",
-              fontSize: 14,
-            }}
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-gold hover:gap-2.5 transition-all"
           >
-            View Details
+            View Details <ArrowRight size={15} />
           </Link>
         </div>
       </div>

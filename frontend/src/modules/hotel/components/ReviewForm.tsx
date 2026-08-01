@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Star, X, ImagePlus } from "lucide-react";
 import { getStoredUser, getUserToken, StoredUser } from "@/lib/userAuth";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000/api/v1";
@@ -101,146 +102,107 @@ export default function ReviewForm({ hotelId }: { hotelId: string }) {
 
   if (submitted) {
     return (
-      <p style={{ padding: 12, background: "#e6f7e6", borderRadius: 8, color: "#237804", margin: "16px 0" }}>
+      <p className="p-4 bg-green-50 rounded-xl text-green-700 my-4 text-sm">
         Thanks! Your review has been submitted and will appear after admin approval.
       </p>
     );
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      style={{ border: "1px solid #e5e5e5", padding: 16, borderRadius: 8, maxWidth: 480, margin: "16px 0" }}
-    >
-      <h4 style={{ marginTop: 0 }}>Write a Review</h4>
+    <form onSubmit={handleSubmit} className="bg-white border border-ink/5 shadow-luxury rounded-2xl p-6 sm:p-8">
+      <h4 className="font-display text-xl text-ink mb-5">Write a Review</h4>
 
       {user ? (
-        <p style={{ fontSize: 14, color: "#666" }}>
-          Posting as <strong>{user.name}</strong>
+        <p className="text-sm text-ink/60 mb-4">
+          Posting as <strong className="text-ink">{user.name}</strong>
         </p>
       ) : (
-        <label style={{ display: "block", marginBottom: 10 }}>
+        <label className="block mb-4 text-sm text-ink/60">
           Your Name
           <input
             required
             value={guestName}
             onChange={(e) => setGuestName(e.target.value)}
-            style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+            className="block w-full mt-1 px-3 py-2.5 rounded-xl border border-ink/10 focus:outline-none focus:border-gold text-ink"
           />
         </label>
       )}
 
-      <label style={{ display: "block", marginBottom: 10 }}>
+      <label className="block mb-4 text-sm text-ink/60">
         Your Rating
-        <div style={{ fontSize: 26, lineHeight: 1 }}>
+        <div className="flex gap-1 mt-1">
           {[1, 2, 3, 4, 5].map((star) => (
-            <span
+            <button
+              type="button"
               key={star}
               onClick={() => setRating(star)}
               onMouseEnter={() => setHoverRating(star)}
               onMouseLeave={() => setHoverRating(0)}
-              style={{
-                cursor: "pointer",
-                color: star <= (hoverRating || rating) ? "#f5a623" : "#ddd",
-              }}
             >
-              ★
-            </span>
+              <Star
+                size={26}
+                className={star <= (hoverRating || rating) ? "text-gold fill-gold" : "text-ink/15"}
+              />
+            </button>
           ))}
         </div>
       </label>
 
-      <label style={{ display: "block", marginBottom: 10 }}>
+      <label className="block mb-4 text-sm text-ink/60">
         Your Review
         <textarea
           required
           minLength={3}
+          rows={4}
           value={comment}
           onChange={(e) => setComment(e.target.value)}
-          style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+          className="block w-full mt-1 px-3 py-2.5 rounded-xl border border-ink/10 focus:outline-none focus:border-gold text-ink"
         />
       </label>
 
-      <label style={{ display: "block", marginBottom: 10 }}>
+      <label className="block mb-4 text-sm text-ink/60">
         Photos (optional, up to {MAX_IMAGES})
-        <input
-          type="file"
-          accept="image/*"
-          onChange={handleImageSelect}
-          disabled={uploadingImage || images.length >= MAX_IMAGES}
-          style={{ display: "block", marginTop: 4 }}
-        />
+        <div className="mt-1">
+          <label className="inline-flex items-center gap-2 cursor-pointer text-sm text-gold border border-gold/40 rounded-full px-4 py-2 hover:bg-gold/5">
+            <ImagePlus size={16} />
+            Add Photo
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleImageSelect}
+              disabled={uploadingImage || images.length >= MAX_IMAGES}
+              className="hidden"
+            />
+          </label>
+        </div>
       </label>
 
       {(images.length > 0 || uploadingImage) && (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(70px, 1fr))",
-            gap: 8,
-            marginBottom: 10,
-          }}
-        >
+        <div className="grid grid-cols-4 sm:grid-cols-5 gap-2 mb-4">
           {images.map((url) => (
-            <div key={url} style={{ position: "relative" }}>
+            <div key={url} className="relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={url}
-                alt="Review photo"
-                style={{ width: "100%", height: 70, objectFit: "cover", borderRadius: 6 }}
-              />
+              <img src={url} alt="Review photo" className="w-full h-16 object-cover rounded-lg" />
               <button
                 type="button"
                 onClick={() => removeImage(url)}
-                style={{
-                  position: "absolute",
-                  top: 2,
-                  right: 2,
-                  background: "#c00",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: 4,
-                  fontSize: 11,
-                  cursor: "pointer",
-                }}
+                className="absolute -top-1.5 -right-1.5 bg-ink text-cream rounded-full p-0.5"
               >
-                ✕
+                <X size={12} />
               </button>
             </div>
           ))}
           {uploadingImage && (
-            <div
-              style={{
-                height: 70,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 12,
-                color: "#888",
-                border: "1px dashed #ccc",
-                borderRadius: 6,
-              }}
-            >
+            <div className="h-16 flex items-center justify-center text-xs text-ink/40 border border-dashed border-ink/20 rounded-lg">
               Uploading...
             </div>
           )}
         </div>
       )}
 
-      {error && <p style={{ color: "#c00" }}>{error}</p>}
+      {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
 
-      <button
-        type="submit"
-        disabled={submitting}
-        style={{
-          background: "#111",
-          color: "#fff",
-          border: "none",
-          padding: "8px 16px",
-          borderRadius: 6,
-          cursor: "pointer",
-        }}
-      >
+      <button type="submit" disabled={submitting} className="btn-primary text-sm">
         {submitting ? "Submitting..." : "Submit Review"}
       </button>
     </form>

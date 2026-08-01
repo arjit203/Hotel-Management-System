@@ -1,20 +1,24 @@
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
+import Link from "next/link";
+import { Phone, Mail, MapPin, ArrowRight } from "lucide-react";
 import StarRating from "@/components/StarRating";
-import GalleryGrid from "@/components/GalleryGrid";
-import FaqAccordion from "@/components/FaqAccordion";
-import MapPlaceholder from "@/components/MapPlaceholder";
-import RoomSearch from "@/modules/hotel/components/RoomSearch";
-import ReviewForm from "@/modules/hotel/components/ReviewForm";
 import { getTheHotel } from "@/lib/hotel";
+import FeaturedRooms from "@/modules/hotel/components/home/FeaturedRooms";
+import AmenitiesPreview from "@/modules/hotel/components/home/AmenitiesPreview";
+import OffersPreview from "@/modules/hotel/components/home/OffersPreview";
+import GalleryPreview from "@/modules/hotel/components/home/GalleryPreview";
+import Breadcrumbs from "@/components/Breadcrumbs";
+import HotelSchema from "@/components/HotelSchema";
 
 export async function generateMetadata(): Promise<Metadata> {
   const data = await getTheHotel();
   if (!data) return {};
 
   return {
-    title: data.hotel.metaTitle || `${data.hotel.name} — 7 Vachan`,
+    title: data.hotel.metaTitle || data.hotel.name,
     description: data.hotel.metaDescription || data.hotel.description.slice(0, 155),
+    alternates: { canonical: "/hotel" },
   };
 }
 
@@ -22,102 +26,47 @@ export default async function HotelPage() {
   const data = await getTheHotel();
   if (!data) return notFound();
 
-  const { hotel, rooms, gallery, faqs, offers, reviewSummary, reviews } = data;
+  const { hotel, rooms, gallery, offers } = data;
 
   return (
-    <main style={{ padding: "2rem", maxWidth: 1100, margin: "0 auto" }}>
-      <h1>{hotel.name}</h1>
-      <StarRating rating={hotel.starRating} />
-      <p style={{ color: "#666" }}>{hotel.address}</p>
-      <p>{hotel.description}</p>
-
-      {offers.length > 0 && (
-        <section style={{ background: "#fff7e6", padding: 16, borderRadius: 8, margin: "16px 0" }}>
-          <h3>Current Offers</h3>
-          {offers.map((o) => (
-            <p key={o._id}>
-              <strong>{o.title}</strong> — {o.description}
-            </p>
-          ))}
-        </section>
-      )}
-
-      <section style={{ margin: "24px 0" }}>
-        <h2>Amenities</h2>
-        <ul style={{ display: "flex", flexWrap: "wrap", gap: 12, listStyle: "none", padding: 0 }}>
-          {hotel.amenities.map((a) => (
-            <li key={a.name} style={{ background: "#f2f2f2", padding: "6px 12px", borderRadius: 20 }}>
-              {a.name}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section style={{ margin: "24px 0" }} id="rooms">
-        <h2>Rooms</h2>
-        <RoomSearch hotelSlug={hotel.slug} initialRooms={rooms} />
-      </section>
-
-      {gallery.length > 0 && (
-        <section style={{ margin: "24px 0" }}>
-          <h2>Gallery</h2>
-          <GalleryGrid images={gallery} />
-        </section>
-      )}
-
-      <section style={{ margin: "24px 0" }}>
-        <h2>
-          Reviews {reviewSummary.count > 0 && `(${reviewSummary.average} ★ · ${reviewSummary.count})`}
-        </h2>
-        {reviews.length === 0 ? (
-          <p style={{ color: "#888" }}>No reviews yet.</p>
-        ) : (
-          reviews.map((r) => (
-            <div key={r._id} style={{ borderBottom: "1px solid #eee", padding: "12px 0" }}>
-              <StarRating rating={r.rating} />
-              <p style={{ margin: "4px 0" }}>{r.comment}</p>
-              {r.images && r.images.length > 0 && (
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fill, minmax(70px, 1fr))",
-                    gap: 6,
-                    maxWidth: 320,
-                    margin: "6px 0",
-                  }}
-                >
-                  {r.images.map((url, i) => (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      key={i}
-                      src={url}
-                      alt="Review photo"
-                      style={{ width: "100%", height: 70, objectFit: "cover", borderRadius: 6 }}
-                    />
-                  ))}
-                </div>
-              )}
-              <span style={{ fontSize: 13, color: "#888" }}>{r.guestName || "Guest"}</span>
-            </div>
-          ))
-        )}
-        <ReviewForm hotelId={hotel._id} />
-      </section>
-
-      {faqs.length > 0 && (
-        <section style={{ margin: "24px 0" }}>
-          <h2>FAQs</h2>
-          <FaqAccordion faqs={faqs} />
-        </section>
-      )}
-
-      <section style={{ margin: "24px 0" }}>
-        <h2>Contact & Location</h2>
-        <p>
-          📞 {hotel.contactPhone} · ✉️ {hotel.contactEmail}
+    <main>
+      <HotelSchema hotel={hotel} image={gallery[0]?.imageUrl} />
+      <Breadcrumbs items={[{ label: "Home", href: "/" }, { label: hotel.name }]} />
+      <section className="bg-ink text-cream py-20 px-5 sm:px-8 text-center">
+        <p className="section-eyebrow justify-center flex">7 Vachan Presents</p>
+        <h1 className="font-display text-4xl sm:text-5xl md:text-6xl text-cream">{hotel.name}</h1>
+        <div className="flex justify-center mt-3">
+          <StarRating rating={hotel.starRating} size={18} />
+        </div>
+        <p className="flex items-center justify-center gap-1.5 text-cream/60 mt-3 text-sm">
+          <MapPin size={15} /> {hotel.address}
         </p>
-        <MapPlaceholder address={hotel.address} />
       </section>
+
+      <section className="mx-auto max-w-4xl px-5 sm:px-8 py-16 text-center">
+        <p className="text-ink/70 leading-relaxed text-lg">{hotel.description}</p>
+        <div className="flex flex-wrap items-center justify-center gap-4 mt-8">
+          <Link href="/hotel/booking" className="btn-primary">
+            Book Your Stay <ArrowRight size={16} />
+          </Link>
+          <Link href="/hotel/about" className="btn-outline">
+            Our Story
+          </Link>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-6 mt-8 text-sm text-ink/60">
+          <a href={`tel:${hotel.contactPhone}`} className="flex items-center gap-1.5 hover:text-gold">
+            <Phone size={15} /> {hotel.contactPhone}
+          </a>
+          <a href={`mailto:${hotel.contactEmail}`} className="flex items-center gap-1.5 hover:text-gold">
+            <Mail size={15} /> {hotel.contactEmail}
+          </a>
+        </div>
+      </section>
+
+      <FeaturedRooms rooms={rooms} />
+      <AmenitiesPreview amenities={hotel.amenities} />
+      <OffersPreview offers={offers} />
+      <GalleryPreview images={gallery} />
     </main>
   );
 }

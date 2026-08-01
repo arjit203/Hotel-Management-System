@@ -22,6 +22,7 @@ interface RoomDetails {
   maxOccupancy: number;
   totalRooms: number;
   amenities: string[];
+  images: string[];
 }
 
 export default function ManageRoomPage() {
@@ -46,6 +47,11 @@ export default function ManageRoomPage() {
     totalRooms: "",
     amenities: "",
   });
+
+  const [roomEditImages, setRoomEditImages] = useState<string[]>([]);
+  const [roomEditUploadMethod, setRoomEditUploadMethod] = useState<"file" | "camera" | "url">("file");
+  const [roomEditImageUrlInput, setRoomEditImageUrlInput] = useState("");
+  const [uploadingRoomEditImage, setUploadingRoomEditImage] = useState(false);
   const [loadingRoom, setLoadingRoom] = useState(true);
   const [savingRoom, setSavingRoom] = useState(false);
 
@@ -64,8 +70,36 @@ export default function ManageRoomPage() {
         totalRooms: String(r.totalRooms),
         amenities: (r.amenities || []).join(", "),
       });
+      setRoomEditImages(r.images || []);
     }
     setLoadingRoom(false);
+  }
+
+  async function handleRoomEditImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (files.length === 0) return;
+    setUploadingRoomEditImage(true);
+    for (const file of files) {
+      const res = await adminApi.upload(file, "rooms");
+      if (res.success && res.data) {
+        setRoomEditImages((prev) => [...prev, res.data!.url]);
+      } else {
+        alert(formatApiError(res));
+      }
+    }
+    setUploadingRoomEditImage(false);
+  }
+
+  function handleAddRoomEditImageUrl() {
+    const url = roomEditImageUrlInput.trim();
+    if (!url) return;
+    setRoomEditImages((prev) => [...prev, url]);
+    setRoomEditImageUrlInput("");
+  }
+
+  function removeRoomEditImage(url: string) {
+    setRoomEditImages((prev) => prev.filter((u) => u !== url));
   }
 
   async function handleUpdateRoom(e: React.FormEvent) {
@@ -83,6 +117,7 @@ export default function ManageRoomPage() {
         .split(",")
         .map((a) => a.trim())
         .filter(Boolean),
+      images: roomEditImages,
     });
     setSavingRoom(false);
     if (!res.success) {
@@ -220,6 +255,99 @@ export default function ManageRoomPage() {
             />
             <small style={{ color: "#888" }}>Comma-separated list.</small>
           </label>
+
+          <label style={{ display: "block", marginBottom: 10 }}>
+            Add Room Image Via
+            <div style={{ display: "flex", gap: 16, marginTop: 4, marginBottom: 8 }}>
+              <label style={{ fontWeight: "normal" }}>
+                <input
+                  type="radio"
+                  name="roomEditUploadMethod"
+                  checked={roomEditUploadMethod === "file"}
+                  onChange={() => setRoomEditUploadMethod("file")}
+                />{" "}
+                Upload Files
+              </label>
+              <label style={{ fontWeight: "normal" }}>
+                <input
+                  type="radio"
+                  name="roomEditUploadMethod"
+                  checked={roomEditUploadMethod === "camera"}
+                  onChange={() => setRoomEditUploadMethod("camera")}
+                />{" "}
+                Take Photo
+              </label>
+              <label style={{ fontWeight: "normal" }}>
+                <input
+                  type="radio"
+                  name="roomEditUploadMethod"
+                  checked={roomEditUploadMethod === "url"}
+                  onChange={() => setRoomEditUploadMethod("url")}
+                />{" "}
+                Image URL
+              </label>
+            </div>
+          </label>
+
+          {roomEditUploadMethod === "url" ? (
+            <label style={{ display: "block", marginBottom: 10 }}>
+              Image URL
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  value={roomEditImageUrlInput}
+                  onChange={(e) => setRoomEditImageUrlInput(e.target.value)}
+                  placeholder="https://example.com/photo.jpg"
+                  style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+                />
+                <button
+                  type="button"
+                  onClick={handleAddRoomEditImageUrl}
+                  disabled={!roomEditImageUrlInput.trim()}
+                  style={{ background: "#111", color: "#fff", border: "none", padding: "8px 16px", borderRadius: 6, whiteSpace: "nowrap" }}
+                >
+                  Add
+                </button>
+              </div>
+            </label>
+          ) : (
+            <label style={{ display: "block", marginBottom: 10 }}>
+              {roomEditUploadMethod === "camera" ? "Take Photo" : "Image Files (multiple allowed)"}
+              <input
+                key={roomEditUploadMethod}
+                type="file"
+                accept="image/*"
+                multiple={roomEditUploadMethod === "file"}
+                capture={roomEditUploadMethod === "camera" ? "environment" : undefined}
+                onChange={handleRoomEditImageSelect}
+                disabled={uploadingRoomEditImage}
+                style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+              />
+            </label>
+          )}
+
+          {(roomEditImages.length > 0 || uploadingRoomEditImage) && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+              {roomEditImages.map((url) => (
+                <div key={url} style={{ position: "relative" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url} alt="" style={{ width: 70, height: 70, objectFit: "cover", borderRadius: 6 }} />
+                  <button
+                    type="button"
+                    onClick={() => removeRoomEditImage(url)}
+                    style={{ position: "absolute", top: 2, right: 2, background: "#c00", color: "#fff", border: "none", borderRadius: 4, fontSize: 11, cursor: "pointer" }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              {uploadingRoomEditImage && (
+                <div style={{ width: 70, height: 70, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#888", border: "1px dashed #ccc", borderRadius: 6 }}>
+                  Uploading...
+                </div>
+              )}
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={savingRoom}

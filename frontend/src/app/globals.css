@@ -2,3 +2,27 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  color: #12110f;
+  background: #faf7f2;
+}
+
+@layer components {
+  /* Shared section heading style used across every public Hotel page */
+  .section-eyebrow {
+    @apply text-gold text-xs sm:text-sm tracking-[0.25em] uppercase font-semibold mb-3;
+  }
+  .section-title {
+    @apply font-display text-3xl sm:text-4xl md:text-5xl text-ink leading-tight;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 bg-ink text-cream px-6 py-3 rounded-full font-medium tracking-wide transition-colors hover:bg-gold hover:text-ink;
+  }
+  .btn-outline {
+    @apply inline-flex items-center justify-center gap-2 border border-ink/20 text-ink px-6 py-3 rounded-full font-medium tracking-wide transition-colors hover:border-gold hover:text-gold;
+  }
+}
