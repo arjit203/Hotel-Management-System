@@ -16,6 +16,7 @@ export const publicHotelRouter = Router();
 publicHotelRouter.get("/", hotelController.listHotels);
 publicHotelRouter.get("/:slug", hotelController.getHotelDetails);
 publicHotelRouter.get("/:slug/rooms", hotelController.listRooms);
+publicHotelRouter.get("/:slug/rooms/search", hotelController.searchRooms);
 publicHotelRouter.get("/:slug/rooms/:roomSlug", hotelController.getRoomDetails);
 publicHotelRouter.get("/rooms/:roomId/availability", hotelController.checkRoomAvailability);
 
@@ -23,6 +24,14 @@ publicHotelRouter.get("/rooms/:roomId/availability", hotelController.checkRoomAv
 // decision. optionalAuthenticate attaches a user if a valid token is present
 // (their account name is used), but never blocks the request — matching the
 // same guest-checkout pattern already used for hotel bookings.
+// Feature 5 (Phase 3.6): review image upload — public, no auth (guests can
+// review too), reuses the same uploadImage middleware as admin media routes.
+publicHotelRouter.post(
+  "/reviews/upload-image",
+  uploadImage.single("image"),
+  hotelController.uploadReviewImage
+);
+
 publicHotelRouter.post(
   "/:hotelId/reviews",
   optionalAuthenticate("user"),
@@ -41,7 +50,13 @@ publicBookingRouter.post(
   optionalAuthenticate("user"),
   hotelController.createBooking
 );
+publicBookingRouter.post("/verify-payment", hotelController.verifyPayment);
 publicBookingRouter.get("/reference/:reference", hotelController.getBookingByReference);
+publicBookingRouter.put(
+  "/reference/:reference/cancel",
+  optionalAuthenticate("user"),
+  hotelController.cancelBooking
+);
 publicBookingRouter.get("/me", authenticate("user"), hotelController.getMyBookings);
 
 // ============================================================
@@ -172,4 +187,9 @@ adminHotelRouter.delete(
   "/reviews/:reviewId",
   requireRole(...HOTEL_MANAGER_ROLES),
   hotelController.adminDeleteReview
+);
+adminHotelRouter.delete(
+  "/reviews/:reviewId/images",
+  requireRole(...HOTEL_MANAGER_ROLES),
+  hotelController.adminRemoveReviewImage
 );

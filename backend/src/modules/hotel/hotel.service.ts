@@ -95,7 +95,7 @@ export async function deleteRoom(roomId: string) {
   if (!room) throw new ApiError(404, "Room not found.");
 
   const activeBookingCount = await HotelBooking.countDocuments({
-    roomId,
+    "rooms.roomId": roomId,
     status: { $in: ["pending", "confirmed", "checked_in"] },
   });
   if (activeBookingCount > 0) {
@@ -105,6 +105,75 @@ export async function deleteRoom(roomId: string) {
   room.isActive = false;
   await room.save();
   return room;
+}
+
+// ---------- ROOM SEARCH (Feature 3, Phase 3.6) ----------
+export interface RoomSearchFilters {
+  checkInDate?: string;
+  checkOutDate?: string;
+  guests?: number;
+  minPrice?: number;
+  maxPrice?: number;
+  amenities?: string[]; // room must have ALL of these
+  roomType?: string; // categoryName, exact match
+  sortBy?: "price" | "popularity" | "newest" | "rating";
+}
+
+export async function searchRooms(hotelId: string, filters: RoomSearchFilters) {
+  const query: Record<string, unknown> = { hotelId, isActive: true };
+
+  if (filters.guests) query.maxOccupancy = { $gte: filters.guests };
+  if (filters.roomType) query.categoryName = filters.roomType;
+  if (filters.minPrice || filters.maxPrice) {
+    query.basePrice = {
+      ...(filters.minPrice ? { $gte: filters.minPrice } : {}),
+      ...(filters.maxPrice ? { $lte: filters.maxPrice } : {}),
+    };
+  }
+  if (filters.amenities && filters.amenities.length > 0) {
+    query.amenities = { $all: filters.amenities };
+  }
+
+  let rooms = await Room.find(query);
+
+  // Availability filter — only applied when both dates are given, since it
+  // requires a concrete date range (reuses the existing getAvailableCount
+  // logic, no new availability calculation invented here).
+  if (filters.checkInDate && filters.checkOutDate) {
+    const checkIn = new Date(filters.checkInDate);
+    const checkOut = new Date(filters.checkOutDate);
+    const availabilityResults = await Promise.all(
+      rooms.map(async (room) => ({
+        room,
+        available: await getAvailableCount(String(room._id), checkIn, checkOut),
+      }))
+    );
+    rooms = availabilityResults.filter((r) => r.available > 0).map((r) => r.room);
+  }
+
+  // "popularity" = total historical bookings for that room (confirmed or
+  // beyond) — a simple, honest proxy given no dedicated view/click tracking
+  // exists in this project. "rating" sort is NOT implemented: reviews are
+  // hotel-level, not room-level (see PROJECT_DOCUMENTATION.md open item —
+  // per-room ratings would require a Review schema redesign, which is out of
+  // scope here per "never redesign database unless required"). Falls back to
+  // "newest" rather than silently faking a per-room rating value.
+  if (filters.sortBy === "popularity") {
+    const counts = await HotelBooking.aggregate([
+      { $unwind: "$rooms" },
+      { $match: { "rooms.roomId": { $in: rooms.map((r) => r._id) }, status: { $ne: "cancelled" } } },
+      { $group: { _id: "$rooms.roomId", count: { $sum: 1 } } },
+    ]);
+    const countMap = new Map(counts.map((c) => [String(c._id), c.count]));
+    rooms.sort((a, b) => (countMap.get(String(b._id)) || 0) - (countMap.get(String(a._id)) || 0));
+  } else if (filters.sortBy === "price") {
+    rooms.sort((a, b) => a.basePrice - b.basePrice);
+  } else {
+    // "newest" and the "rating" fallback both land here.
+    rooms.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  return rooms;
 }
 
 // ---------- AVAILABILITY ----------
@@ -139,12 +208,14 @@ export async function getAvailableCount(roomId: string, checkIn: Date, checkOut:
   }
 
   // Overlapping bookings (any booking whose [checkIn, checkOut) overlaps requested range)
+  // Feature 4: roomId now lives inside the rooms[] array, not top-level —
+  // a single booking may reserve this room type alongside others.
   const overlappingBookings = await HotelBooking.find({
-    roomId,
+    "rooms.roomId": roomId,
     status: { $in: ["pending", "confirmed", "checked_in"] },
     checkInDate: { $lt: checkOut },
     checkOutDate: { $gt: checkIn },
-  }).select("checkInDate checkOutDate numRooms");
+  }).select("checkInDate checkOutDate rooms");
 
   const blockedOverrides = await RoomAvailability.find({
     roomId,
@@ -161,7 +232,10 @@ export async function getAvailableCount(roomId: string, checkIn: Date, checkOut:
   for (const date of dates) {
     const bookedOnThisDate = overlappingBookings
       .filter((b) => b.checkInDate <= date && b.checkOutDate > date)
-      .reduce((sum, b) => sum + b.numRooms, 0);
+      .reduce((sum, b) => {
+        const matchingLine = b.rooms.find((r) => String(r.roomId) === String(roomId));
+        return sum + (matchingLine?.numRooms || 0);
+      }, 0);
 
     const manuallyBlocked = blockedByDate.get(date.toISOString()) || 0;
     const availableOnThisDate = room.totalRooms - bookedOnThisDate - manuallyBlocked;

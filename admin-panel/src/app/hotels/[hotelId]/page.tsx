@@ -56,6 +56,7 @@ interface ReviewData {
   guestName?: string;
   rating: number;
   comment: string;
+  images?: string[];
   isApproved: boolean;
   adminReply?: string;
   createdAt: string;
@@ -264,6 +265,13 @@ async function handleAddGalleryItem(e: React.FormEvent) {
   async function handleDeleteReview(reviewId: string) {
     if (!confirm("Delete this review permanently?")) return;
     const res = await adminApi.delete(`/admin/hotels/reviews/${reviewId}`);
+    if (res.success) loadAll();
+    else alert(formatApiError(res));
+  }
+
+  async function handleDeleteReviewImage(reviewId: string, imageUrl: string) {
+    if (!confirm("Remove this image from the review?")) return;
+    const res = await adminApi.delete(`/admin/hotels/reviews/${reviewId}/images`, { imageUrl });
     if (res.success) loadAll();
     else alert(formatApiError(res));
   }
@@ -668,6 +676,45 @@ async function handleAddGalleryItem(e: React.FormEvent) {
               </div>
               <p style={{ margin: "6px 0" }}>{"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}</p>
               <p style={{ margin: "6px 0" }}>{r.comment}</p>
+
+              {r.images && r.images.length > 0 && (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))",
+                    gap: 8,
+                    maxWidth: 360,
+                    margin: "8px 0",
+                  }}
+                >
+                  {r.images.map((url) => (
+                    <div key={url} style={{ position: "relative" }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={url}
+                        alt="Review photo"
+                        style={{ width: "100%", height: 80, objectFit: "cover", borderRadius: 6 }}
+                      />
+                      <button
+                        onClick={() => handleDeleteReviewImage(r._id, url)}
+                        style={{
+                          position: "absolute",
+                          top: 2,
+                          right: 2,
+                          background: "#c00",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: 4,
+                          fontSize: 11,
+                          cursor: "pointer",
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {r.adminReply && (
                 <p style={{ margin: "6px 0", padding: 8, background: "#f5f5f5", borderRadius: 6 }}>

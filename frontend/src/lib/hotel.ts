@@ -28,7 +28,7 @@ export interface HotelDetailsData {
   faqs: { _id: string; question: string; answer: string }[];
   offers: { _id: string; title: string; description?: string }[];
   reviewSummary: { average: number; count: number };
-  reviews: { _id: string; guestName?: string; rating: number; comment: string }[];
+  reviews: { _id: string; guestName?: string; rating: number; comment: string; images?: string[] }[];
 }
 
 /**

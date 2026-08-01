@@ -55,11 +55,17 @@ export const availabilityQuerySchema = z.object({
 export const createBookingSchema = z
   .object({
     hotelId: z.string().min(1),
-    roomId: z.string().min(1),
+    rooms: z
+      .array(
+        z.object({
+          roomId: z.string().min(1),
+          numRooms: z.number().int().positive(),
+        })
+      )
+      .min(1, "At least one room must be selected."),
     checkInDate: z.string().refine((v) => !isNaN(Date.parse(v)), "Invalid checkInDate"),
     checkOutDate: z.string().refine((v) => !isNaN(Date.parse(v)), "Invalid checkOutDate"),
     numGuests: z.number().int().positive(),
-    numRooms: z.number().int().positive().default(1),
     guestName: z.string().min(2),
     guestEmail: z.string().email(),
     guestPhone: z.string().min(7),
@@ -70,6 +76,25 @@ export const createBookingSchema = z
     path: ["checkOutDate"],
   });
 
+// ---------- PAYMENT VERIFICATION (Feature 1, Phase 3.6) ----------
+export const verifyPaymentSchema = z.object({
+  razorpay_order_id: z.string().min(1),
+  razorpay_payment_id: z.string().min(1),
+  razorpay_signature: z.string().min(1),
+});
+
+// ---------- BOOKING CANCELLATION (Feature 2, Phase 3.6) ----------
+// guestEmail is required as a lightweight identity check — bookingReference
+// alone is guessable/shareable, so this prevents a stranger who only has the
+// reference (e.g. seen on a screen, forwarded email) from cancelling someone
+// else's booking. Logged-in users are additionally allowed to cancel their
+// own booking without re-entering the email (checked in the controller via
+// userId match), so this field is optional at the schema level.
+export const cancelBookingSchema = z.object({
+  guestEmail: z.string().email().optional(),
+  cancellationReason: z.string().max(500).optional(),
+});
+
 // ---------- REVIEW (public, requires login — enforced in controller) ----------
 export const createReviewSchema = z.object({
   rating: z.number().int().min(1).max(5),
@@ -79,11 +104,20 @@ export const createReviewSchema = z.object({
   // controller, not the schema, since "required only if no login" isn't
   // expressible as a static schema rule).
   guestName: z.string().min(2).max(100).optional(),
+  // Feature 5 (Phase 3.6): review images — capped at 5 per review, uploaded
+  // beforehand via POST /hotels/reviews/upload-image (same shared Cloudinary
+  // utility as the admin media routes), then their URLs sent here.
+  images: z.array(z.string().url()).max(5).optional(),
 });
 
 // ---------- REVIEW REPLY (admin) ----------
 export const replyReviewSchema = z.object({
   reply: z.string().min(1).max(1000),
+});
+
+// ---------- REVIEW IMAGE DELETE (admin, Feature 5) ----------
+export const removeReviewImageSchema = z.object({
+  imageUrl: z.string().url(),
 });
 
 export type CreateHotelInput = z.infer<typeof createHotelSchema>;
@@ -92,4 +126,6 @@ export type CreateRoomInput = z.infer<typeof createRoomSchema>;
 export type UpdateRoomInput = z.infer<typeof updateRoomSchema>;
 export type SetAvailabilityInput = z.infer<typeof setAvailabilitySchema>;
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
+export type VerifyPaymentInput = z.infer<typeof verifyPaymentSchema>;
+export type CancelBookingInput = z.infer<typeof cancelBookingSchema>;
 export type CreateReviewInput = z.infer<typeof createReviewSchema>;

@@ -9,6 +9,7 @@ export interface IReview extends Document {
   reviewableId: Types.ObjectId;
   rating: number;
   comment: string;
+  images: string[]; // Cloudinary URLs (Feature 5, Phase 3.6) — max enforced in hotel.validation.ts
   isApproved: boolean;
   adminReply?: string;
   createdAt: Date;
@@ -23,6 +24,7 @@ const reviewSchema = new Schema<IReview>(
     reviewableId: { type: Schema.Types.ObjectId, required: true, index: true },
     rating: { type: Number, required: true, min: 1, max: 5 },
     comment: { type: String, required: true, trim: true },
+    images: { type: [String], default: [] },
     isApproved: { type: Boolean, default: false },
     adminReply: { type: String, trim: true },
   },

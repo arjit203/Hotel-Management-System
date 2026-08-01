@@ -4,7 +4,7 @@ import StarRating from "@/components/StarRating";
 import GalleryGrid from "@/components/GalleryGrid";
 import FaqAccordion from "@/components/FaqAccordion";
 import MapPlaceholder from "@/components/MapPlaceholder";
-import RoomCard from "@/modules/hotel/components/RoomCard";
+import RoomSearch from "@/modules/hotel/components/RoomSearch";
 import ReviewForm from "@/modules/hotel/components/ReviewForm";
 import { getTheHotel } from "@/lib/hotel";
 
@@ -55,17 +55,7 @@ export default async function HotelPage() {
 
       <section style={{ margin: "24px 0" }} id="rooms">
         <h2>Rooms</h2>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
-            gap: 20,
-          }}
-        >
-          {rooms.map((room) => (
-            <RoomCard key={room._id} room={room} />
-          ))}
-        </div>
+        <RoomSearch hotelSlug={hotel.slug} initialRooms={rooms} />
       </section>
 
       {gallery.length > 0 && (
@@ -86,6 +76,27 @@ export default async function HotelPage() {
             <div key={r._id} style={{ borderBottom: "1px solid #eee", padding: "12px 0" }}>
               <StarRating rating={r.rating} />
               <p style={{ margin: "4px 0" }}>{r.comment}</p>
+              {r.images && r.images.length > 0 && (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(70px, 1fr))",
+                    gap: 6,
+                    maxWidth: 320,
+                    margin: "6px 0",
+                  }}
+                >
+                  {r.images.map((url, i) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      key={i}
+                      src={url}
+                      alt="Review photo"
+                      style={{ width: "100%", height: 70, objectFit: "cover", borderRadius: 6 }}
+                    />
+                  ))}
+                </div>
+              )}
               <span style={{ fontSize: 13, color: "#888" }}>{r.guestName || "Guest"}</span>
             </div>
           ))

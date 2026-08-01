@@ -101,22 +101,63 @@ export function buildPasswordResetEmailHtml(name: string, resetUrl: string): str
 export function buildBookingConfirmationEmailHtml(details: {
   guestName: string;
   hotelName: string;
-  roomName: string;
+  rooms: { name: string; numRooms: number }[];
   checkIn: string;
   checkOut: string;
   bookingReference: string;
   totalAmount: number;
 }): string {
+  const roomsList = details.rooms.map((r) => `<li>${r.numRooms} × ${r.name}</li>`).join("");
   return `
     <p>Hi ${details.guestName},</p>
     <p>Your booking at <strong>${details.hotelName}</strong> is confirmed!</p>
     <ul>
       <li><strong>Booking Reference:</strong> ${details.bookingReference}</li>
-      <li><strong>Room:</strong> ${details.roomName}</li>
       <li><strong>Check-in:</strong> ${details.checkIn}</li>
       <li><strong>Check-out:</strong> ${details.checkOut}</li>
       <li><strong>Total Amount:</strong> ₹${details.totalAmount}</li>
     </ul>
+    <p><strong>Rooms:</strong></p>
+    <ul>${roomsList}</ul>
     <p>Please keep your booking reference handy for check-in. Payment can be settled at the property (online payment coming soon).</p>
+  `;
+}
+
+// -- Feature 2 (Phase 3.6): booking cancellation --
+export function buildCancellationGuestEmailHtml(details: {
+  guestName: string;
+  hotelName: string;
+  bookingReference: string;
+  refundEligible: boolean;
+  refundAmount?: number;
+}): string {
+  return `
+    <p>Hi ${details.guestName},</p>
+    <p>Your booking <strong>${details.bookingReference}</strong> at ${details.hotelName} has been cancelled.</p>
+    ${
+      details.refundEligible
+        ? `<p>You are eligible for a refund of ₹${details.refundAmount ?? 0}. It will be processed to your original payment method.</p>`
+        : `<p>This booking was not eligible for a refund based on our cancellation policy.</p>`
+    }
+  `;
+}
+
+export function buildCancellationAdminEmailHtml(details: {
+  bookingReference: string;
+  hotelName: string;
+  guestName: string;
+  guestEmail: string;
+  refundEligible: boolean;
+  refundAmount?: number;
+}): string {
+  return `
+    <p>A booking has been cancelled and may require action.</p>
+    <ul>
+      <li><strong>Booking Reference:</strong> ${details.bookingReference}</li>
+      <li><strong>Hotel:</strong> ${details.hotelName}</li>
+      <li><strong>Guest:</strong> ${details.guestName} (${details.guestEmail})</li>
+      <li><strong>Refund Eligible:</strong> ${details.refundEligible ? "Yes" : "No"}</li>
+      ${details.refundEligible ? `<li><strong>Refund Amount:</strong> ₹${details.refundAmount ?? 0}</li>` : ""}
+    </ul>
   `;
 }

@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import CancelBookingButton from "@/modules/hotel/components/CancelBookingButton";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000/api/v1";
 
@@ -9,7 +10,7 @@ interface BookingData {
   checkInDate: string;
   checkOutDate: string;
   numGuests: number;
-  numRooms: number;
+  rooms: { roomName: string; categoryName: string; numRooms: number; pricePerNight: number; subtotal: number }[];
   totalAmount: number;
   balanceDue: number;
   status: string;
@@ -61,7 +62,17 @@ export default async function BookingConfirmationPage({
           <strong>Check-out:</strong> {new Date(booking.checkOutDate).toDateString()}
         </p>
         <p>
-          <strong>Rooms:</strong> {booking.numRooms} · <strong>Guests:</strong> {booking.numGuests}
+          <strong>Rooms:</strong>
+        </p>
+        <ul style={{ marginTop: 0 }}>
+          {booking.rooms.map((r, i) => (
+            <li key={i}>
+              {r.numRooms} × {r.roomName} (₹{r.pricePerNight}/night)
+            </li>
+          ))}
+        </ul>
+        <p>
+          <strong>Guests:</strong> {booking.numGuests}
         </p>
         <p>
           <strong>Total Amount:</strong> ₹{booking.totalAmount}
@@ -75,6 +86,13 @@ export default async function BookingConfirmationPage({
         A confirmation email has been sent to {booking.guestEmail}. Please keep your booking
         reference handy at check-in.
       </p>
+
+      {["pending", "confirmed"].includes(booking.status) &&
+        new Date(booking.checkInDate) > new Date() && (
+          <div style={{ marginTop: 20 }}>
+            <CancelBookingButton bookingReference={booking.bookingReference} requireEmailPrompt={true} />
+          </div>
+        )}
     </main>
   );
 }

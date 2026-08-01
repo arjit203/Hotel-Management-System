@@ -21,9 +21,52 @@ export default function ReviewForm({ hotelId }: { hotelId: string }) {
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
 
+  // Feature 5 (Phase 3.6): review images. Uploaded one at a time to Cloudinary
+  // as soon as chosen (via the public /hotels/reviews/upload-image endpoint),
+  // so `images` holds ready-to-submit URLs — the actual review POST just
+  // sends the URL list, no file handling at submit time. Max 5 (enforced
+  // both here and by the backend's createReviewSchema).
+  const MAX_IMAGES = 5;
+  const [images, setImages] = useState<string[]>([]);
+  const [uploadingImage, setUploadingImage] = useState(false);
+
   useEffect(() => {
     setUser(getStoredUser());
   }, []);
+
+  async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file again later
+    if (!file) return;
+    if (images.length >= MAX_IMAGES) {
+      setError(`You can attach up to ${MAX_IMAGES} images.`);
+      return;
+    }
+    setUploadingImage(true);
+    setError("");
+    try {
+      const formData = new FormData();
+      formData.append("image", file);
+      const res = await fetch(`${API_BASE_URL}/hotels/reviews/upload-image`, {
+        method: "POST",
+        body: formData,
+      });
+      const json = await res.json();
+      if (!json.success) {
+        setError(json.message || "Image upload failed.");
+      } else {
+        setImages((prev) => [...prev, json.data.url]);
+      }
+    } catch {
+      setError("Image upload failed. Please try again.");
+    } finally {
+      setUploadingImage(false);
+    }
+  }
+
+  function removeImage(url: string) {
+    setImages((prev) => prev.filter((u) => u !== url));
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -41,7 +84,8 @@ export default function ReviewForm({ hotelId }: { hotelId: string }) {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-      body: JSON.stringify({ rating, comment, ...(user ? {} : { guestName }) }),      });
+        body: JSON.stringify({ rating, comment, images, ...(user ? {} : { guestName }) }),
+      });
       const json = await res.json();
       if (!json.success) {
         setError(json.message || "Something went wrong. Please try again.");
@@ -116,6 +160,72 @@ export default function ReviewForm({ hotelId }: { hotelId: string }) {
           style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
         />
       </label>
+
+      <label style={{ display: "block", marginBottom: 10 }}>
+        Photos (optional, up to {MAX_IMAGES})
+        <input
+          type="file"
+          accept="image/*"
+          onChange={handleImageSelect}
+          disabled={uploadingImage || images.length >= MAX_IMAGES}
+          style={{ display: "block", marginTop: 4 }}
+        />
+      </label>
+
+      {(images.length > 0 || uploadingImage) && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(70px, 1fr))",
+            gap: 8,
+            marginBottom: 10,
+          }}
+        >
+          {images.map((url) => (
+            <div key={url} style={{ position: "relative" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={url}
+                alt="Review photo"
+                style={{ width: "100%", height: 70, objectFit: "cover", borderRadius: 6 }}
+              />
+              <button
+                type="button"
+                onClick={() => removeImage(url)}
+                style={{
+                  position: "absolute",
+                  top: 2,
+                  right: 2,
+                  background: "#c00",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 4,
+                  fontSize: 11,
+                  cursor: "pointer",
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          {uploadingImage && (
+            <div
+              style={{
+                height: 70,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 12,
+                color: "#888",
+                border: "1px dashed #ccc",
+                borderRadius: 6,
+              }}
+            >
+              Uploading...
+            </div>
+          )}
+        </div>
+      )}
 
       {error && <p style={{ color: "#c00" }}>{error}</p>}
 

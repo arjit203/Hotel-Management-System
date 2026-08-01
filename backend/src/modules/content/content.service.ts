@@ -24,9 +24,11 @@ export async function createReview(input: {
   reviewableId: string;
   rating: number;
   comment: string;
+  images?: string[];
 }) {
   return Review.create({
     ...input,
+    images: input.images || [],
     userId: input.userId ? new Types.ObjectId(input.userId) : null,
     reviewableId: new Types.ObjectId(input.reviewableId),
   });
@@ -53,6 +55,20 @@ export async function replyToReview(reviewId: string, reply: string) {
 
 export async function deleteReview(reviewId: string) {
   const review = await Review.findByIdAndDelete(reviewId);
+  if (!review) throw new ApiError(404, "Review not found.");
+  return review;
+}
+
+// Feature 5 (Phase 3.6): admin removes a single image from a review without
+// deleting the whole review. DB-only (removes the URL from the images[]
+// array) — matches the existing Gallery-item delete pattern in this codebase,
+// which also doesn't call Cloudinary's destroy API on delete.
+export async function removeReviewImage(reviewId: string, imageUrl: string) {
+  const review = await Review.findByIdAndUpdate(
+    reviewId,
+    { $pull: { images: imageUrl } },
+    { new: true }
+  );
   if (!review) throw new ApiError(404, "Review not found.");
   return review;
 }

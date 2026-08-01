@@ -15,7 +15,16 @@ interface Booking {
   totalAmount: number;
 }
 
-const STATUS_OPTIONS = ["pending", "confirmed", "checked_in", "checked_out", "cancelled"];
+const STATUS_OPTIONS = [
+  "pending",
+  "confirmed",
+  "checked_in",
+  "checked_out",
+  "completed",
+  "cancelled",
+  "refund_pending",
+  "refunded",
+];
 
 export default function AdminBookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);

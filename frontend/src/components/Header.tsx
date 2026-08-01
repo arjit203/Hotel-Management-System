@@ -35,6 +35,9 @@ export default function Header() {
       <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
         {user ? (
           <>
+            <Link href="/my-bookings" style={{ fontSize: 14, textDecoration: "none", color: "#111" }}>
+              My Bookings
+            </Link>
             <span style={{ fontSize: 14, color: "#444" }}>Hi, {user.name}</span>
             <button
               onClick={handleLogout}

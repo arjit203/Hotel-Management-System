@@ -13,8 +13,11 @@ import {
   setAvailabilitySchema,
   availabilityQuerySchema,
   createBookingSchema,
+  verifyPaymentSchema,
+  cancelBookingSchema,
   createReviewSchema,
   replyReviewSchema,
+  removeReviewImageSchema,
 } from "./hotel.validation";
 
 function handleZodError(res: Response, error: any) {
@@ -70,6 +73,31 @@ export async function listRooms(req: Request, res: Response, next: NextFunction)
   }
 }
 
+// Feature 3 (Phase 3.6): dynamic room search with filters + sort.
+// Query params are all optional strings (as they arrive over HTTP) and are
+// parsed/coerced here rather than in the service layer, keeping hotel.service
+// focused on domain logic over raw request parsing.
+export async function searchRooms(req: Request, res: Response, next: NextFunction) {
+  try {
+    const hotel = await hotelService.getHotelBySlug(req.params.slug);
+    const { checkInDate, checkOutDate, guests, minPrice, maxPrice, amenities, roomType, sortBy } = req.query;
+
+    const rooms = await hotelService.searchRooms(String(hotel._id), {
+      checkInDate: checkInDate as string | undefined,
+      checkOutDate: checkOutDate as string | undefined,
+      guests: guests ? Number(guests) : undefined,
+      minPrice: minPrice ? Number(minPrice) : undefined,
+      maxPrice: maxPrice ? Number(maxPrice) : undefined,
+      amenities: amenities ? String(amenities).split(",").map((a) => a.trim()) : undefined,
+      roomType: roomType as string | undefined,
+      sortBy: sortBy as "price" | "popularity" | "newest" | "rating" | undefined,
+    });
+    res.status(200).json({ success: true, data: rooms });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function getRoomDetails(req: Request, res: Response, next: NextFunction) {
   try {
     const hotel = await hotelService.getHotelBySlug(req.params.slug);
@@ -98,6 +126,26 @@ export async function checkRoomAvailability(req: Request, res: Response, next: N
 
 // ================== PUBLIC: REVIEWS ==================
 
+// Feature 5 (Phase 3.6): lets a guest/customer upload a review image BEFORE
+// submitting the review itself (same two-step pattern as the admin media
+// routes: upload → get URL → send URL in the actual create call). Reuses the
+// same shared uploadImageBuffer() utility as the admin routes — no new
+// upload logic, just a public-facing route since review authors are not
+// admins. No auth required, matching the existing guest-review pattern;
+// same file-type/size limits apply via the shared upload.middleware.
+export async function uploadReviewImage(req: Request, res: Response, next: NextFunction) {
+  try {
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ success: false, message: "No image file provided (field name: 'image')." });
+    }
+    const result = await uploadImageBuffer(file.buffer, "7vachan/hotel/reviews");
+    res.status(201).json({ success: true, message: "Image uploaded.", data: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function createHotelReview(req: Request, res: Response, next: NextFunction) {
   const parsed = createReviewSchema.safeParse(req.body);
   if (!parsed.success) return handleZodError(res, parsed.error);
@@ -120,6 +168,7 @@ export async function createHotelReview(req: Request, res: Response, next: NextF
       reviewableId: req.params.hotelId,
       rating: parsed.data.rating,
       comment: parsed.data.comment,
+      images: parsed.data.images,
     });
     res.status(201).json({
       success: true,
@@ -176,6 +225,20 @@ export async function adminDeleteReview(req: Request, res: Response, next: NextF
   }
 }
 
+// Feature 5 (Phase 3.6): admin removes one image from a review without
+// deleting the whole review (e.g. inappropriate/irrelevant photo).
+export async function adminRemoveReviewImage(req: Request, res: Response, next: NextFunction) {
+  const parsed = removeReviewImageSchema.safeParse(req.body);
+  if (!parsed.success) return handleZodError(res, parsed.error);
+
+  try {
+    const review = await contentService.removeReviewImage(req.params.reviewId, parsed.data.imageUrl);
+    res.status(200).json({ success: true, message: "Image removed.", data: review });
+  } catch (err) {
+    next(err);
+  }
+}
+
 // ================== PUBLIC: BOOKING ==================
 
 export async function createBooking(req: Request, res: Response, next: NextFunction) {
@@ -184,12 +247,24 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
 
   try {
     const actor = (req as any).actor; // optional — set only if a user JWT was provided
-    const booking = await bookingService.createHotelBooking(parsed.data, actor?.id);
+    const { booking, razorpayOrder } = await bookingService.createHotelBooking(parsed.data, actor?.id);
     res.status(201).json({
       success: true,
-      message: "Booking confirmed successfully.",
-      data: booking,
+      message: "Booking created. Complete the advance payment to confirm.",
+      data: { booking, razorpayOrder },
     });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function verifyPayment(req: Request, res: Response, next: NextFunction) {
+  const parsed = verifyPaymentSchema.safeParse(req.body);
+  if (!parsed.success) return handleZodError(res, parsed.error);
+
+  try {
+    const booking = await bookingService.verifyPayment(parsed.data);
+    res.status(200).json({ success: true, message: "Payment verified. Booking confirmed.", data: booking });
   } catch (err) {
     next(err);
   }
@@ -209,6 +284,23 @@ export async function getMyBookings(req: Request, res: Response, next: NextFunct
     const actor = (req as any).actor;
     const bookings = await bookingService.getBookingsForUser(actor.id);
     res.status(200).json({ success: true, data: bookings });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function cancelBooking(req: Request, res: Response, next: NextFunction) {
+  const parsed = cancelBookingSchema.safeParse(req.body);
+  if (!parsed.success) return handleZodError(res, parsed.error);
+
+  try {
+    const actor = (req as any).actor; // optional — set only if a user JWT was provided
+    const booking = await bookingService.cancelBooking(
+      req.params.reference,
+      { guestEmail: parsed.data.guestEmail, userId: actor?.id },
+      parsed.data.cancellationReason
+    );
+    res.status(200).json({ success: true, message: "Booking cancelled.", data: booking });
   } catch (err) {
     next(err);
   }

@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from "react";
+
 export interface GalleryImage {
   _id: string;
   imageUrl: string;
@@ -12,6 +16,7 @@ export interface GalleryImage {
 // regardless of category.
 export default function GalleryGrid({ images }: { images: GalleryImage[] }) {
   if (!images || images.length === 0) return null;
+  const [enlarged, setEnlarged] = useState<string | null>(null);
 
   const groups = images.reduce<Record<string, GalleryImage[]>>((acc, img) => {
     const key = img.category || "Other";
@@ -38,13 +43,26 @@ export default function GalleryGrid({ images }: { images: GalleryImage[] }) {
                 key={img._id}
                 src={img.imageUrl}
                 alt={img.title || `${category} photo`}
-                style={{ width: "100%", height: 140, objectFit: "cover", borderRadius: 8 }}
                 loading="lazy"
-              />
-            ))}
+                style={{ width: "100%", height: 140, objectFit: "cover", borderRadius: 8, cursor: "pointer" }}              
+                onClick={() => setEnlarged(img.imageUrl)}
+           /> ))}
           </div>
         </div>
       ))}
+      {enlarged && (
+  <div
+    onClick={() => setEnlarged(null)}
+    style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      zIndex: 1000, cursor: "pointer",
+    }}
+  >
+    {/* eslint-disable-next-line @next/next/no-img-element */}
+    <img src={enlarged} alt="Enlarged view" style={{ maxWidth: "90%", maxHeight: "90%", borderRadius: 8 }} />
+  </div>
+)}
     </div>
   );
 }
