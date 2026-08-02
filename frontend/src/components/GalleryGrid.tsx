@@ -1,11 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { X, ChevronLeft, ChevronRight } from "lucide-react";
+import { useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import { EASE_LUXE } from "@/components/motion/variants";
 import LuxeImage from "@/components/motion/LuxeImage";
-import { cldImage, IMAGE_WIDTHS } from "@/lib/imageUrl";
+import Lightbox from "@/components/ui/Lightbox";
 
 export interface GalleryImage {
   _id: string;
@@ -35,30 +34,6 @@ export default function GalleryGrid({ images }: { images: GalleryImage[] }) {
     activeCategory === "All"
       ? images
       : images.filter((img) => (img.category || "Other") === activeCategory);
-
-  const showNext = useCallback(
-    () => setLightboxIndex((i) => (i === null ? null : (i + 1) % filtered.length)),
-    [filtered.length]
-  );
-  const showPrev = useCallback(
-    () => setLightboxIndex((i) => (i === null ? null : (i - 1 + filtered.length) % filtered.length)),
-    [filtered.length]
-  );
-
-  useEffect(() => {
-    if (lightboxIndex === null) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setLightboxIndex(null);
-      if (e.key === "ArrowRight") showNext();
-      if (e.key === "ArrowLeft") showPrev();
-    }
-    window.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
-    };
-  }, [lightboxIndex, showNext, showPrev]);
 
   if (!images || images.length === 0) return null;
 
@@ -138,65 +113,17 @@ export default function GalleryGrid({ images }: { images: GalleryImage[] }) {
       </motion.div>
 
       {/* ── Lightbox ── */}
-      <AnimatePresence>
-        {lightboxIndex !== null && filtered[lightboxIndex] && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
-            onClick={() => setLightboxIndex(null)}
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/95 p-6 backdrop-blur-sm"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Gallery image viewer"
-          >
-            <button
-              onClick={() => setLightboxIndex(null)}
-              className="absolute right-6 top-6 text-cream transition-colors hover:text-gold"
-              aria-label="Close"
-            >
-              <X size={26} strokeWidth={1.5} />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                showPrev();
-              }}
-              className="absolute left-4 text-cream transition-all hover:-translate-x-0.5 hover:text-gold sm:left-8"
-              aria-label="Previous image"
-            >
-              <ChevronLeft size={34} strokeWidth={1.25} />
-            </button>
-
-            <motion.img
-              key={lightboxIndex}
-              initial={{ opacity: 0, scale: 0.97 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.45, ease: EASE_LUXE }}
-              src={cldImage(filtered[lightboxIndex].imageUrl, { width: IMAGE_WIDTHS.full })}
-              alt={filtered[lightboxIndex].title || "Gallery image"}
-              onClick={(e) => e.stopPropagation()}
-              className="max-h-[85vh] max-w-[90%] rounded-luxe object-contain shadow-lift"
-            />
-
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                showNext();
-              }}
-              className="absolute right-4 text-cream transition-all hover:translate-x-0.5 hover:text-gold sm:right-8"
-              aria-label="Next image"
-            >
-              <ChevronRight size={34} strokeWidth={1.25} />
-            </button>
-
-            <p className="absolute bottom-7 left-1/2 -translate-x-1/2 text-[11px] uppercase tracking-eyebrow text-cream/50">
-              {lightboxIndex + 1} / {filtered.length}
-            </p>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <Lightbox
+        images={filtered.map((img) => ({
+          src: img.imageUrl,
+          alt: img.title || `${img.category} photograph`,
+          caption: img.title,
+        }))}
+        index={lightboxIndex}
+        onClose={() => setLightboxIndex(null)}
+        onIndexChange={setLightboxIndex}
+        label="Gallery image viewer"
+      />
     </div>
   );
 }

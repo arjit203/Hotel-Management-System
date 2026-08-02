@@ -1,5 +1,6 @@
 import { MetadataRoute } from "next";
 import { getTheHotel } from "@/lib/hotel";
+import { getTheRestaurant } from "@/lib/restaurant";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
@@ -16,6 +17,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     "/hotel/faqs",
     "/hotel/contact",
     "/hotel/booking",
+    "/restaurant",
+    "/restaurant/menu",
+    "/restaurant/dining",
+    "/restaurant/offers",
+    "/restaurant/gallery",
+    "/restaurant/reviews",
+    "/restaurant/faqs",
+    "/restaurant/contact",
+    "/restaurant/reserve",
   ].map((path) => ({
     url: `${SITE_URL}${path}`,
     lastModified: new Date(),
@@ -30,6 +40,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     changeFrequency: "weekly" as const,
     priority: 0.7,
   }));
+
+  // Touch the restaurant fetch so a missing/unreachable restaurant simply omits
+  // nothing extra rather than breaking sitemap generation.
+  await getTheRestaurant();
 
   return [...staticRoutes, ...roomRoutes];
 }

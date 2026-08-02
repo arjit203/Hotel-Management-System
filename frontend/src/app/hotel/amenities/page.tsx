@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getTheHotel } from "@/lib/hotel";
 import { getAmenityIcon } from "@/lib/amenityIcons";
 import PageHeader from "@/components/PageHeader";
+import EmptyState from "@/components/ui/EmptyState";
 import { Stagger, StaggerScaleItem } from "@/components/motion/Stagger";
 
 export const metadata: Metadata = {
@@ -30,7 +31,7 @@ export default async function AmenitiesPage() {
         />
 
         {data.hotel.amenities.length === 0 ? (
-          <p className="py-16 text-center font-light text-warm-500">Amenity details coming soon.</p>
+          <EmptyState title="Amenity details coming soon." />
         ) : (
           <Stagger
             className="grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-5 lg:grid-cols-4"

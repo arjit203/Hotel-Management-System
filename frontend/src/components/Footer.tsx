@@ -3,13 +3,21 @@ import { Phone, Mail, MapPin, Instagram, Facebook, Twitter, Youtube } from "luci
 import { getTheHotel } from "@/lib/hotel";
 import NewsletterForm from "@/components/NewsletterForm";
 
-const EXPLORE_LINKS = [
+// Two columns now that there are two verticals — the footer must stay inside its
+// 220–280px budget, so each vertical gets its four most-wanted destinations
+// rather than a full sitemap.
+const HOTEL_LINKS = [
   { href: "/hotel/rooms", label: "Rooms & Suites" },
-  { href: "/hotel/offers", label: "Offers" },
-  { href: "/hotel/gallery", label: "Gallery" },
-  { href: "/hotel/amenities", label: "Amenities" },
-  { href: "/hotel/about", label: "About" },
-  { href: "/hotel/contact", label: "Contact" },
+  { href: "/hotel/offers", label: "Hotel Offers" },
+  { href: "/hotel/gallery", label: "Hotel Gallery" },
+  { href: "/hotel/contact", label: "Hotel Contact" },
+];
+
+const RESTAURANT_LINKS = [
+  { href: "/restaurant/menu", label: "Menu" },
+  { href: "/restaurant/dining", label: "Private Dining" },
+  { href: "/restaurant/reserve", label: "Reserve A Table" },
+  { href: "/restaurant/contact", label: "Restaurant Contact" },
 ];
 
 const SOCIALS = [
@@ -87,18 +95,28 @@ export default async function Footer() {
 
         {/* Links — two tight columns, no headings needed at this size */}
         <nav className="lg:col-span-3" aria-label="Footer">
-          <ul className="grid grid-cols-2 gap-x-6 gap-y-2.5 text-sm font-light">
-            {EXPLORE_LINKS.map((link) => (
-              <li key={link.href}>
-                <Link
-                  href={link.href}
-                  className="text-cream/60 transition-colors duration-300 hover:text-gold"
-                >
-                  {link.label}
-                </Link>
-              </li>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">
+            {[
+              { heading: "Hotel", links: HOTEL_LINKS },
+              { heading: "Restaurant", links: RESTAURANT_LINKS },
+            ].map((group) => (
+              <div key={group.heading}>
+                <p className="mb-3 text-xs uppercase tracking-luxe text-gold">{group.heading}</p>
+                <ul className="space-y-2.5 text-sm font-light">
+                  {group.links.map((link) => (
+                    <li key={link.href}>
+                      <Link
+                        href={link.href}
+                        className="text-cream/60 transition-colors duration-300 hover:text-gold"
+                      >
+                        {link.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ))}
-          </ul>
+          </div>
         </nav>
 
         {/* Newsletter + social */}

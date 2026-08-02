@@ -14,12 +14,13 @@ import { cldImage, IMAGE_WIDTHS } from "@/lib/imageUrl";
  * navigation, and a frame counter. The main frame keeps a fixed aspect ratio so
  * the page never reflows as images decode.
  */
-export default function RoomImageGallery({
+export default function MediaGallery({
   images,
-  roomName,
+  label,
 }: {
   images: string[];
-  roomName: string;
+  /** Subject of the photography, used in alt text and the dialog label. */
+  label: string;
 }) {
   const [activeImage, setActiveImage] = useState(0);
   const [expanded, setExpanded] = useState(false);
@@ -64,7 +65,7 @@ export default function RoomImageGallery({
           <motion.img
             key={activeImage}
             src={cldImage(images[activeImage], { width: IMAGE_WIDTHS.hero })}
-            alt={`${roomName} — photograph ${activeImage + 1} of ${images.length}`}
+            alt={`${label} — photograph ${activeImage + 1} of ${images.length}`}
             initial={reduceMotion ? undefined : { opacity: 0, scale: 1.03 }}
             animate={reduceMotion ? undefined : { opacity: 1, scale: 1 }}
             exit={reduceMotion ? undefined : { opacity: 0 }}
@@ -150,7 +151,7 @@ export default function RoomImageGallery({
             className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/96 p-6 backdrop-blur-sm"
             role="dialog"
             aria-modal="true"
-            aria-label={`${roomName} photography`}
+            aria-label={`${label} photography`}
           >
             <button
               onClick={() => setExpanded(false)}
@@ -179,7 +180,7 @@ export default function RoomImageGallery({
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.45, ease: EASE_LUXE }}
               src={cldImage(images[activeImage], { width: IMAGE_WIDTHS.full })}
-              alt={`${roomName} — photograph ${activeImage + 1}`}
+              alt={`${label} — photograph ${activeImage + 1}`}
               onClick={(e) => e.stopPropagation()}
               className="max-h-[85vh] max-w-[92%] rounded-luxe object-contain shadow-lift"
             />

@@ -1,4 +1,5 @@
 import type { Variants } from "framer-motion";
+import { DURATIONS, EASE, EASE_SOFT } from "@/lib/theme";
 
 /**
  * Shared motion vocabulary for the whole site.
@@ -9,16 +10,14 @@ import type { Variants } from "framer-motion";
  * "app", slow deceleration reads as "luxury".
  */
 
-/** Matches `ease-luxe` in tailwind.config.js so CSS hovers and JS reveals agree. */
-export const EASE_LUXE = [0.22, 1, 0.36, 1] as const;
-export const EASE_SOFT = [0.4, 0, 0.2, 1] as const;
-
-export const DURATION = {
-  fast: 0.35,
-  base: 0.7,
-  slow: 0.95,
-  cinematic: 1.4,
-} as const;
+/**
+ * Re-exported from lib/theme so there is one definition of the easing curve and
+ * the duration scale. These names are kept because every motion component already
+ * imports them; lib/theme is the source of the values.
+ */
+export const EASE_LUXE = EASE;
+export { EASE_SOFT };
+export const DURATION = DURATIONS;
 
 /** Default scroll trigger: fire slightly before the element is fully in view. */
 export const VIEWPORT = { once: true, margin: "-12% 0px -12% 0px" } as const;

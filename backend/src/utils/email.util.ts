@@ -161,3 +161,72 @@ export function buildCancellationAdminEmailHtml(details: {
     </ul>
   `;
 }
+
+// ============================================================
+// Restaurant module (added 2026-08-02). Additive only — every builder above is
+// untouched. Table reservations take no payment, so these deliberately carry no
+// amount, advance or refund figures.
+// ============================================================
+
+export function buildReservationConfirmationEmailHtml(details: {
+  guestName: string;
+  restaurantName: string;
+  diningAreaName: string;
+  date: string;
+  timeSlot: string;
+  partySize: number;
+  reservationReference: string;
+  restaurantAddress: string;
+  restaurantPhone: string;
+}): string {
+  return `
+    <p>Hi ${details.guestName},</p>
+    <p>Your table at <strong>${details.restaurantName}</strong> is confirmed.</p>
+    <ul>
+      <li><strong>Reference:</strong> ${details.reservationReference}</li>
+      <li><strong>Date:</strong> ${details.date}</li>
+      <li><strong>Time:</strong> ${details.timeSlot}</li>
+      <li><strong>Guests:</strong> ${details.partySize}</li>
+      <li><strong>Seating:</strong> ${details.diningAreaName}</li>
+    </ul>
+    <p><strong>Where:</strong> ${details.restaurantAddress}</p>
+    <p>Running late or need to change something? Call us on ${details.restaurantPhone}.</p>
+    <p>We look forward to hosting you.</p>
+  `;
+}
+
+export function buildReservationCancellationEmailHtml(details: {
+  guestName: string;
+  restaurantName: string;
+  reservationReference: string;
+  date: string;
+  timeSlot: string;
+  /** Renders the internal-facing variant for the admin notification. */
+  forAdmin?: boolean;
+  guestEmail?: string;
+  partySize?: number;
+}): string {
+  if (details.forAdmin) {
+    return `
+      <p>A table reservation has been cancelled by the guest.</p>
+      <ul>
+        <li><strong>Reference:</strong> ${details.reservationReference}</li>
+        <li><strong>Restaurant:</strong> ${details.restaurantName}</li>
+        <li><strong>Guest:</strong> ${details.guestName} (${details.guestEmail || "—"})</li>
+        <li><strong>Was booked for:</strong> ${details.date} at ${details.timeSlot}</li>
+        <li><strong>Party size:</strong> ${details.partySize ?? "—"}</li>
+      </ul>
+      <p>The tables have been released back to availability automatically.</p>
+    `;
+  }
+
+  return `
+    <p>Hi ${details.guestName},</p>
+    <p>Your reservation at <strong>${details.restaurantName}</strong> has been cancelled.</p>
+    <ul>
+      <li><strong>Reference:</strong> ${details.reservationReference}</li>
+      <li><strong>Was booked for:</strong> ${details.date} at ${details.timeSlot}</li>
+    </ul>
+    <p>No charge was made. We hope to welcome you another time.</p>
+  `;
+}

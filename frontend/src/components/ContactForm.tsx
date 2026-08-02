@@ -18,8 +18,8 @@ export default function ContactForm({ whatsappNumber }: { whatsappNumber: string
     window.open(`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(text)}`, "_blank");
   }
 
-  const fieldClass =
-    "block w-full border-0 border-b border-ink/12 bg-transparent py-2.5 text-base font-light text-ink placeholder:text-warm-400 transition-colors duration-300 focus:border-gold focus:outline-none focus:ring-0";
+  // Shared `.field-line` component class (globals.css) — was a local copy.
+  const fieldClass = "field-line";
 
   return (
     <form onSubmit={handleSubmit} className="card-luxe space-y-7 p-7 sm:p-9">

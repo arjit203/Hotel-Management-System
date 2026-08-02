@@ -8,6 +8,7 @@ import { Quote, Star } from "lucide-react";
 import StarRating from "@/components/StarRating";
 import Reveal from "@/components/motion/Reveal";
 import TextReveal from "@/components/motion/TextReveal";
+import Monogram from "@/components/ui/Monogram";
 
 interface Review {
   _id: string;
@@ -74,10 +75,7 @@ export default function Testimonials({
                       </p>
                     </blockquote>
                     <figcaption className="mt-7 flex items-center gap-3 border-t border-ink/[0.07] pt-5">
-                      {/* Monogram initial — avoids inventing guest avatars. */}
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gold/12 font-display text-base text-gold">
-                        {(r.guestName || "G").trim().charAt(0).toUpperCase()}
-                      </span>
+                      <Monogram name={r.guestName} />
                       <span className="text-[11px] font-medium uppercase tracking-luxe text-ink/70">
                         {r.guestName || "Guest"}
                       </span>

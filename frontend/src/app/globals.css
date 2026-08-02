@@ -283,7 +283,25 @@
            bg-gradient-to-r from-transparent via-white/55 to-transparent;
   }
 
-  /* ---------- Form controls ---------- */
+  /* ---------- Form controls ----------
+     `.field-line` is the site's default input: an underline, not a box. Boxed
+     inputs stack into a form that reads as data entry; a hairline underline reads
+     as a stationery form. This exact class string was previously copy-pasted as a
+     local `fieldClass` const in five components (BookingForm, ContactForm,
+     ReviewForm, RoomSearch, RoomAvailabilityCheck). */
+  .field-line {
+    @apply block w-full border-0 border-b border-ink/[0.12] bg-transparent py-2.5 text-base
+           font-light text-ink placeholder:text-warm-400 transition-colors duration-300
+           focus:border-gold focus:outline-none focus:ring-0;
+  }
+  /* Compact variant for dense filter bars. */
+  .field-line-sm {
+    @apply block w-full border-0 border-b border-ink/[0.12] bg-transparent py-2.5 text-sm
+           font-light text-ink placeholder:text-warm-400 transition-colors duration-300
+           focus:border-gold focus:outline-none focus:ring-0;
+  }
+  /* Boxed input — used where a control sits on a tinted panel and needs its own
+     surface (the auth card's white fields use their own component). */
   .field {
     @apply w-full bg-white rounded-xl border border-ink/10 px-4 py-3 text-sm text-ink
            placeholder:text-warm-400 transition-colors duration-300

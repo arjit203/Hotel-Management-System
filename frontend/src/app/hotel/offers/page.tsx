@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { getTheHotel } from "@/lib/hotel";
 import PageHeader from "@/components/PageHeader";
+import EmptyState from "@/components/ui/EmptyState";
 import { Stagger, StaggerItem } from "@/components/motion/Stagger";
 
 export const metadata: Metadata = {
@@ -32,9 +33,7 @@ export default async function OffersPage() {
         />
 
         {data.offers.length === 0 ? (
-          <p className="py-16 text-center font-light text-warm-500">
-            No active offers right now — check back soon.
-          </p>
+          <EmptyState title="No active offers right now — check back soon." />
         ) : (
           <Stagger className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 lg:gap-8">
             {data.offers.map((offer, i) => (

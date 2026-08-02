@@ -5,9 +5,9 @@ import { Phone, Mail, MapPin, ArrowRight, Clock } from "lucide-react";
 import StarRating from "@/components/StarRating";
 import { getTheHotel } from "@/lib/hotel";
 import FeaturedRooms from "@/modules/hotel/components/home/FeaturedRooms";
-import AmenitiesPreview from "@/modules/hotel/components/home/AmenitiesPreview";
-import OffersPreview from "@/modules/hotel/components/home/OffersPreview";
-import GalleryPreview from "@/modules/hotel/components/home/GalleryPreview";
+import AmenitiesPreview from "@/components/sections/AmenitiesPreview";
+import OffersPreview from "@/components/sections/OffersPreview";
+import GalleryPreview from "@/components/sections/GalleryPreview";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import HotelSchema from "@/components/HotelSchema";
 import Reveal from "@/components/motion/Reveal";
@@ -127,9 +127,9 @@ export default async function HotelPage() {
       </section>
 
       <FeaturedRooms rooms={rooms} />
-      <AmenitiesPreview amenities={hotel.amenities} />
-      <OffersPreview offers={offers} />
-      <GalleryPreview images={gallery} />
+      <AmenitiesPreview amenities={hotel.amenities} href="/hotel/amenities" />
+      <OffersPreview offers={offers} viewAllHref="/hotel/offers" reserveHref="/hotel/booking" />
+      <GalleryPreview images={gallery} href="/hotel/gallery" />
     </main>
   );
 }

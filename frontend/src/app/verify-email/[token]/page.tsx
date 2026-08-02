@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, Loader2, MailWarning } from "lucide-react";
-import BookingSuccessMark from "@/modules/hotel/components/BookingSuccessMark";
+import SuccessMark from "@/components/ui/SuccessMark";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000/api/v1";
 
@@ -62,7 +62,7 @@ export default function VerifyEmailPage() {
 
         {status === "success" && (
           <>
-            <BookingSuccessMark />
+            <SuccessMark />
             <p className="section-eyebrow mt-7 flex justify-center">Verified</p>
             <h1 className="font-display text-display-sm font-normal text-ink">You&apos;re all set</h1>
             <p className="body-muted mx-auto mt-4 max-w-sm">

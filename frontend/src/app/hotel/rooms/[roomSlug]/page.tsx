@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Users, ArrowRight, ArrowLeft } from "lucide-react";
 import { getAmenityIcon } from "@/lib/amenityIcons";
 import { getTheHotelRoom, getTheHotel } from "@/lib/hotel";
-import RoomImageGallery from "@/modules/hotel/components/RoomImageGallery";
+import MediaGallery from "@/components/MediaGallery";
 import RoomAvailabilityCheck from "@/modules/hotel/components/RoomAvailabilityCheck";
 import RoomCard from "@/modules/hotel/components/RoomCard";
 import StarRating from "@/components/StarRating";
@@ -74,7 +74,7 @@ export default async function RoomDetailsPage({ params }: { params: { roomSlug: 
           {/* ── Imagery ── */}
           <div className="lg:col-span-7">
             <Reveal duration={0.85} scale>
-              <RoomImageGallery images={room.images} roomName={room.name} />
+              <MediaGallery images={room.images} label={room.name} />
             </Reveal>
           </div>
 

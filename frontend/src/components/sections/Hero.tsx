@@ -7,9 +7,21 @@ import { ArrowRight, ArrowDown, Play } from "lucide-react";
 import { EASE_LUXE } from "@/components/motion/variants";
 import { cldImage, IMAGE_WIDTHS } from "@/lib/imageUrl";
 
+interface HeroCta {
+  label: string;
+  href: string;
+}
+
 interface HeroProps {
-  hotelName: string;
-  images: string[]; // gallery/room images used as slider backdrops
+  /** The property/venue name rendered as the masked headline. */
+  title: string;
+  images: string[]; // gallery images used as slider backdrops
+  /** CTAs are required because their routes are vertical-specific. */
+  primaryCta: HeroCta;
+  secondaryCta: HeroCta;
+  /** Brand-level copy — defaults suit any 7 Vachan vertical. */
+  eyebrow?: string;
+  tagline?: string;
 }
 
 const SLIDE_MS = 6500;
@@ -28,7 +40,14 @@ const SLIDE_MS = 6500;
  * Supports a background video via NEXT_PUBLIC_HERO_VIDEO_URL — optional, and it
  * layers over the stills so the hero still works when it isn't set.
  */
-export default function Hero({ hotelName, images }: HeroProps) {
+export default function Hero({
+  title,
+  images,
+  primaryCta,
+  secondaryCta,
+  eyebrow = "Welcome to",
+  tagline = "Where quiet luxury meets the warmth of true hospitality.",
+}: HeroProps) {
   const reduceMotion = useReducedMotion();
   const slides = images.length > 0 ? images : [];
   const [index, setIndex] = useState(0);
@@ -60,7 +79,7 @@ export default function Hero({ hotelName, images }: HeroProps) {
                 // a 4000px camera file behind a 1920px viewport is several MB.
                 style={{ backgroundImage: `url(${cldImage(slides[index], { width: IMAGE_WIDTHS.hero })})` }}
                 role="img"
-                aria-label={`${hotelName} — property photography`}
+                aria-label={`${title} — property photography`}
               />
             ) : (
               // No imagery uploaded yet: a warm graded panel, never a broken image.
@@ -101,14 +120,14 @@ export default function Hero({ hotelName, images }: HeroProps) {
           transition={{ duration: 0.9, ease: EASE_LUXE, delay: 0.2 }}
           className="section-eyebrow flex justify-center !text-gold-light"
         >
-          Welcome to
+          {eyebrow}
         </motion.p>
 
         {/* Headline: each word rises out of its own mask. Rendered as a single
             <h1> with aria-label so SEO/AT still see one clean heading. */}
-        <h1 className="hero-title max-w-5xl" aria-label={hotelName}>
+        <h1 className="hero-title max-w-5xl" aria-label={title}>
           {reduceMotion ? (
-            hotelName
+            title
           ) : (
             <motion.span
               initial="hidden"
@@ -116,7 +135,7 @@ export default function Hero({ hotelName, images }: HeroProps) {
               variants={{ visible: { transition: { staggerChildren: 0.09, delayChildren: 0.35 } } }}
               className="inline-block"
             >
-              {hotelName.split(" ").map((word, i, arr) => (
+              {title.split(" ").map((word, i, arr) => (
                 <span
                   key={`${word}-${i}`}
                   aria-hidden="true"
@@ -147,7 +166,7 @@ export default function Hero({ hotelName, images }: HeroProps) {
         >
           <span aria-hidden="true" className="mb-7 block h-10 w-px bg-gradient-to-b from-gold to-transparent" />
           <p className="max-w-xl text-base font-light leading-relaxed tracking-wide text-cream/75 sm:text-lg">
-            Where quiet luxury meets the warmth of true hospitality.
+            {tagline}
           </p>
         </motion.div>
 
@@ -157,11 +176,11 @@ export default function Hero({ hotelName, images }: HeroProps) {
           transition={{ duration: 0.9, ease: EASE_LUXE, delay: 1.15 }}
           className="mt-10 flex flex-wrap items-center justify-center gap-4"
         >
-          <Link href="/hotel/booking" className="btn-gold group">
-            Book Your Stay <ArrowRight size={14} className="btn-arrow" />
+          <Link href={primaryCta.href} className="btn-gold group">
+            {primaryCta.label} <ArrowRight size={14} className="btn-arrow" />
           </Link>
-          <Link href="/hotel/rooms" className="btn-ghost-light group">
-            Explore Rooms <ArrowRight size={14} className="btn-arrow" />
+          <Link href={secondaryCta.href} className="btn-ghost-light group">
+            {secondaryCta.label} <ArrowRight size={14} className="btn-arrow" />
           </Link>
         </motion.div>
       </div>

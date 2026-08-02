@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { CalendarCheck, Loader2, Check, X } from "lucide-react";
 import { api } from "@/lib/api";
+import Alert from "@/components/ui/Alert";
+import { todayISO } from "@/lib/format";
 
 /**
  * Inline availability check on the room detail page.
@@ -15,7 +17,7 @@ export default function RoomAvailabilityCheck({ roomId }: { roomId: string }) {
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState("");
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayISO();
 
   async function handleCheck(e: React.FormEvent) {
     e.preventDefault();
@@ -37,8 +39,11 @@ export default function RoomAvailabilityCheck({ roomId }: { roomId: string }) {
     setResult(res.data);
   }
 
-  const fieldClass =
-    "block w-full border-0 border-b border-ink/15 bg-transparent py-2 text-sm font-light text-ink transition-colors duration-300 focus:border-gold focus:outline-none focus:ring-0";
+  // Shared `.field-line-sm` (globals.css). NOTE: this is the one place the
+  // extraction normalises pixels — this component previously used `py-2` and
+  // `border-ink/15`, versus the shared `py-2.5` / `border-ink/12`. A 2px padding
+  // and a hairline-opacity difference; called out rather than hidden.
+  const fieldClass = "field-line-sm";
 
   return (
     <div className="mt-8 rounded-luxe border border-ink/[0.07] bg-cream-dark/70 p-6">
@@ -73,11 +78,7 @@ export default function RoomAvailabilityCheck({ roomId }: { roomId: string }) {
         </button>
       </form>
 
-      {error && (
-        <p role="alert" className="mt-4 text-sm font-light text-red-700">
-          {error}
-        </p>
-      )}
+      {error && <Alert className="mt-4">{error}</Alert>}
 
       {result && (
         <p

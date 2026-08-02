@@ -1,9 +1,13 @@
-import { ShieldCheck, Sparkles, Clock, HeartHandshake } from "lucide-react";
+import { ShieldCheck, Sparkles, Clock, HeartHandshake, type LucideIcon } from "lucide-react";
 import Reveal from "@/components/motion/Reveal";
 import TextReveal from "@/components/motion/TextReveal";
 import { Stagger, StaggerItem } from "@/components/motion/Stagger";
 
-const POINTS = [
+/**
+ * The Hotel module's copy, exported so the hotel page can keep passing exactly
+ * what it rendered before. Other verticals pass their own `points`.
+ */
+export const HOTEL_VALUE_POINTS = [
   {
     icon: Sparkles,
     title: "Premium Comfort",
@@ -26,7 +30,21 @@ const POINTS = [
   },
 ];
 
-export default function WhyChooseUs() {
+export interface ValuePoint {
+  icon: LucideIcon;
+  title: string;
+  desc: string;
+}
+
+export default function ValueProps({
+  points,
+  eyebrow = "Our Promise",
+  title = "Why guests return",
+}: {
+  points: ValuePoint[];
+  eyebrow?: string;
+  title?: string;
+}) {
   return (
     <section className="section relative overflow-hidden bg-ink text-cream">
       {/* Warm light bloom + a hairline grid of gold rules for depth. */}
@@ -38,11 +56,11 @@ export default function WhyChooseUs() {
       <div className="container-luxe relative">
         <div className="mx-auto mb-16 max-w-2xl text-center sm:mb-20">
           <Reveal duration={0.6}>
-            <p className="section-eyebrow flex justify-center">Our Promise</p>
+            <p className="section-eyebrow flex justify-center">{eyebrow}</p>
           </Reveal>
           <TextReveal
             as="h2"
-            text="Why guests return"
+            text={title}
             className="font-display text-display-md font-normal text-cream"
             delay={0.05}
           />
@@ -52,8 +70,8 @@ export default function WhyChooseUs() {
           className="grid grid-cols-1 gap-px overflow-hidden rounded-luxe border border-cream/10 bg-cream/10 sm:grid-cols-2 lg:grid-cols-4"
           stagger={0.1}
         >
-          {POINTS.map(({ icon: Icon, title, desc }) => (
-            <StaggerItem key={title}>
+          {points.map(({ icon: Icon, title: pointTitle, desc }) => (
+            <StaggerItem key={pointTitle}>
               {/* Hairline-divided cells: the 1px gaps come from the parent's
                   gap-px over a tinted background, so there are no double borders. */}
               <div className="group h-full bg-ink px-8 py-12 text-center transition-colors duration-600 ease-luxe hover:bg-ink-light">
@@ -67,7 +85,7 @@ export default function WhyChooseUs() {
                     className="text-gold transition-transform duration-600 ease-luxe group-hover:scale-110"
                   />
                 </span>
-                <h3 className="font-display text-xl font-medium text-cream">{title}</h3>
+                <h3 className="font-display text-xl font-medium text-cream">{pointTitle}</h3>
                 <p className="mt-3 text-sm font-light leading-relaxed text-cream/55">{desc}</p>
               </div>
             </StaggerItem>

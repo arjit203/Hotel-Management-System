@@ -3,11 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertCircle, ArrowRight, ArrowLeft, Check, Loader2, Trash2 } from "lucide-react";
+import { ArrowRight, ArrowLeft, Check, Loader2, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { RoomSummary } from "./RoomCard";
 import { getUserToken } from "@/lib/userAuth";
 import { EASE_LUXE } from "@/components/motion/variants";
+import Alert from "@/components/ui/Alert";
+import { todayISO } from "@/lib/format";
 
 interface BookingFormProps {
   hotelId: string;
@@ -219,10 +221,10 @@ export default function BookingForm({ hotelId, room, allRooms }: BookingFormProp
   }
 
   const availableToAdd = allRooms.filter((r) => !cart.some((l) => l.roomId === r._id));
-  const inputClass =
-    "block w-full mt-1.5 border-0 border-b border-ink/12 bg-transparent py-2.5 text-base font-light text-ink transition-colors duration-300 focus:border-gold focus:outline-none focus:ring-0";
+  // Shared `.field-line` component class (globals.css) — was a local copy.
+  const inputClass = "field-line mt-1.5";
   const labelClass = "field-label block mb-0";
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayISO();
 
   const steps: { key: Step; label: string }[] = [
     { key: "dates", label: "Dates & Rooms" },
@@ -279,15 +281,7 @@ export default function BookingForm({ hotelId, room, allRooms }: BookingFormProp
         </div>
       </div>
 
-      {error && (
-        <p
-          role="alert"
-          className="mb-6 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-light text-red-700"
-        >
-          <AlertCircle size={16} className="mt-0.5 shrink-0" />
-          {error}
-        </p>
-      )}
+      {error && <Alert className="mb-6">{error}</Alert>}
 
       <AnimatePresence mode="wait" initial={false}>
         <motion.div

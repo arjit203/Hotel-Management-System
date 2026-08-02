@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getTheHotel } from "@/lib/hotel";
 import GalleryGrid from "@/components/GalleryGrid";
 import PageHeader from "@/components/PageHeader";
+import EmptyState from "@/components/ui/EmptyState";
 
 export const metadata: Metadata = {
   title: "Gallery",
@@ -26,7 +27,7 @@ export default async function GalleryPage() {
         {data.gallery.length > 0 ? (
           <GalleryGrid images={data.gallery} />
         ) : (
-          <p className="py-16 text-center font-light text-warm-500">Gallery coming soon.</p>
+          <EmptyState title="Gallery coming soon." />
         )}
       </div>
     </main>

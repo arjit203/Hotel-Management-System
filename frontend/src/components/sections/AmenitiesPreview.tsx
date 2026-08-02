@@ -5,16 +5,28 @@ import Reveal from "@/components/motion/Reveal";
 import TextReveal from "@/components/motion/TextReveal";
 import { Stagger, StaggerScaleItem } from "@/components/motion/Stagger";
 
-export default function AmenitiesPreview({ amenities }: { amenities: { name: string; icon?: string }[] }) {
+export default function AmenitiesPreview({
+  amenities,
+  href,
+  eyebrow = "Facilities",
+  title = "Considered comforts",
+  ctaLabel = "Explore All Amenities",
+}: {
+  amenities: { name: string; icon?: string }[];
+  href: string;
+  eyebrow?: string;
+  title?: string;
+  ctaLabel?: string;
+}) {
   if (amenities.length === 0) return null;
 
   return (
     <section className="section container-luxe">
       <div className="mx-auto mb-14 max-w-2xl text-center">
         <Reveal duration={0.6}>
-          <p className="section-eyebrow flex justify-center">Facilities</p>
+          <p className="section-eyebrow flex justify-center">{eyebrow}</p>
         </Reveal>
-        <TextReveal as="h2" text="Considered comforts" className="section-title" delay={0.05} />
+        <TextReveal as="h2" text={title} className="section-title" delay={0.05} />
       </div>
 
       <Stagger
@@ -43,8 +55,8 @@ export default function AmenitiesPreview({ amenities }: { amenities: { name: str
       </Stagger>
 
       <Reveal delay={0.1} className="mt-14 text-center">
-        <Link href="/hotel/amenities" className="btn-outline group">
-          Explore All Amenities <ArrowRight size={14} className="btn-arrow" />
+        <Link href={href} className="btn-outline group">
+          {ctaLabel} <ArrowRight size={14} className="btn-arrow" />
         </Link>
       </Reveal>
     </section>

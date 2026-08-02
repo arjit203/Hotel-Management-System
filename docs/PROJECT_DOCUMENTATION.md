@@ -27,7 +27,7 @@ Unified booking + management platform for Hotel, Marriage Hall, and Restaurant u
 | **Hotel (listing, details, rooms, availability, booking, admin management)** | ✅ Complete |
 | Shared Content module (Reviews/Gallery/FAQs/Offers — polymorphic, reused by Hotel now, Hall/Restaurant later) | ✅ Complete (backing Hotel; not yet consumed by other verticals) |
 | Marriage Hall | ⬜ Not started |
-| Restaurant | ⬜ Not started |
+| **Restaurant (backend: menu, dining areas, table availability, instant reservations)** | ✅ Backend complete — frontend not started |
 | Booking Engine (shared conflict/locking hardening) | ⬜ Not started — see Known Limitations below |
 | Payments | ⬜ Not started |
 | Admin Panel UI (frontend for Hotel Management) | ⬜ Not started — backend admin APIs exist; admin-panel frontend pages not yet built |
@@ -114,6 +114,9 @@ No new npm packages required at initial build — Hotel module used only what Au
 - `frontend/src/components/motion/` — **[Phase 3.8, 2026-08-02]** shared, vertical-agnostic motion primitives (`Reveal`, `Stagger`, `TextReveal`, `Parallax`, `LuxeImage`, `PageTransition`, `ScrollProgress`, `AnimatedNumber`, `variants.ts`). Built to be reused by Hall/Restaurant — do not duplicate per vertical. All honour `prefers-reduced-motion` and animate only `opacity`/`transform`.
 - `frontend/src/components/auth/` — **[Phase 3.8]** customer auth presentation (`AuthShell`, `FloatingField`, `SocialPlaceholders`, `LoginForm`, `SignupForm`). Presentation only; all calls go to the existing `/auth/user/*` endpoints.
 - `frontend/src/components/{PageHeader,Skeleton}.tsx` — **[Phase 3.8]** the single page-header treatment (also emits breadcrumb JSON-LD) and shared loading placeholders.
+- `frontend/src/components/ui/` — **[Phase 3.9, 2026-08-02]** shared, vertical-agnostic UI primitives extracted from proven duplication: `Lightbox` (was 3 copies), `Alert` (5), `EmptyState` (5), `Pagination` (2), `StatusBadge` (2), `Monogram` (2). Reuse these in Hall/Restaurant; do not re-implement.
+- `frontend/src/lib/theme.ts` — **[Phase 3.9]** design tokens for TypeScript consumers (colours, fonts, easing, durations, intervals, breakpoints, layout, radii, shadows). Mirrors `tailwind.config.js`, which remains the source for CSS utilities — **edit both together.**
+- `frontend/src/lib/format.ts` — **[Phase 3.9]** shared formatters (`money`, `formatDate*`, `nightsBetween`, `todayISO`, `initial`). `nightsBetween` mirrors the backend's `calculateNights` so displayed and charged night counts cannot diverge.
 
 ### Design System (frontend, Phase 3.8)
 **→ Full reference: `docs/DESIGN_SYSTEM.md`. Read it before building the Marriage Hall or Restaurant front-end** — those verticals must reuse this system (tokens, `.btn-*`/`.card-luxe` classes, and `components/motion/*`) rather than fork it, per `AI_INSTRUCTIONS.md` §6/§15. That document ends with a per-vertical checklist.
@@ -132,3 +135,92 @@ See `API_DOCUMENTATION.md`.
 - **Admin Panel frontend UI not built** — this task built the backend admin APIs (Hotel/Room/Availability/Offers/Gallery/FAQ/Booking management, all RBAC-protected) but not the corresponding `admin-panel` React pages/forms. The admin can currently only be exercised via API calls (e.g. Thunder Client/Postman) until the Admin Panel UI module is scoped and built.
 - **Real Google Maps embed not implemented** — `MapPlaceholder` component shows a link-out to Google Maps search rather than an embedded interactive map, pending `GOOGLE_MAPS_API_KEY` billing setup (env var already reserved).
 - **Restaurant online-ordering-style deferred features don't apply here** — Hotel has no Phase-2-deferred features; all 14 requested Hotel Module requirements are fully implemented now.
+
+---
+
+## 6. Module: Restaurant
+
+### Purpose
+Public restaurant presence and **instant table reservation**: menu browsing with
+search and filters, Chef Specials, Today's Special, dining areas (including
+Private and Family dining), table availability, timings, reviews, gallery, FAQs
+and offers.
+
+### Scope boundary (from RULES.md §2)
+- **Table reservation is INSTANT** — created directly as `confirmed`, no admin
+  approval. Approval-based booking belongs to Marriage Hall, not here.
+- **No payment.** Holding a table is free; `TableReservation` deliberately carries
+  no amount, advance, Razorpay or invoice fields.
+- **Online food ordering is Phase 2.** No cart, checkout, delivery tracking or
+  food payment exists anywhere in this module — only menu browsing and an
+  "Order Online" entry point on the frontend.
+
+### Design Decisions
+- **Mirrors the Hotel module's architecture exactly** — validation → service →
+  controller → routes, the same `{ success, data }` envelope, the same
+  `authenticate`/`optionalAuthenticate`/`requireRole` middleware, the same
+  `ApiError` class, the same soft-delete-with-dependency-guard policy. Nothing was
+  re-invented.
+- **The shared `content/` module is reused wholesale** for reviews, gallery, FAQs
+  and offers. Its models already accepted `"restaurant"` in their polymorphic
+  enums, so **zero model changes were needed** — only routes to expose them. No
+  restaurant-specific copies of those four features exist.
+- **`DiningArea` is the availability unit, not individual tables.** Reservations
+  count against an area's `totalTables`; the host assigns specific tables on the
+  floor. Modelling individual tables would encode a precision the business does
+  not operate at.
+- **`TableAvailability` stores manual overrides only** — the same decision as
+  `RoomAvailability`. Bookable tables are computed on read as
+  `totalTables − blocked − activeReservations`, so no background job
+  pre-generates rows. A day-wide override (no `timeSlot`) and a slot override sum
+  together.
+- **`reservationSlots` and `serviceHours` are admin-configured data**, not derived
+  from a hardcoded interval, per `AI_INSTRUCTIONS.md` §15 (configuration must be
+  data-driven). This also lets the service reject a slot the restaurant does not
+  actually offer.
+- **Party-to-table maths is explicit**: `ceil(partySize / area.maxPartySize)`, so a
+  party of 10 in a 4-seat area consumes 3 tables.
+- **Reference prefix `7VR-`** distinguishes a restaurant reservation from a hotel
+  booking's `7V-` at a glance, for guests and reception alike.
+- **Menu search uses an escaped regex**, not the model's `$text` index, because
+  MongoDB cannot combine `$text` with a sort on another field efficiently, and
+  guests expect partial-word matching ("pane" → "Paneer"). The text index remains
+  on the model for future use.
+- **Guest checkout supported** — `optionalAuthenticate` on reservation and review
+  routes, exactly as in Hotel.
+
+### Dependencies
+**No new npm packages.** The module uses only what Auth/Hotel already installed
+(`mongoose`, `zod`, `express`, `nodemailer`, `multer`, `cloudinary`).
+
+### Environment Variables Added
+**None.** Reuses `MONGODB_URI`, `JWT_SECRET`/`ADMIN_JWT_SECRET`, `SMTP_*`,
+`EMAIL_FROM`, `CLOUDINARY_*` and `ADMIN_NOTIFICATION_EMAIL`.
+
+### Folder Locations
+- `backend/src/modules/restaurant/` — validation, services, controller, routes
+- `backend/src/modules/restaurant/models/` — `restaurant`, `menuCategory`,
+  `menuItem`, `diningArea`, `tableAvailability`, `tableReservation`
+- `backend/src/utils/email.util.ts` — gained two **additive** exports
+  (`buildReservationConfirmationEmailHtml`, `buildReservationCancellationEmailHtml`);
+  every existing builder is untouched
+- `backend/src/server.ts` — three additive `app.use` mounts
+
+### Full Endpoint List
+See `API_DOCUMENTATION.md`.
+
+### Known Limitations (by design, not gaps)
+- **Reservation race condition** — the availability check and the insert are not
+  one transaction, so two simultaneous requests for the last table could both
+  succeed. Identical to the Hotel module's booking race, and deliberately deferred
+  to the same shared **Booking Engine** hardening item so both verticals get one
+  fix rather than two divergent ones.
+- **Integration-tested end-to-end** against the live database: create restaurant →
+  category → menu items → dining areas → availability grid → reserve → overbook
+  rejection → cancel → tables released → admin override → delete guards, followed
+  by full cleanup. See CHANGELOG for the result table.
+- **No Restaurant admin-panel UI** — the admin APIs exist; the `admin-panel` pages
+  do not. Same position the Hotel module was in after its backend phase.
+- **Restaurant frontend not started.**
+
+---

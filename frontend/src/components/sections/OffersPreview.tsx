@@ -10,7 +10,23 @@ interface Offer {
   description?: string;
 }
 
-export default function OffersPreview({ offers }: { offers: Offer[] }) {
+export default function OffersPreview({
+  offers,
+  viewAllHref,
+  reserveHref,
+  eyebrow = "Special Packages",
+  title = "Exclusive offers",
+  reserveLabel = "Reserve this offer",
+}: {
+  offers: Offer[];
+  /** "View All Offers" target. */
+  viewAllHref: string;
+  /** Per-offer CTA target. */
+  reserveHref: string;
+  eyebrow?: string;
+  title?: string;
+  reserveLabel?: string;
+}) {
   if (offers.length === 0) return null;
 
   return (
@@ -18,9 +34,9 @@ export default function OffersPreview({ offers }: { offers: Offer[] }) {
       <div className="container-luxe">
         <div className="mx-auto mb-14 max-w-2xl text-center">
           <Reveal duration={0.6}>
-            <p className="section-eyebrow flex justify-center">Special Packages</p>
+            <p className="section-eyebrow flex justify-center">{eyebrow}</p>
           </Reveal>
-          <TextReveal as="h2" text="Exclusive offers" className="section-title" delay={0.05} />
+          <TextReveal as="h2" text={title} className="section-title" delay={0.05} />
         </div>
 
         <Stagger className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 lg:gap-8">
@@ -45,8 +61,8 @@ export default function OffersPreview({ offers }: { offers: Offer[] }) {
 
                 {/* `group-hover` too, so the arrow also steps forward when the
                     whole offer card is hovered — not only the link itself. */}
-                <Link href="/hotel/booking" className="link-arrow mt-8">
-                  Reserve this offer
+                <Link href={reserveHref} className="link-arrow mt-8">
+                  {reserveLabel}
                   <ArrowRight size={14} className="group-hover:translate-x-1" />
                 </Link>
               </article>
@@ -55,7 +71,7 @@ export default function OffersPreview({ offers }: { offers: Offer[] }) {
         </Stagger>
 
         <Reveal delay={0.1} className="mt-14 text-center">
-          <Link href="/hotel/offers" className="btn-primary group">
+          <Link href={viewAllHref} className="btn-primary group">
             View All Offers <ArrowRight size={14} className="btn-arrow" />
           </Link>
         </Reveal>

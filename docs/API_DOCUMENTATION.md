@@ -193,3 +193,185 @@ Protected, `super_admin`/`branch_admin`. **Body:** `{ "publicId": "7vachan/hotel
 - `slug`: lowercase, alphanumeric + hyphens only, unique per hotel (rooms) / globally (hotels)
 - Room `categoryName`: must be one of `Deluxe | Executive | Luxury | Suite`
 - `basePrice`: positive number · `maxOccupancy`/`totalRooms`: positive integers
+
+---
+
+## Restaurant — Public
+
+**Base:** `/api/v1/restaurants` · **Auth:** none unless stated.
+
+`RULES.md` §2 governs this module: table reservation is **instant**, and online food ordering is **Phase 2** — so there is deliberately **no cart, order, checkout, delivery or payment endpoint anywhere below**.
+
+### `GET /api/v1/restaurants`
+List active restaurants. Optional `?branchId=<id>`.
+**200:** `{ success, data: Restaurant[] }`
+
+### `GET /api/v1/restaurants/:slug`
+The page aggregate — one request renders the whole public restaurant page.
+**200:** `{ success, data: { restaurant, menuCategories, menuItems, diningAreas, chefSpecials, todaysSpecials, gallery, faqs, offers, reviewSummary, reviews } }`
+**Errors:** `404` restaurant not found
+
+### `GET /api/v1/restaurants/:slug/menu`
+Menu browse + search + filters. All query params optional.
+
+| Param | Type | Notes |
+|---|---|---|
+| `search` | string | Case-insensitive partial match on name, description, tags |
+| `categoryId` | string | Restrict to one menu section |
+| `foodType` | `veg` / `non_veg` / `egg` | Veg / Non-Veg filter |
+| `minPrice`, `maxPrice` | number | Price filter |
+| `chefSpecial` | boolean | Chef Specials only |
+| `todaysSpecial` | boolean | Today's Special only |
+| `sortBy` | `price_asc` / `price_desc` / `name` / `default` | `default` = displayOrder |
+
+**200:** `{ success, data: MenuItem[] }`
+**Errors:** `400` validation, or "minPrice cannot be greater than maxPrice."
+
+### `GET /api/v1/restaurants/:slug/menu/categories`
+**200:** `{ success, data: MenuCategory[] }` — sorted by `displayOrder`.
+
+### `GET /api/v1/restaurants/:slug/menu/chef-specials`
+### `GET /api/v1/restaurants/:slug/menu/todays-specials`
+**200:** `{ success, data: MenuItem[] }` — available items only, max 6.
+
+### `GET /api/v1/restaurants/:slug/dining-areas`
+Seating areas, including Private and Family dining (`areaType`).
+**200:** `{ success, data: DiningArea[] }`
+
+### `GET /api/v1/restaurants/:slug/availability`
+The Table Availability grid — every area against every sitting for one date.
+
+| Param | Required | Notes |
+|---|---|---|
+| `date` | yes | ISO date |
+| `partySize` | no | Sets `canSeatParty` per slot |
+
+**200:** `{ success, data: { date, slots: string[], areas: [{ diningAreaId, diningAreaName, areaType, slots: [{ timeSlot, availableTables, canSeatParty }] }] } }`
+
+### `GET /api/v1/restaurants/dining-areas/:areaId/availability`
+One area, one sitting. `date` and `timeSlot` required; `partySize` optional.
+**200:** `{ success, data: { availableTables, tablesNeeded, canReserve } }`
+**Errors:** `400` "timeSlot is required when checking a single dining area." · `404` dining area not found
+
+### `POST /api/v1/restaurants/reviews/upload-image`
+`multipart/form-data`, field `image`. Public — guests may review.
+**201:** `{ success, data: { url, publicId } }`
+
+### `POST /api/v1/restaurants/:restaurantId/reviews`
+Optional auth. Logged in → the account name is used; guest → `guestName` required.
+**Body:** `{ rating: 1-5, comment, guestName?, images? }` (max 5 images)
+**201:** `{ success, message, data: Review }` — held until admin approval.
+
+---
+
+## Restaurant — Table Reservations (Public, guest checkout supported)
+
+**Base:** `/api/v1/table-reservations`
+
+### `POST /api/v1/table-reservations`
+Creates a reservation **directly as `confirmed`** — instant, no approval step, and **no payment is taken**. Optional auth: a token links the reservation to the account; its absence is a guest reservation (`RULES.md` — never force login).
+
+**Body:**
+```json
+{
+  "restaurantId": "…",
+  "diningAreaId": "…",
+  "reservationDate": "2026-09-01",
+  "timeSlot": "19:30",
+  "partySize": 4,
+  "guestName": "Arjit Gupta",
+  "guestEmail": "arjit@example.com",
+  "guestPhone": "9993542874",
+  "specialRequest": "Window table",
+  "occasion": "Anniversary"
+}
+```
+
+**201:** `{ success, data: TableReservation }` — includes `reservationReference` (`7VR-XXXXXXXX`) and `tablesReserved`. A confirmation email is sent to the guest.
+
+**Errors:**
+- `400` validation · `timeSlot` not a configured sitting · past date · party below the area's minimum · party above the restaurant's `maxPartySize` (message directs the guest to call)
+- `404` restaurant or dining area not found
+- `409` restaurant closed that weekday · not enough free tables (message states how many are free)
+
+### `GET /api/v1/table-reservations/reference/:reference`
+Public lookup for the confirmation page.
+**200:** `{ success, data: TableReservation }` · **404** not found
+
+### `GET /api/v1/table-reservations/me`
+**Requires user auth.** **200:** `{ success, data: TableReservation[] }`
+
+### `PUT /api/v1/table-reservations/reference/:reference/cancel`
+Optional auth. **Body:** `{ guestEmail?, cancellationReason? }`
+
+Ownership must be proved — the reference alone is shareable. A guest supplies `guestEmail`; a logged-in owner is matched on `userId`. No refund logic: nothing was charged.
+
+**200:** `{ success, data: TableReservation }` — status `cancelled`, tables released.
+**Errors:** `400` no email and not logged in, or past reservation · `403` not the owner · `409` already cancelled, or already seated/completed/no-show
+
+---
+
+## Restaurant — Admin
+
+**Base:** `/api/v1/admin/restaurants` · **All routes require admin auth.**
+**Roles:** `super_admin` and `branch_admin` mutate. `staff` is read-only on menu items, dining areas, availability, reservations and reviews.
+
+| Method | Path | Roles |
+|---|---|---|
+| POST | `/` | manager |
+| PUT, DELETE | `/:restaurantId` | manager |
+| POST, DELETE | `/upload-image` | manager |
+| POST | `/:restaurantId/menu/categories` | manager |
+| PUT, DELETE | `/menu/categories/:categoryId` | manager |
+| POST | `/:restaurantId/menu/items` | manager |
+| GET | `/menu/items/:itemId` | manager + staff |
+| PUT, DELETE | `/menu/items/:itemId` | manager |
+| POST | `/:restaurantId/dining-areas` | manager |
+| GET | `/dining-areas/:areaId` | manager + staff |
+| PUT, DELETE | `/dining-areas/:areaId` | manager |
+| PUT | `/dining-areas/:areaId/availability` | manager |
+| GET | `/dining-areas/:areaId/availability` | manager + staff |
+| GET | `/reservations` | manager + staff |
+| PUT | `/reservations/:reservationId/status` | manager |
+| POST | `/:restaurantId/gallery` | manager |
+| DELETE | `/gallery/:itemId` | manager |
+| POST | `/:restaurantId/offers` | manager |
+| PUT, DELETE | `/offers/:offerId` | manager |
+| POST | `/:restaurantId/faqs` | manager |
+| DELETE | `/faqs/:faqId` | manager |
+| GET | `/:restaurantId/reviews` | manager + staff |
+| PUT | `/reviews/:reviewId/approve` | manager |
+| PUT | `/reviews/:reviewId/reply` | manager |
+| DELETE | `/reviews/:reviewId` | manager |
+
+### `PUT /api/v1/admin/restaurants/dining-areas/:areaId/availability`
+Manual override (close Private Dining for an event, shut the terrace in rain).
+**Body:** `{ date, timeSlot?, blockedTables, reason? }` — omit `timeSlot` to block the whole day.
+**Errors:** `400` `blockedTables` exceeds the area's `totalTables`
+
+### `GET /api/v1/admin/restaurants/reservations`
+Optional `?restaurantId=`, `?status=`, `?date=`.
+
+### `PUT /api/v1/admin/restaurants/reservations/:reservationId/status`
+**Body:** `{ status }` where status is one of `confirmed`, `seated`, `completed`, `cancelled`, `no_show`.
+
+### Soft-delete guards
+- **Restaurant** — blocked while active dining areas exist
+- **Menu category** — blocked while it holds active items
+- **Dining area** — blocked while **upcoming** `confirmed`/`seated` reservations exist (past ones do not block)
+
+### Availability model
+Bookable tables are **computed on read**, never stored:
+
+```
+availableTables = totalTables
+                − blockedTables (day-wide override + slot override)
+                − sum of tablesReserved (status confirmed or seated)
+```
+
+A party occupies `ceil(partySize / area.maxPartySize)` tables. This mirrors the Hotel module's `RoomAvailability` design — only exceptions are stored, so no background job pre-generates rows.
+
+**Known limitation (shared with Hotel):** the availability check and the reservation insert are not one transaction, so two simultaneous requests for the last table could both succeed. Deferred to the shared Booking Engine hardening item so both verticals get the same fix.
+
+### Environment variables
+No new variables. The module reuses `MONGODB_URI`, `JWT_SECRET`/`ADMIN_JWT_SECRET`, `SMTP_*`, `EMAIL_FROM`, `CLOUDINARY_*` and `ADMIN_NOTIFICATION_EMAIL` — all already required by the Auth and Hotel modules.

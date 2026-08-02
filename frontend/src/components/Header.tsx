@@ -4,21 +4,12 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion, useMotionValueEvent, useReducedMotion, useScroll } from "framer-motion";
-import { Menu, X, User, LogOut, ArrowRight, Briefcase } from "lucide-react";
+import { Menu, X, User, LogOut, ArrowRight, Briefcase, ChevronDown } from "lucide-react";
 import { getStoredUser, clearUserToken, StoredUser } from "@/lib/userAuth";
+import { NAV_LINKS, isEntryActive } from "@/components/navLinks";
 import { EASE_LUXE } from "@/components/motion/variants";
 
-const NAV_LINKS = [
-  { href: "/", label: "Home" },
-  { href: "/hotel", label: "Hotel" },
-  { href: "/hotel/rooms", label: "Rooms" },
-  { href: "/hotel/gallery", label: "Gallery" },
-  { href: "/hotel/offers", label: "Offers" },
-  { href: "/hotel/amenities", label: "Amenities" },
-  { href: "/hotel/reviews", label: "Reviews" },
-  { href: "/hotel/faqs", label: "FAQs" },
-  { href: "/hotel/contact", label: "Contact" },
-];
+
 
 /** Scroll distance before the auto-hide behaviour is allowed to kick in. */
 const HIDE_AFTER = 260;
@@ -119,7 +110,7 @@ export default function Header() {
                 transparent ? "text-cream/55" : "text-warm-400"
               }`}
             >
-              Hotel &amp; Stays
+              Hotel · Restaurant
             </span>
           </Link>
 
@@ -128,20 +119,59 @@ export default function Header() {
               cramped nav is the fastest way to look inexpensive. */}
           <nav className="hidden items-center gap-8 xl:flex 2xl:gap-10">
             {NAV_LINKS.map((link) => {
-              const active = pathname === link.href;
+              const active = isEntryActive(link, pathname);
+              const tone = transparent
+                ? "text-cream/80 hover:text-cream data-[active=true]:text-gold"
+                : "text-ink/75 hover:text-ink data-[active=true]:text-gold";
+
+              if (!link.children) {
+                return (
+                  <Link key={link.href} href={link.href} data-active={active} className={`nav-link ${tone}`}>
+                    {link.label}
+                  </Link>
+                );
+              }
+
+              // Grouped entry. The panel opens on hover AND on keyboard focus
+              // (focus-within), so it is reachable without a mouse; the parent
+              // remains a real link to the vertical's overview page.
               return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  data-active={active}
-                  className={`nav-link ${
-                    transparent
-                      ? "text-cream/80 hover:text-cream data-[active=true]:text-gold"
-                      : "text-ink/75 hover:text-ink data-[active=true]:text-gold"
-                  }`}
-                >
-                  {link.label}
-                </Link>
+                <div key={link.href} className="group/nav relative">
+                  <Link
+                    href={link.href}
+                    data-active={active}
+                    className={`nav-link inline-flex items-center gap-1.5 ${tone}`}
+                  >
+                    {link.label}
+                    <ChevronDown
+                      size={13}
+                      strokeWidth={1.75}
+                      className="transition-transform duration-400 ease-luxe group-hover/nav:rotate-180"
+                    />
+                  </Link>
+
+                  <div
+                    className="invisible absolute left-1/2 top-full z-50 w-60 -translate-x-1/2 translate-y-1 pt-5 opacity-0
+                               transition-all duration-300 ease-luxe
+                               group-hover/nav:visible group-hover/nav:translate-y-0 group-hover/nav:opacity-100
+                               group-focus-within/nav:visible group-focus-within/nav:translate-y-0 group-focus-within/nav:opacity-100"
+                  >
+                    <ul className="overflow-hidden rounded-luxe border border-ink/[0.07] bg-cream/95 py-2 shadow-lift backdrop-blur-xl">
+                      {link.children.map((child) => (
+                        <li key={child.href}>
+                          <Link
+                            href={child.href}
+                            className={`block px-5 py-2.5 text-sm font-light transition-colors duration-300 hover:bg-gold/[0.08] hover:text-gold ${
+                              pathname === child.href ? "text-gold" : "text-ink/75"
+                            }`}
+                          >
+                            {child.label}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
               );
             })}
           </nav>
@@ -243,16 +273,40 @@ export default function Header() {
                     hidden: { opacity: 0, y: 18 },
                     visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE_LUXE } },
                   }}
+                  className="border-b border-cream/10 py-4"
                 >
                   <Link
                     href={link.href}
                     onClick={() => setMobileOpen(false)}
-                    className={`block border-b border-cream/10 py-4 font-display text-2xl transition-colors duration-300 ${
-                      pathname === link.href ? "text-gold" : "text-cream hover:text-gold"
+                    className={`block font-display text-2xl transition-colors duration-300 ${
+                      isEntryActive(link, pathname) ? "text-gold" : "text-cream hover:text-gold"
                     }`}
                   >
                     {link.label}
                   </Link>
+
+                  {/* Children are listed inline rather than behind an accordion:
+                      on a full-screen drawer there is room, and one fewer tap to
+                      reach any page. */}
+                  {link.children && (
+                    <ul className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 pl-1">
+                      {link.children
+                        .filter((c) => c.href !== link.href)
+                        .map((child) => (
+                          <li key={child.href}>
+                            <Link
+                              href={child.href}
+                              onClick={() => setMobileOpen(false)}
+                              className={`block py-1 text-sm font-light transition-colors duration-300 ${
+                                pathname === child.href ? "text-gold" : "text-cream/60 hover:text-gold"
+                              }`}
+                            >
+                              {child.label}
+                            </Link>
+                          </li>
+                        ))}
+                    </ul>
+                  )}
                 </motion.div>
               ))}
 

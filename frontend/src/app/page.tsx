@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
 import { getTheHotel } from "@/lib/hotel";
-import Hero from "@/modules/hotel/components/home/Hero";
+import Hero from "@/components/sections/Hero";
 import QuickBookingWidget from "@/modules/hotel/components/home/QuickBookingWidget";
-import Introduction from "@/modules/hotel/components/home/Introduction";
+import Introduction from "@/components/sections/Introduction";
 import FeaturedRooms from "@/modules/hotel/components/home/FeaturedRooms";
-import WhyChooseUs from "@/modules/hotel/components/home/WhyChooseUs";
-import AmenitiesPreview from "@/modules/hotel/components/home/AmenitiesPreview";
-import OffersPreview from "@/modules/hotel/components/home/OffersPreview";
-import GalleryPreview from "@/modules/hotel/components/home/GalleryPreview";
-import Testimonials from "@/modules/hotel/components/home/Testimonials";
+import ValueProps, { HOTEL_VALUE_POINTS } from "@/components/sections/ValueProps";
+import AmenitiesPreview from "@/components/sections/AmenitiesPreview";
+import OffersPreview from "@/components/sections/OffersPreview";
+import GalleryPreview from "@/components/sections/GalleryPreview";
+import Testimonials from "@/components/sections/Testimonials";
 import MapPlaceholder from "@/components/MapPlaceholder";
 import Reveal from "@/components/motion/Reveal";
 import TextReveal from "@/components/motion/TextReveal";
@@ -61,21 +61,28 @@ export default async function HomePage() {
 
   return (
     <main>
-      <Hero hotelName={hotel.name} images={heroImages} />
+      <Hero
+        title={hotel.name}
+        images={heroImages}
+        primaryCta={{ label: "Book Your Stay", href: "/hotel/booking" }}
+        secondaryCta={{ label: "Explore Rooms", href: "/hotel/rooms" }}
+      />
       <QuickBookingWidget />
 
       <Introduction
-        hotelName={hotel.name}
+        name={hotel.name}
         description={hotel.description}
         starRating={hotel.starRating}
         image={introImage}
+        storyHref="/hotel/about"
+        browseHref="/hotel/rooms"
       />
 
       <FeaturedRooms rooms={rooms} />
-      <WhyChooseUs />
-      <AmenitiesPreview amenities={hotel.amenities} />
-      <OffersPreview offers={offers} />
-      <GalleryPreview images={gallery} />
+      <ValueProps points={HOTEL_VALUE_POINTS} />
+      <AmenitiesPreview amenities={hotel.amenities} href="/hotel/amenities" />
+      <OffersPreview offers={offers} viewAllHref="/hotel/offers" reserveHref="/hotel/booking" />
+      <GalleryPreview images={gallery} href="/hotel/gallery" />
       <Testimonials
         reviews={reviews}
         average={reviewSummary.average}

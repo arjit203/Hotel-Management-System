@@ -8,6 +8,8 @@ import RoomCard, { RoomSummary } from "@/modules/hotel/components/RoomCard";
 import { SkeletonGrid } from "@/components/Skeleton";
 import { Stagger, StaggerItem } from "@/components/motion/Stagger";
 import { EASE_LUXE } from "@/components/motion/variants";
+import Pagination from "@/components/ui/Pagination";
+import { todayISO } from "@/lib/format";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000/api/v1";
 const PAGE_SIZE = 6;
@@ -104,10 +106,11 @@ export default function RoomSearch({
 
   const totalPages = Math.max(1, Math.ceil(rooms.length / PAGE_SIZE));
   const pageRooms = rooms.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayISO();
 
-  const fieldClass =
-    "w-full bg-transparent border-0 border-b border-ink/12 py-2.5 text-sm font-light text-ink placeholder:text-warm-400 transition-colors duration-300 focus:border-gold focus:outline-none focus:ring-0";
+  // Was a local copy of the underline-input class string; now the shared
+  // `.field-line-sm` component class (globals.css).
+  const fieldClass = "field-line-sm";
 
   const filterFields = (
     <>
@@ -292,23 +295,8 @@ export default function RoomSearch({
       )}
 
       {/* ── Pagination ── */}
-      {!searching && totalPages > 1 && (
-        <nav aria-label="Rooms pagination" className="mt-14 flex items-center justify-center gap-2">
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-            <button
-              key={p}
-              onClick={() => setPage(p)}
-              aria-current={p === page ? "page" : undefined}
-              className={`h-10 w-10 rounded-full text-xs font-medium tabular-nums transition-all duration-400 ease-luxe ${
-                p === page
-                  ? "bg-ink text-cream"
-                  : "border border-ink/10 text-warm-500 hover:border-gold hover:text-gold"
-              }`}
-            >
-              {p}
-            </button>
-          ))}
-        </nav>
+      {!searching && (
+        <Pagination page={page} totalPages={totalPages} onChange={setPage} label="Rooms pagination" />
       )}
     </div>
   );

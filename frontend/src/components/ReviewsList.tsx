@@ -5,6 +5,8 @@ import { Quote } from "lucide-react";
 import StarRating from "@/components/StarRating";
 import LuxeImage from "@/components/motion/LuxeImage";
 import { Stagger, StaggerItem } from "@/components/motion/Stagger";
+import Pagination from "@/components/ui/Pagination";
+import Monogram from "@/components/ui/Monogram";
 
 interface Review {
   _id: string;
@@ -68,10 +70,7 @@ export default function ReviewsList({ reviews }: { reviews: Review[] }) {
               )}
 
               <figcaption className="mt-7 flex items-center gap-3 border-t border-ink/[0.07] pt-5">
-                {/* Monogram initial rather than a stock avatar. */}
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gold/12 font-display text-base text-gold">
-                  {(r.guestName || "G").trim().charAt(0).toUpperCase()}
-                </span>
+                <Monogram name={r.guestName} />
                 <span className="text-[11px] font-medium uppercase tracking-luxe text-ink/70">
                   {r.guestName || "Guest"}
                 </span>
@@ -81,24 +80,12 @@ export default function ReviewsList({ reviews }: { reviews: Review[] }) {
         ))}
       </Stagger>
 
-      {totalPages > 1 && (
-        <nav aria-label="Reviews pagination" className="mt-14 flex items-center justify-center gap-2">
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-            <button
-              key={p}
-              onClick={() => setPage(p)}
-              aria-current={p === page ? "page" : undefined}
-              className={`h-10 w-10 rounded-full text-xs font-medium tabular-nums transition-all duration-400 ease-luxe ${
-                p === page
-                  ? "bg-ink text-cream"
-                  : "border border-ink/10 text-warm-500 hover:border-gold hover:text-gold"
-              }`}
-            >
-              {p}
-            </button>
-          ))}
-        </nav>
-      )}
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        onChange={setPage}
+        label="Reviews pagination"
+      />
     </div>
   );
 }

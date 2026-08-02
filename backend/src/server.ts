@@ -12,6 +12,11 @@ import {
   publicBookingRouter,
   adminHotelRouter,
 } from "./modules/hotel/hotel.routes";
+import {
+  publicRestaurantRouter,
+  publicReservationRouter,
+  adminRestaurantRouter,
+} from "./modules/restaurant/restaurant.routes";
 
 dotenv.config();
 
@@ -30,6 +35,12 @@ app.use("/api/v1/auth", authRoutes);   // ← NEW
 app.use("/api/v1/hotels", publicHotelRouter);
 app.use("/api/v1/hotel-bookings", publicBookingRouter);
 app.use("/api/v1/admin/hotels", adminHotelRouter);
+
+// Restaurant module (Phase 4.0) — additive. The Hotel mounts above are unchanged,
+// and these namespaces don't overlap them, so no existing route behaviour shifts.
+app.use("/api/v1/restaurants", publicRestaurantRouter);
+app.use("/api/v1/table-reservations", publicReservationRouter);
+app.use("/api/v1/admin/restaurants", adminRestaurantRouter);
 
 // 404 handler                          // ← NEW
 app.use((req, res) => {                 // ← NEW

@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, MailCheck, Loader2 } from "lucide-react";
+import { MailCheck, Loader2 } from "lucide-react";
+import Alert from "@/components/ui/Alert";
 import { api } from "@/lib/api";
 import AuthField from "@/components/auth/AuthField";
 import SocialPlaceholders from "@/components/auth/SocialPlaceholders";
@@ -156,15 +157,7 @@ export default function SignupForm() {
           </div>
         )}
 
-        {error && (
-          <p
-            role="alert"
-            className="flex items-start gap-2.5 rounded-xl border border-red-400/30 bg-red-500/15 px-4 py-3 text-sm font-light text-red-200"
-          >
-            <AlertCircle size={16} className="mt-0.5 shrink-0" />
-            {error}
-          </p>
-        )}
+        {error && <Alert variant="dark">{error}</Alert>}
 
         <button
           type="submit"

@@ -7,6 +7,9 @@ import { api } from "@/lib/api";
 import { getUserToken, getStoredUser } from "@/lib/userAuth";
 import CancelBookingButton from "@/modules/hotel/components/CancelBookingButton";
 import { Skeleton, SkeletonText } from "@/components/Skeleton";
+import StatusBadge from "@/components/ui/StatusBadge";
+import EmptyState from "@/components/ui/EmptyState";
+import { money, formatDateShort as formatDate } from "@/lib/format";
 
 interface BookingData {
   _id: string;
@@ -19,21 +22,8 @@ interface BookingData {
   status: string;
 }
 
-// Matches the confirmation page's muted chip vocabulary so a status looks the
-// same wherever the guest encounters it.
-const STATUS_STYLES: Record<string, string> = {
-  pending: "border-amber-300/60 bg-amber-50 text-amber-800",
-  confirmed: "border-gold/40 bg-gold/10 text-gold-dark",
-  checked_in: "border-sky-300/60 bg-sky-50 text-sky-800",
-  checked_out: "border-ink/15 bg-ink/[0.04] text-ink/70",
-  completed: "border-ink/15 bg-ink/[0.04] text-ink/70",
-  cancelled: "border-red-300/60 bg-red-50 text-red-700",
-  refund_pending: "border-amber-300/60 bg-amber-50 text-amber-800",
-  refunded: "border-ink/15 bg-ink/[0.04] text-ink/70",
-};
-
-const formatDate = (value: string) =>
-  new Date(value).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+// Status chips and formatters now come from the shared layer, so a status and a
+// date read identically here and on the confirmation page.
 
 /**
  * Presentation rebuild only — the data flow (token check, GET /hotel-bookings/me,
@@ -84,35 +74,32 @@ export default function MyBookingsPage() {
 
       {/* ── Signed out ── */}
       {!loading && !loggedIn && (
-        <div className="card-luxe flex flex-col items-center px-8 py-16 text-center">
-          <span className="mb-6 flex h-14 w-14 items-center justify-center rounded-full bg-gold/[0.08]">
-            <LogIn size={20} strokeWidth={1.5} className="text-gold" />
-          </span>
-          <h2 className="card-title">Sign in to view your stays</h2>
-          <p className="body-muted mx-auto mt-3 max-w-sm">
-            Your reservations live in your account. Booked as a guest? Use the reference from your
-            confirmation email instead.
-          </p>
-          <Link href="/login" className="btn-primary group mt-8">
-            Sign In <ArrowRight size={14} className="btn-arrow" />
-          </Link>
-        </div>
+        <EmptyState
+          variant="card"
+          icon={LogIn}
+          title="Sign in to view your stays"
+          description="Your reservations live in your account. Booked as a guest? Use the reference from your confirmation email instead."
+          action={
+            <Link href="/login" className="btn-primary group">
+              Sign In <ArrowRight size={14} className="btn-arrow" />
+            </Link>
+          }
+        />
       )}
 
       {/* ── Empty ── */}
       {!loading && loggedIn && bookings.length === 0 && (
-        <div className="card-luxe flex flex-col items-center px-8 py-16 text-center">
-          <span className="mb-6 flex h-14 w-14 items-center justify-center rounded-full bg-gold/[0.08]">
-            <Luggage size={20} strokeWidth={1.5} className="text-gold" />
-          </span>
-          <h2 className="card-title">No stays yet</h2>
-          <p className="body-muted mx-auto mt-3 max-w-sm">
-            When you book with us, your reservations will appear here.
-          </p>
-          <Link href="/hotel/rooms" className="btn-primary group mt-8">
-            Explore Rooms <ArrowRight size={14} className="btn-arrow" />
-          </Link>
-        </div>
+        <EmptyState
+          variant="card"
+          icon={Luggage}
+          title="No stays yet"
+          description="When you book with us, your reservations will appear here."
+          action={
+            <Link href="/hotel/rooms" className="btn-primary group">
+              Explore Rooms <ArrowRight size={14} className="btn-arrow" />
+            </Link>
+          }
+        />
       )}
 
       {/* ── Bookings ── */}
@@ -130,13 +117,7 @@ export default function MyBookingsPage() {
                       <p className="text-xs uppercase tracking-luxe text-warm-500">Reference</p>
                       <p className="price mt-1 text-lg tracking-wide">{b.bookingReference}</p>
                     </div>
-                    <span
-                      className={`rounded-full border px-4 py-1.5 text-xs font-medium uppercase tracking-luxe ${
-                        STATUS_STYLES[b.status] || "border-ink/15 bg-ink/[0.04] text-ink/70"
-                      }`}
-                    >
-                      {b.status.replace(/_/g, " ")}
-                    </span>
+                    <StatusBadge status={b.status} />
                   </div>
 
                   <div className="mt-6 flex flex-wrap items-center gap-x-7 gap-y-3 border-t border-ink/[0.07] pt-5 text-sm font-light text-warm-600">
@@ -159,7 +140,7 @@ export default function MyBookingsPage() {
                       <span className="mb-1.5 block text-xs uppercase tracking-luxe text-warm-500">
                         Total
                       </span>
-                      <span className="price text-2xl">₹{b.totalAmount.toLocaleString("en-IN")}</span>
+                      <span className="price text-2xl">{money(b.totalAmount)}</span>
                     </p>
 
                     <div className="flex flex-wrap items-center gap-5">

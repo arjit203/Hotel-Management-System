@@ -4,6 +4,129 @@ Format: newest entries on top. Categories: Added / Changed / Fixed / Security / 
 
 ---
 
+## [2026-08-02 (c)] — Phase 4.0: Restaurant module — backend
+
+**Hotel module untouched.** No Hotel model, service, controller, route, API contract, payment or auth code was modified. `server.ts` gained three additive `app.use` mounts on non-overlapping namespaces; `email.util.ts` gained two additive exports. Everything else is new files under `backend/src/modules/restaurant/`.
+
+Scope per `RULES.md` §2: table reservation is **instant**, online food ordering is **Phase 2**. There is deliberately **no cart, order, checkout, delivery or food-payment code anywhere in this module**.
+
+### Added
+- **Models** (`backend/src/modules/restaurant/models/`) — `restaurant`, `menuCategory`, `menuItem`, `diningArea`, `tableAvailability`, `tableReservation`. All mirror the Hotel module's conventions (`branchId` multi-tenancy, slug scoping, `isActive` soft delete, midnight-UTC dates).
+- **`restaurant.validation.ts`** — Zod schemas for every route, including a shared `HH:MM` time validator and a `menuQuerySchema` that backs search, veg/non-veg, price filters and the specials flags from one place.
+- **`restaurant.service.ts`** — restaurant/menu/dining-area CRUD, `getAvailableTables`, `getDayAvailability` (the Table Availability grid), `tablesNeededFor`, admin availability overrides.
+- **`reservation.service.ts`** — instant `confirmed` creation, reference generation (`7VR-` prefix), lookup, user list, admin list, status update, guest-initiated cancellation with an ownership check.
+- **`restaurant.controller.ts`** and **`restaurant.routes.ts`** — three routers matching the Hotel module's split: public content, public reservations, admin.
+- **`email.util.ts`** — two additive builders: `buildReservationConfirmationEmailHtml`, `buildReservationCancellationEmailHtml` (the latter has a `forAdmin` variant). No existing builder changed.
+- **`API_DOCUMENTATION.md`** — three new sections (Restaurant Public / Table Reservations / Admin), 182 lines, covering every endpoint with request shapes, error codes, RBAC matrix and the availability formula.
+
+### Reused, not rebuilt
+- **`content.service.ts` wholesale** for reviews, gallery, FAQs and offers. Its models already accepted `"restaurant"` in their polymorphic enums, so **zero model changes were required** — only routes. There are no restaurant-specific copies of those four features.
+- `auth.middleware` (`authenticate`, `optionalAuthenticate`, `requireRole`), `apiError.util`, `cloudinary.util`, `upload.middleware`, `email.util`, `db` config — all imported, none duplicated.
+- **No new npm packages. No new environment variables.**
+
+### Design decisions worth knowing
+- **`DiningArea` is the availability unit, not individual tables.** Reservations count against `totalTables`; the host assigns actual tables on the floor. Modelling individual tables would encode a precision the business doesn't operate at.
+- **`TableAvailability` stores manual overrides only** — same decision as `RoomAvailability`. Availability is computed on read: `totalTables − blocked(day-wide + slot) − Σ tablesReserved(confirmed|seated)`. No pre-generation job.
+- **A party occupies `ceil(partySize / area.maxPartySize)` tables** — a party of 10 in a 4-seat area consumes 3.
+- **`reservationSlots` and `serviceHours` are admin-configured data**, not a hardcoded interval (`AI_INSTRUCTIONS.md` §15). The service rejects a slot the restaurant doesn't offer.
+- **Menu search uses an escaped regex, not the `$text` index.** MongoDB can't combine `$text` with a sort on another field efficiently, and guests expect partial-word matches ("pane" → "Paneer"). The text index stays on the model for future use.
+- **`TableReservation` has no amount/advance/Razorpay/invoice fields**, with a comment saying not to add them without a rules change.
+- **Reference prefix `7VR-`** distinguishes a restaurant reservation from a hotel booking's `7V-` at a glance.
+- **`contentService.createOffer` was NOT extended** to accept `discountPercent` — changing that signature would alter a contract the completed Hotel module depends on. The restaurant controller calls it with exactly the field set the Hotel controller uses.
+
+### Verification — what was actually exercised
+`tsc --noEmit` → 0 errors. `tsc -p tsconfig.json` → build succeeds, `dist/modules/restaurant/` emitted. Server booted against the live database and the following were run as real HTTP requests:
+
+**Hotel regression (unaffected):** `/health` 200 · `/hotels` 200 · `/hotel-bookings/reference/NOPE` 404
+
+**Validation layer:** empty reservation body → 400 with per-field errors · `timeSlot: "7pm"` → 400 "must be 24-hour HH:MM" · `minPrice=900&maxPrice=100` → 400 "minPrice cannot be greater than maxPrice." · availability without `date` → 400
+
+**Service layer:** nonexistent restaurant → 404 · unknown slug → 404 · unknown reservation reference → 404
+
+**Auth/RBAC:** cancel without email or login → 400 identity guard · `/table-reservations/me` without token → 401 · admin route without token → 401 · admin route with garbage token → 401
+
+**End-to-end, against the live database** (admin credentials supplied after the first pass; test data created and fully removed afterwards):
+
+| Flow | Result |
+|---|---|
+| Create restaurant → category → 3 menu items → 2 dining areas | all 201 |
+| Menu search `pane` | matched "Paneer Tikka" — partial-word matching confirmed |
+| Menu search `bestseller` | matched via `tags` |
+| `foodType=veg` / `non_veg` | 2 / 1 |
+| `minPrice=200&maxPrice=450` | 1 of 3 (180 and 520 correctly excluded) |
+| `sortBy=price_asc` | 180 → 420 → 520 |
+| Chef Specials / Today's Specials | 1 each, correct items |
+| Page aggregate | all 11 keys populated |
+| Availability grid | Main Hall 2 tables/slot; Private Dining `canSeatParty:false` for a party of 4 (its `minPartySize` is 6) |
+| Closed weekday | 409 "…is closed on that day." |
+| Unconfigured slot `21:00` | 400, listing the configured sittings |
+| Party below area minimum | 400 |
+| **Reserve party of 6** | `tablesReserved: 2` — `ceil(6/4)` confirmed; status `confirmed`; ref `7VR-…` |
+| Availability after booking | 2 → **0** |
+| Overbook attempt | 409 "fully booked at 19:30" |
+| Cancel with wrong email | 403 ownership guard |
+| Cancel with correct email | 200, status `cancelled` |
+| Availability after cancel | 0 → **2** (tables released) |
+| Double cancel | 409 already cancelled |
+| Admin availability override | 2 → 0 blocked; over-block rejected ("only has 2") |
+| Delete category holding items | 409 guard |
+| Delete restaurant with areas | 409 guard |
+| Cleanup + Hotel regression | all removed, `/restaurants` empty, `/hotels` still 200 |
+
+### Notes / Known Limitations
+- **Reservation race condition** — the availability check and the insert are not one transaction, so two simultaneous requests for the last table could both succeed. Identical to the Hotel booking race and deliberately deferred to the same shared **Booking Engine** hardening item, so both verticals get one fix.
+- **No Restaurant admin-panel UI** — the admin APIs exist, the `admin-panel` pages do not. Same position Hotel was in after its backend phase.
+- **Restaurant frontend not started.**
+
+---
+
+## [2026-08-02 (b)] — Phase 3.9: Shared component extraction & design-token module (frontend only)
+
+**Numbering note:** the owner's brief labelled this "Phase 3.8", but 3.8 was already taken by the entry below (design system + motion layer, same day). Recorded as 3.9 so the two remain distinguishable; they are consecutive parts of the same effort.
+
+**No backend, API, database, business-logic, payment, authentication, routing or SEO changes.** No new UI, no redesign. This entry is pure de-duplication and code organisation.
+
+**Net effect: 18 files changed, 146 insertions, 375 deletions (−229 lines).**
+
+### Added
+- **`frontend/src/lib/theme.ts`** — design tokens for TypeScript consumers: `COLORS`, `FONTS`, `EASE`, `DURATIONS`, `INTERVALS`, `BREAKPOINTS` + `mediaUp()`, `LAYOUT`, `RADII`, `SHADOWS`, plus the greppable guard-rails `MIN_TEXT_COLOR` / `MIN_FONT_PX` / `MIN_BODY_FONT_PX`. `components/motion/variants.ts` now re-exports its easing and duration scale from here, so there is one definition. Documented in-file that this **mirrors** `tailwind.config.js` (which stays the source for CSS utilities) and that the two must be edited together — Tailwind's config is CommonJS and `allowJs` is false, so importing across is not possible without a tsconfig change, which was out of scope.
+- **`frontend/src/lib/format.ts`** — `money`, `amount`, `formatDate`, `formatDateLong`, `formatDateShort`, `nightsBetween`, `todayISO`, `initial`. `nightsBetween` deliberately mirrors the backend's `calculateNights` so a displayed night count can never disagree with the charged one.
+- **`frontend/src/components/ui/`** (new subfolder — six components, each extracted from real duplication, none speculative):
+  - `Lightbox.tsx` — was implemented **three times** (GalleryGrid, GalleryPreview, RoomImageGallery), and the copies had already drifted (differing aria labels, one missing the scroll lock). Now also restores the previous `body.overflow` value instead of blanking it, so a nested lock can't be clobbered.
+  - `Alert.tsx` — was hand-written **five times**; `variant="dark"` covers the auth card, where the light-surface red was unreadable.
+  - `Pagination.tsx` — byte-identical markup in RoomSearch and ReviewsList.
+  - `StatusBadge.tsx` — the eight-status `STATUS_STYLES` map was duplicated in the confirmation page and my-bookings. The vocabulary is owned by the backend (`updateBookingStatus`), so it must render identically everywhere.
+  - `EmptyState.tsx` — five variations across my-bookings, offers, amenities and gallery.
+  - `Monogram.tsx` — duplicated in Testimonials and ReviewsList.
+- **`.field-line` / `.field-line-sm`** in `globals.css` — the underline-input class string was copy-pasted as a local `fieldClass`/`inputClass` const in five components.
+
+### Changed
+- Wired all of the above into their existing call sites; no component gained a new prop contract and no page changed structure.
+- `components/motion/variants.ts` — `EASE_LUXE` / `DURATION` are now aliases of `lib/theme`'s `EASE` / `DURATIONS`. Names kept because every motion component already imports them.
+- `docs/DESIGN_SYSTEM.md` — new §5b (shared UI primitives) and §7b (formatters and tokens); the new-vertical checklist in §9 extended.
+
+### Fixed
+- `@apply border-ink/12` **failed the build** (`The border-ink/12 class does not exist`). Arbitrary opacity modifiers work in a JIT-scanned `class` attribute but not inside `@apply`; corrected to `border-ink/[0.12]`, which compiles to the identical `rgba(20,18,15,.12)`.
+- `Monogram` adds `aria-hidden="true"` — the initial is decorative and was previously announced to screen readers immediately before the guest name it duplicates.
+
+### Verification — how "zero visual difference" was actually checked
+Not asserted; measured. The prerendered HTML of all 14 static routes was captured **before** the refactor, then re-captured after and diffed with build artefacts (chunk hashes, font-variable hashes, RSC payload) normalised out:
+
+- **11 of 14 routes: byte-identical DOM.**
+- 3 routes differ, each fully accounted for:
+  - `index.html`, `hotel/reviews.html` — Monogram only: same class set in a different order, plus the new `aria-hidden`. No computed-style change.
+  - `hotel/contact.html` — `class="block w-full border-0 border-b border-ink/12 …"` → `class="field-line"`. Equivalence confirmed against the **compiled** stylesheet: `border-color:rgba(20,18,15,.12)`, `padding:.625rem`, `font-size:1rem`, `font-weight:300` — the same declarations the utility string produced.
+- `tsc --noEmit` → 0 errors. `next build` → 19/19 routes, 0 errors. Shared First Load JS unchanged at 87.3 kB.
+
+### Notes / Known Limitations
+- **One intentional pixel change, disclosed:** `RoomAvailabilityCheck`'s date inputs previously used `py-2` + `border-ink/15`; they now use the shared `.field-line-sm` (`py-2.5` + `/12`). That is 2px of vertical padding and a slightly lighter hairline. Standardising inconsistent values necessarily changes whichever value was the outlier — flagged rather than buried.
+- **No components were relocated.** The brief asked for components to be moved into shared folders, but the layout was already correct: `components/` is the shared surface, `modules/hotel/components/` is hotel-specific. Moving files like `Hero` or `Testimonials` would have produced import churn across every page for no functional gain, against a "zero difference" requirement. `Hero`, `Testimonials`, `GalleryPreview` and `WhyChooseUs` are generic enough to reuse **from their current paths**; see DESIGN_SYSTEM.md §9.
+- **No speculative components were created.** The brief listed ~25 candidates (Navbar, Modal, Toast, Select, Textarea, Feature Card, …). Only the six with proven duplication were extracted. Building the rest with no consumer would add untested dead code and contradict "do not create new UI" — they should be extracted when a second vertical actually needs them.
+- **Still no browser verification.** The HTML diff is strong evidence of unchanged markup, but no page has been opened in a browser, and hover/scroll/lightbox interactions are unverified at runtime.
+- `text-[11px]` remains in several components, below the 12px floor documented in DESIGN_SYSTEM.md §2. Correcting it is a visual change and was therefore out of scope for this phase.
+
+---
+
 ## [2026-08-02] — Phase 3.8: Luxury design system, motion layer & UX refinement (frontend only)
 
 **No backend, API, database, business-logic, payment, routing, or admin-panel changes.** Every API call, request shape, query parameter and destination route is byte-for-byte unchanged. This entry is presentation, accessibility and UX only.

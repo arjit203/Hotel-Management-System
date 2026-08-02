@@ -24,20 +24,20 @@ import { useState } from "react";
  *   so it hands off to the guest's mail client instead. A real server-side
  *   resend needs a new endpoint (out of scope this phase).
  */
-export default function InvoiceActions({
+export default function ConfirmationActions({
   bookingReference,
   guestEmail,
-  hotelName,
+  brandName,
 }: {
   bookingReference: string;
   guestEmail: string;
-  hotelName: string;
+  brandName: string;
 }) {
   const [copied, setCopied] = useState(false);
 
   const mailtoHref =
     `mailto:${encodeURIComponent(guestEmail)}` +
-    `?subject=${encodeURIComponent(`Booking confirmation — ${hotelName} (${bookingReference})`)}` +
+    `?subject=${encodeURIComponent(`Booking confirmation — ${brandName} (${bookingReference})`)}` +
     `&body=${encodeURIComponent(
       `Booking reference: ${bookingReference}\n\n` +
         `Keep this reference handy at check-in. You can view the full confirmation at:\n` +

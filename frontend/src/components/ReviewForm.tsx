@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Star, X, ImagePlus, Check, AlertCircle, Loader2, ArrowRight } from "lucide-react";
+import { Star, X, ImagePlus, Check, Loader2, ArrowRight } from "lucide-react";
+import Alert from "@/components/ui/Alert";
 import { getStoredUser, getUserToken, StoredUser } from "@/lib/userAuth";
 import { cldImage, IMAGE_WIDTHS } from "@/lib/imageUrl";
 
@@ -13,7 +14,16 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5
 // backend uses the account's name and ignores any guestName sent; if not,
 // guestName is required. This component reflects that: logged-in users skip
 // the "Your Name" field entirely (shown as "Posting as {name}" instead).
-export default function ReviewForm({ hotelId }: { hotelId: string }) {
+export default function ReviewForm({
+  reviewEndpoint,
+  uploadEndpoint,
+}: {
+  /** POST target for the review, e.g. `/hotels/<id>/reviews`. Path only — the
+   *  API base URL is prepended here. Vertical-specific, hence required. */
+  reviewEndpoint: string;
+  /** POST target for a review photo, e.g. `/hotels/reviews/upload-image`. */
+  uploadEndpoint: string;
+}) {
   const [user, setUser] = useState<StoredUser | null>(null);
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
@@ -49,7 +59,7 @@ export default function ReviewForm({ hotelId }: { hotelId: string }) {
     try {
       const formData = new FormData();
       formData.append("image", file);
-      const res = await fetch(`${API_BASE_URL}/hotels/reviews/upload-image`, {
+      const res = await fetch(`${API_BASE_URL}${uploadEndpoint}`, {
         method: "POST",
         body: formData,
       });
@@ -70,8 +80,8 @@ export default function ReviewForm({ hotelId }: { hotelId: string }) {
     setImages((prev) => prev.filter((u) => u !== url));
   }
 
-  const fieldClass =
-    "block w-full border-0 border-b border-ink/12 bg-transparent py-2.5 text-base font-light text-ink transition-colors duration-300 focus:border-gold focus:outline-none focus:ring-0";
+  // Shared `.field-line` component class (globals.css) — was a local copy.
+  const fieldClass = "field-line";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -83,7 +93,7 @@ export default function ReviewForm({ hotelId }: { hotelId: string }) {
     setError("");
     try {
       const token = getUserToken();
-      const res = await fetch(`${API_BASE_URL}/hotels/${hotelId}/reviews`, {
+      const res = await fetch(`${API_BASE_URL}${reviewEndpoint}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -222,15 +232,7 @@ export default function ReviewForm({ hotelId }: { hotelId: string }) {
         </div>
       )}
 
-      {error && (
-        <p
-          role="alert"
-          className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-light text-red-700"
-        >
-          <AlertCircle size={16} className="mt-0.5 shrink-0" />
-          {error}
-        </p>
-      )}
+      {error && <Alert>{error}</Alert>}
 
       <button type="submit" disabled={submitting} className="btn-primary group w-full disabled:opacity-60">
         {submitting ? (

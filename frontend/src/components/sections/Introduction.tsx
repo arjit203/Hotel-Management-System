@@ -16,15 +16,30 @@ import LuxeImage from "@/components/motion/LuxeImage";
  * reads as an unbroken stack of card rows.
  */
 export default function Introduction({
-  hotelName,
+  name,
   description,
   starRating,
   image,
+  storyHref,
+  browseHref,
+  // Labels default to what the Hotel module already rendered, so its call site
+  // needn't change. Other verticals override them.
+  storyLabel = "Our Story",
+  browseLabel = "Browse rooms",
+  headline = "A quieter kind of luxury",
+  ratingLabel = `${starRating}-Star Hospitality`,
 }: {
-  hotelName: string;
+  name: string;
   description: string;
   starRating: number;
   image?: string;
+  /** Routes are vertical-specific, so these are required. */
+  storyHref: string;
+  browseHref: string;
+  storyLabel?: string;
+  browseLabel?: string;
+  headline?: string;
+  ratingLabel?: string;
 }) {
   return (
     <section className="section container-luxe">
@@ -37,7 +52,7 @@ export default function Introduction({
 
           <TextReveal
             as="h2"
-            text={`A quieter kind of luxury`}
+            text={headline}
             className="section-title"
             delay={0.05}
           />
@@ -46,23 +61,23 @@ export default function Introduction({
             <div className="mt-6 flex items-center gap-3">
               <StarRating rating={starRating} size={15} />
               <span className="text-[10px] uppercase tracking-eyebrow text-warm-400">
-                {starRating}-Star Hospitality
+                {ratingLabel}
               </span>
             </div>
 
             <p className="lead mt-6">{description}</p>
 
             <p className="body-muted mt-4">
-              Rooted in the promise of &ldquo;{hotelName}&rdquo; — every arrival is met with the same
+              Rooted in the promise of &ldquo;{name}&rdquo; — every arrival is met with the same
               care, whether you stay one night or a season.
             </p>
 
             <div className="mt-9 flex flex-wrap items-center gap-4">
-              <Link href="/hotel/about" className="btn-outline group">
-                Our Story <ArrowRight size={14} className="btn-arrow" />
+              <Link href={storyHref} className="btn-outline group">
+                {storyLabel} <ArrowRight size={14} className="btn-arrow" />
               </Link>
-              <Link href="/hotel/rooms" className="link-arrow">
-                Browse rooms <ArrowRight size={14} />
+              <Link href={browseHref} className="link-arrow">
+                {browseLabel} <ArrowRight size={14} />
               </Link>
             </div>
           </Reveal>
@@ -76,7 +91,7 @@ export default function Introduction({
                 <Parallax strength={8} className="h-full w-full">
                   <LuxeImage
                     src={image}
-                    alt={`${hotelName} — interiors`}
+                    alt={`${name} — interiors`}
                     wrapperClassName="h-full w-full"
                     width={1200}
                     sizes="(max-width: 1024px) 100vw, 50vw"

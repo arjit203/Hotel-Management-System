@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Phone, Mail, MapPin, MessageCircle, Clock } from "lucide-react";
 import { getTheHotel } from "@/lib/hotel";
 import MapPlaceholder from "@/components/MapPlaceholder";
-import ContactForm from "@/modules/hotel/components/ContactForm";
+import ContactForm from "@/components/ContactForm";
 import PageHeader from "@/components/PageHeader";
 import Reveal from "@/components/motion/Reveal";
 

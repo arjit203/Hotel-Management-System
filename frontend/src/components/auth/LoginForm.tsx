@@ -3,7 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, AlertCircle, Check, Loader2 } from "lucide-react";
+import { ArrowLeft, Check, Loader2 } from "lucide-react";
+import Alert from "@/components/ui/Alert";
 import { api } from "@/lib/api";
 import { setUserToken, setStoredUser } from "@/lib/userAuth";
 import AuthField from "@/components/auth/AuthField";
@@ -167,13 +168,7 @@ export default function LoginForm() {
         )}
 
         {error && (
-          <p
-            role="alert"
-            className="flex items-start gap-2.5 rounded-xl border border-red-400/30 bg-red-500/15 px-4 py-3 text-sm font-light text-red-200"
-          >
-            <AlertCircle size={16} className="mt-0.5 shrink-0" />
-            {error}
-          </p>
+          <Alert variant="dark">{error}</Alert>
         )}
 
         {/* Gold CTA, per the reference. Ink text rather than the reference's

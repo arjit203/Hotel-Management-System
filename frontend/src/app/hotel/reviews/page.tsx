@@ -1,8 +1,8 @@
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getTheHotel } from "@/lib/hotel";
-import ReviewsList from "@/modules/hotel/components/ReviewsList";
-import ReviewForm from "@/modules/hotel/components/ReviewForm";
+import ReviewsList from "@/components/ReviewsList";
+import ReviewForm from "@/components/ReviewForm";
 import StarRating from "@/components/StarRating";
 import PageHeader from "@/components/PageHeader";
 import Reveal from "@/components/motion/Reveal";
@@ -55,7 +55,10 @@ export default async function ReviewsPage() {
               <p className="section-eyebrow flex justify-center">Your Turn</p>
               <h2 className="section-title !text-[1.75rem]">Share your stay</h2>
             </div>
-            <ReviewForm hotelId={hotel._id} />
+            <ReviewForm
+              reviewEndpoint={`/hotels/${hotel._id}/reviews`}
+              uploadEndpoint="/hotels/reviews/upload-image"
+            />
           </div>
         </Reveal>
       </div>

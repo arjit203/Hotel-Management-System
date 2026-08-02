@@ -13,7 +13,7 @@ import { EASE_LUXE } from "@/components/motion/variants";
  *
  * Under reduced-motion it renders as a static mark, and it's hidden from print.
  */
-export default function BookingSuccessMark() {
+export default function SuccessMark() {
   const reduceMotion = useReducedMotion();
 
   if (reduceMotion) {

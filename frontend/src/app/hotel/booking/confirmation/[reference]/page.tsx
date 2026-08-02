@@ -2,10 +2,12 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import CancelBookingButton from "@/modules/hotel/components/CancelBookingButton";
-import InvoiceActions from "@/modules/hotel/components/InvoiceActions";
-import BookingSuccessMark from "@/modules/hotel/components/BookingSuccessMark";
+import ConfirmationActions from "@/components/ConfirmationActions";
+import SuccessMark from "@/components/ui/SuccessMark";
 import Breadcrumbs from "@/components/Breadcrumbs";
+import StatusBadge from "@/components/ui/StatusBadge";
 import { getTheHotel } from "@/lib/hotel";
+import { money, formatDateLong as formatDate, nightsBetween } from "@/lib/format";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000/api/v1";
 
@@ -49,19 +51,6 @@ interface BookingData {
   subtotal?: number;
 }
 
-// Muted, on-brand status chips — the previous saturated green/amber/red pills
-// were the loudest thing on a page that should feel calm and settled.
-const STATUS_STYLES: Record<string, string> = {
-  pending: "border-amber-300/60 bg-amber-50 text-amber-800",
-  confirmed: "border-gold/40 bg-gold/10 text-gold-dark",
-  checked_in: "border-sky-300/60 bg-sky-50 text-sky-800",
-  checked_out: "border-ink/15 bg-ink/[0.04] text-ink/70",
-  completed: "border-ink/15 bg-ink/[0.04] text-ink/70",
-  cancelled: "border-red-300/60 bg-red-50 text-red-700",
-  refund_pending: "border-amber-300/60 bg-amber-50 text-amber-800",
-  refunded: "border-ink/15 bg-ink/[0.04] text-ink/70",
-};
-
 async function getBooking(reference: string): Promise<BookingData | null> {
   try {
     const res = await fetch(`${API_BASE_URL}/hotel-bookings/reference/${reference}`, {
@@ -74,16 +63,8 @@ async function getBooking(reference: string): Promise<BookingData | null> {
   }
 }
 
-function formatDate(value: string) {
-  return new Date(value).toLocaleDateString("en-IN", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-const money = (n: number) => `₹${n.toLocaleString("en-IN")}`;
+// `formatDate` and `money` now come from lib/format — they were duplicated here
+// and in my-bookings with slightly different date options.
 
 export default async function BookingConfirmationPage({
   params,
@@ -98,13 +79,7 @@ export default async function BookingConfirmationPage({
   const hotelData = await getTheHotel();
   const hotel = hotelData?.hotel;
 
-  const nights = Math.max(
-    1,
-    Math.round(
-      (new Date(booking.checkOutDate).getTime() - new Date(booking.checkInDate).getTime()) /
-        86_400_000
-    )
-  );
+  const nights = nightsBetween(booking.checkInDate, booking.checkOutDate);
   const advancePaid = booking.advancePaid ?? 0;
   const isCancellable =
     ["pending", "confirmed"].includes(booking.status) && new Date(booking.checkInDate) > new Date();
@@ -121,7 +96,7 @@ export default async function BookingConfirmationPage({
 
       {/* ── Success header ── */}
       <header className="text-center">
-        <BookingSuccessMark />
+        <SuccessMark />
         <p className="section-eyebrow mt-7 flex justify-center">
           {booking.status === "confirmed" ? "Reservation Confirmed" : "Reservation Received"}
         </p>
@@ -267,13 +242,7 @@ export default async function BookingConfirmationPage({
 
         {/* Status + any special request */}
         <div className="flex flex-wrap items-center justify-between gap-4 border-t border-ink/[0.08] bg-cream/50 px-8 py-5 sm:px-10">
-          <span
-            className={`inline-flex rounded-full border px-4 py-1.5 text-xs font-medium uppercase tracking-luxe ${
-              STATUS_STYLES[booking.status] || "border-ink/15 bg-ink/[0.04] text-ink/70"
-            }`}
-          >
-            {booking.status.replace(/_/g, " ")}
-          </span>
+          <StatusBadge status={booking.status} />
           <span className="text-xs font-light text-warm-500">
             Guests: {booking.numGuests}
             {hotel?.checkInTime ? ` · Check-in from ${hotel.checkInTime}` : ""}
@@ -289,10 +258,10 @@ export default async function BookingConfirmationPage({
 
       {/* ── Actions ── */}
       <div className="mt-9">
-        <InvoiceActions
+        <ConfirmationActions
           bookingReference={booking.bookingReference}
           guestEmail={booking.guestEmail}
-          hotelName={hotel?.name || "7 Vachan"}
+          brandName={hotel?.name || "7 Vachan"}
         />
       </div>
 
