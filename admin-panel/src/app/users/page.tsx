@@ -22,9 +22,14 @@ interface AdminProfile {
 /**
  * Roles as the backend defines them, with what each one can actually do.
  *
- * These descriptions mirror `requireRole(...)` usage in hotel.routes.ts and
- * restaurant.routes.ts. They are documentation, not enforcement — RBAC is
- * server-side only and this page cannot change it.
+ * These descriptions mirror `requireRole(...)` usage in hotel.routes.ts,
+ * restaurant.routes.ts and hall.routes.ts. They are documentation, not
+ * enforcement — RBAC is server-side only and this page cannot change it.
+ *
+ * `hall_manager`'s isolation is structural rather than special-cased: Hotel and
+ * Restaurant both name their managers explicitly as
+ * `["super_admin","branch_admin"]`, so a hall_manager token is refused there by
+ * the same `requireRole` check every other route uses.
  */
 const ROLES = [
   {
@@ -40,10 +45,16 @@ const ROLES = [
     can: "Same management rights as Super Admin, limited to the branch they belong to.",
   },
   {
+    key: "hall_manager",
+    label: "Marriage Hall Manager",
+    scope: "Marriage Hall only",
+    can: "Full control of the hall vertical — venue, packages, decoration, catering, gallery, calendar and enquiries. Cannot touch Hotel or Restaurant.",
+  },
+  {
     key: "staff",
     label: "Staff",
     scope: "Read-only",
-    can: "View bookings, reservations, availability and reviews. Cannot create, edit or delete.",
+    can: "View bookings, reservations, enquiries, availability and reviews. Cannot create, edit or delete.",
   },
 ];
 

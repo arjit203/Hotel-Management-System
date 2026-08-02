@@ -1,11 +1,12 @@
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, ShoppingBag } from "lucide-react";
+import { ArrowRight, ShoppingBag, UtensilsCrossed } from "lucide-react";
 import { getTheRestaurant } from "@/lib/restaurant";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import Reveal from "@/components/motion/Reveal";
+import PropertyUnavailable from "@/components/PropertyUnavailable";
 import MenuBrowser from "@/modules/restaurant/components/MenuBrowser";
 
 export const metadata: Metadata = {
@@ -17,7 +18,17 @@ export const metadata: Metadata = {
 
 export default async function RestaurantMenuPage() {
   const data = await getTheRestaurant();
-  if (!data) return notFound();
+  // Not `notFound()`. The loader returns null both when the property does
+  // not exist and when the API is simply unreachable, and a 404 during a
+  // backend restart tells guests — and search engines — the page is gone.
+  if (!data) {
+    return (
+      <PropertyUnavailable
+        retryHref="/restaurant/menu"
+        icon={UtensilsCrossed}
+      />
+    );
+  }
 
   const { menuCategories, menuItems } = data;
 

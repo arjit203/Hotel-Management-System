@@ -25,12 +25,12 @@ Unified booking + management platform for Hotel, Marriage Hall, and Restaurant u
 | Project Scaffold (frontend/backend/admin skeletons) | ✅ Complete |
 | Authentication (User + Admin, JWT, RBAC, email verification, forgot password) | ✅ Complete |
 | **Hotel (listing, details, rooms, availability, booking, admin management)** | ✅ Complete |
-| Shared Content module (Reviews/Gallery/FAQs/Offers — polymorphic, reused by Hotel now, Hall/Restaurant later) | ✅ Complete (backing Hotel; not yet consumed by other verticals) |
-| Marriage Hall | ⬜ Not started |
+| Shared Content module (Reviews/Gallery/FAQs/Offers — polymorphic) | ✅ Complete — now consumed by all three verticals with no model changes |
+| **Marriage Hall (venue, packages, showcases, availability calendar, approval-first enquiries)** | ✅ Complete — see §8. Seed not yet run in this environment |
 | **Restaurant (backend: menu, dining areas, table availability, instant reservations)** | ✅ Backend complete — public frontend complete |
 | Booking Engine (shared conflict/locking hardening) | ⬜ Not started — see Known Limitations below |
 | Payments | ⬜ Not started |
-| **Admin Console UI (Hotel + Restaurant, shared Admin Design System)** | ✅ Built — see §7. Awaiting a manual click-through of the write paths |
+| **Admin Console UI (Hotel + Restaurant + Marriage Hall, shared Admin Design System)** | ✅ Built — see §7. Awaiting a manual click-through of the write paths |
 
 ---
 
@@ -330,5 +330,249 @@ it consumes.
 - **Write paths are not yet verified by execution.** Build, types and live
   payload shapes were checked; a manual click-through of create / edit / delete /
   upload / status-change is still outstanding.
+
+---
+
+## 8. Module: Marriage Hall
+
+### Purpose
+The third vertical: a banquet venue whose website exists to make a family
+*picture their wedding in the room* and then ask to visit. Built frontend-first
+per the Phase 4 brief (80% experience / 20% backend), and visually richer than
+the Hotel module by design.
+
+### Scope boundary (from RULES.md §14)
+**Hall bookings are never instant or self-serve.** A family submits an
+*enquiry*; nothing is reserved and nothing is charged. An admin reviews it,
+speaks to them offline, and only then confirms — which is the moment the date is
+held. Payment, when the Payments module exists, is triggered *after* approval.
+
+Consequently there is **no amount, advance, paymentStatus, Razorpay order or
+invoice field anywhere in this module**, and there must not be one without a
+rules change. Copying Hotel's instant-booking flow here would be a business
+error, not just a technical one.
+
+### Design Decisions
+- **One `HallShowcase` collection serves four sections** — decoration themes,
+  catering, dining arrangements and floral styling. They are the same shape (a
+  titled, illustrated, ordered card with a description, a category and bullet
+  highlights), so four near-identical models, services, route groups and admin
+  panels were not written. `showcaseType` selects the section, `category`
+  sub-groups within it. Type-specific fields (`colorPalette` and
+  `beforeImageUrl` for decoration, `sampleItems` for catering) are optional
+  columns, not a loose `Mixed` bag, so they stay validated and queryable.
+  Adding a fifth section later is one enum value and one config entry.
+- **`priceLabel` is a free-text string, never a number.** The owner has not set
+  pricing, and the eventual model may be per-plate rather than per-event. A
+  numeric field would push a placeholder onto the public site and force a schema
+  change the day that is decided. Default: `"On request"`. Catering carries no
+  price at all — it is showcase content, with no cart, order or quote endpoint.
+- **`HallAvailability` stores manual overrides only** — the same decision as
+  `RoomAvailability` and `TableAvailability`. A day's status is computed on read:
+  an admin override always wins, otherwise a `confirmed` enquiry reads as
+  `booked` and a `pending`/`reviewing` one as `tentative`. Setting a date back to
+  `available` **deletes** the row, so an empty collection genuinely means
+  "nothing is held". No pre-generation job.
+- **`approved` deliberately does not hold the date.** It means the venue is
+  willing and the conversation has started; only `confirmed` writes a calendar
+  block. Several families can be discussing the same auspicious date, and
+  showing it as gone would lose the others. Releasing a date only removes the
+  override *this enquiry* created, so a hand-placed staff block on the same day
+  survives.
+- **The enquiry snapshots the chosen package and theme names** at submit time,
+  so renaming a package in the admin panel later does not rewrite what the
+  family actually asked for.
+- **`hall_manager` is a new admin role, added additively.** Hotel and Restaurant
+  name their managers explicitly as `["super_admin","branch_admin"]`, so a
+  `hall_manager` token is refused there by the same `requireRole` check every
+  other route already uses — the isolation the brief asked for falls out of the
+  existing pattern rather than needing new middleware. No existing role's
+  permissions changed.
+- **Reference prefix `7VH-`** sits alongside the hotel booking's `7V-` and the
+  restaurant reservation's `7VR-`, so staff can tell the three apart at a glance.
+- **The public calendar is `no-store`, everything else is cached 120s.** A
+  date's status is the one thing that changes as enquiries arrive, and a cached
+  "available" on a date that has just been taken is the most damaging error this
+  site could make. The editorial content has no such risk — and unlike Hotel,
+  no stale rate can cause a wrong charge, because there are no rates.
+
+### Reused, not rebuilt
+- **`content.service.ts` wholesale** for reviews, gallery, FAQs and offers. The
+  polymorphic enums already accepted `"hall"`, so **zero content-model changes
+  were required** — only routes.
+- **The public design system in full.** `Hero`, `Reveal`, `Parallax`,
+  `TextReveal`, `Stagger`, `LuxeImage`, `Lightbox`, `PageHeader`,
+  `Breadcrumbs`, `FaqAccordion`, `ReviewsList`, `ReviewForm`, `ContactForm`,
+  `MapPlaceholder`, `AnimatedNumber`, `EmptyState` and the whole `ink`/`gold`/
+  `cream` token set are used as-is. Exactly one new file landed in
+  `frontend/src/components/`: `HallSchema.tsx`.
+- **The admin content managers.** `GalleryManager`, `OffersManager`,
+  `FaqManager` and `ReviewsManager` serve a third vertical with no change beyond
+  a base-path prop.
+- `auth.middleware`, `apiError.util`, `cloudinary.util`, `upload.middleware`,
+  `email.util`, `db` config — all imported, none duplicated.
+- **No new npm package. No new environment variable.**
+
+### Dependencies
+Nothing added. Backend uses what the Hotel and Restaurant modules already pull
+in; the frontend uses `framer-motion` and `lucide-react`, both already present.
+
+### Environment Variables Added
+None.
+
+### Folder Locations
+- `backend/src/modules/hall/` — validation, services, controller, routes
+- `backend/src/modules/hall/models/` — `hall`, `hallPackage`, `hallShowcase`,
+  `hallAvailability`, `hallEnquiry`
+- `backend/src/utils/email.util.ts` — gained two **additive** exports
+- `backend/src/server.ts` — three additive mounts
+- `backend/src/modules/auth/models/admin.model.ts` — `hall_manager` added to the
+  role union and enum (additive)
+- `frontend/src/app/marriage-hall/` — eight public routes
+- `frontend/src/modules/hall/components/` — `MasonryGallery`,
+  `AvailabilityCalendar`, `EnquiryForm`, `DecorationThemes`, `BeforeAfter`,
+  `ShowcaseSection`, `PackageCards`, `FloatingEnquiry`, `HallEmpty`
+- `frontend/src/lib/hall.ts`, `frontend/src/components/HallSchema.tsx`
+- `admin-panel/src/app/halls/`, `admin-panel/src/app/enquiries/`
+- `admin-panel/src/components/hall/` — `PackagesPanel`, `ShowcasePanel`,
+  `CalendarPanel`
+- `database/seeders/seed-demo-content.ts` (all three verticals)
+
+### Public routes
+`/marriage-hall` · `/gallery` · `/packages` · `/decorations` · `/catering` ·
+`/availability` · `/reviews` · `/contact`
+
+Floral styling lives on `/decorations` and dining on `/catering`, because the
+brief's eight routes don't include `/floral` or `/dining` and splitting a
+family's styling or catering decision across two URLs would make them navigate
+to compare.
+
+### Full Endpoint List
+See `API_DOCUMENTATION.md`.
+
+### Seeding
+See §9 — the Marriage Hall is seeded by the shared `seed-demo-content.ts`
+alongside the other two verticals.
+
+### Known Limitations (by design, not gaps)
+- **No payment.** Deliberate — see the scope boundary above. The enquiry model
+  is payment-*ready* in the sense that adding fields later needs no
+  restructuring, but nothing should be added before the Payments module and a
+  `RULES.md` decision.
+- **No numeric pricing anywhere**, for the reason given above.
+- **Enquiry race condition** — the date-availability check and the enquiry
+  insert are not one transaction, so two simultaneous enquiries for the last
+  open date could both be accepted. Materially less harmful here than in Hotel
+  (nothing is reserved, and an admin reads every enquiry before confirming), and
+  deferred to the same shared **Booking Engine** hardening item.
+- **`spaces[]` is API-editable only** — the admin venue form covers everything
+  else, but per-space capacity rows have no UI yet.
+- **FAQs cannot be edited**, only created and deleted — a shared content-module
+  limitation, not hall-specific.
+- **The seed has not been run in the development environment used to build this**
+  (`querySrv ECONNREFUSED` resolving the Atlas SRV record from that shell). Until
+  it runs, `GET /halls` returns `[]` and every public hall page renders its empty
+  state rather than the designed experience.
+- **No browser verification.** Build, types, route wiring and endpoint shapes are
+  verified; visual rendering and admin CRUD execution are not.
+
+---
+
+## 9. Demo content seeding
+
+### Purpose
+`database/seeders/seed-demo-content.ts` fills all three verticals with
+presentable photography and showcase copy, so the site can be reviewed and
+demonstrated before the owner's own photographs exist.
+
+```bash
+cd backend && npx ts-node ../database/seeders/seed-demo-content.ts \
+  --email you@example.com --password yourpassword
+```
+
+**The backend must be running**, and the credentials are the same ones you use
+for the admin panel. `ADMIN_EMAIL` / `ADMIN_PASSWORD` environment variables work
+instead of the flags. A `staff` login is rejected (read-only); a `hall_manager`
+can seed only the hall.
+
+Idempotent — safe to run repeatedly. It replaced the earlier
+`seed-marriage-hall.ts`, which covered one vertical and used a different image
+source; keeping both would have let their imagery drift apart.
+
+### Why it writes through the API instead of Mongoose
+The obvious design — connect with Mongoose, insert documents — was written first
+and could not run. A `mongodb+srv://` URI needs a DNS SRV lookup, and on this
+network every new process gets `querySrv ECONNREFUSED`, even though the
+already-running backend (which connected earlier) keeps working fine.
+
+Going through `/api/v1/admin/*` reuses the backend process's live connection, so
+there is no DNS lookup and no connection string in the script at all. Two
+further benefits fell out of it: every write passes the real Zod validation and
+RBAC, so the seed cannot create a document the application itself would reject;
+and the run doubles as a live smoke test of the admin API.
+
+### Two traps worth knowing before writing another seeder
+- **ts-node executes a `.ts` file only when it contains at least one `import` or
+  `export`.** With none, it treats the file as a plain script and runs nothing —
+  exit 0, no output, no error, and a database that stays empty for no visible
+  reason. `seed-demo-content.ts` keeps a `path`/`dotenv` import partly for this,
+  with a comment saying not to remove it.
+- Seeders under `database/` sit outside `backend/tsconfig.json`'s rootDir, so
+  they load as ES modules where **`__dirname` does not exist**. Resolve paths
+  from `process.cwd()` and run from `backend/`.
+
+### What it writes, and what it will not touch
+**Replaces (media only, because these held placeholder URLs):** gallery items ·
+`Room.images` · `MenuItem.imageUrl` · `DiningArea.images`.
+
+**Adds only what is missing, so your own entries always survive:** hall packages
+(matched on slug) · hall showcases (matched on `showcaseType` + title) · FAQs and
+offers (added only when that owner has none at all) · blank hall fields
+(`heroImages`, `eventTypes`, `features`, `spaces`).
+
+**Never touches, under any circumstance:** `HotelBooking`, `TableReservation`,
+`HallEnquiry`, `User`, `Admin`, room pricing or capacity, menu prices, package
+`priceLabel`, or any property's name, slug, description or contact details. Live
+operational data is out of scope for a content seeder, and losing a real booking
+to a demo script would be unrecoverable.
+
+**It enriches whichever Hotel / Restaurant / Hall already exists — it never
+creates a second one alongside yours.** An earlier version upserted the hall on
+slug `7-vachan-banquets`, which would have produced a duplicate next to a hall
+created in the admin panel; and because `getTheHall()` takes the first row of a
+newest-first list, the seeded one would then have hidden the real one on the
+public site.
+
+### Images
+Pexels, free for commercial use with no attribution required
+(https://www.pexels.com/license/). Served straight from `images.pexels.com`
+with a width transform — nothing is uploaded to Cloudinary, so replacing them
+later is just uploading real photographs through the admin panel, which
+overwrites these URLs. Every one of the 124 photo IDs was verified to return
+HTTP 200 before being written into the file.
+
+Non-Cloudinary URLs pass through `cldImage()` untouched and `LuxeImage` renders
+a plain `<img>`, so no `next.config.js` remote-host whitelisting is involved.
+
+### Implementation notes
+- Declares its own loose Mongoose schemas rather than importing the real models
+  — that import fails under ts-node from `backend/` (`ERR_MODULE_NOT_FOUND`),
+  which is why `seed-super-admin.ts` does the same. Models are typed
+  `Model<any>`, because a `strict: false` schema has no document interface to
+  infer from and the `models.X || model(...)` union otherwise produces
+  incompatible overloads.
+- Resolves `.env` from `process.cwd()` rather than `__dirname`, because the file
+  sits outside `backend/tsconfig.json`'s rootDir and therefore loads as an ES
+  module where `__dirname` does not exist. Run it from `backend/`.
+- Menu-item and dining-area photographs are matched by a keyword regex against
+  the record's existing name, so re-running after adding dishes picks the new
+  ones up without any edit here.
+- On a `querySrv` DNS failure it prints the actual cause (SRV lookups blocked by
+  the network/VPN) and the fix, rather than a bare stack trace.
+
+### Known limitation
+Photographs are matched to subjects by search term, not by inspection — a dish
+whose name matches no rule falls back to a generic plate. Re-check the pairings
+once, and either rename the dish or upload the real photograph.
 
 ---

@@ -4,6 +4,8 @@ import { getTheHotel } from "@/lib/hotel";
 import GalleryGrid from "@/components/GalleryGrid";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
+import { BedDouble } from "lucide-react";
+import PropertyUnavailable from "@/components/PropertyUnavailable";
 
 export const metadata: Metadata = {
   title: "Gallery",
@@ -13,7 +15,17 @@ export const metadata: Metadata = {
 
 export default async function GalleryPage() {
   const data = await getTheHotel();
-  if (!data) return notFound();
+  // Not `notFound()`. The loader returns null both when the property does
+  // not exist and when the API is simply unreachable, and a 404 during a
+  // backend restart tells guests — and search engines — the page is gone.
+  if (!data) {
+    return (
+      <PropertyUnavailable
+        retryHref="/hotel/gallery"
+        icon={BedDouble}
+      />
+    );
+  }
 
   return (
     <main>

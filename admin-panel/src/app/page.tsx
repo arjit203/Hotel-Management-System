@@ -25,16 +25,25 @@ import { useSummary } from "@/lib/summary";
 import { currency, dayMonth, isToday, relativeTime, timeSlotLabel } from "@/lib/format";
 
 /**
- * Operational overview across both verticals.
+ * Operational overview across all three verticals.
  *
  * Every figure is computed from the lists SummaryProvider already holds — the
  * backend has no analytics/stats endpoint and this redesign does not add one.
  */
 export default function AdminDashboardPage() {
   const { admin } = useAdminSession();
-  const { hotels, restaurants, loading: propertiesLoading } = useBusiness();
-  const { bookings, reservations, hotelReviews, restaurantReviews, content, stats, loading } =
-    useSummary();
+  const { hotels, restaurants, halls, loading: propertiesLoading } = useBusiness();
+  const {
+    bookings,
+    reservations,
+    hallEnquiries,
+    hotelReviews,
+    restaurantReviews,
+    hallReviews,
+    content,
+    stats,
+    loading,
+  } = useSummary();
 
   const todaysArrivals = useMemo(
     () =>
@@ -66,8 +75,23 @@ export default function AdminDashboardPage() {
   );
 
   const pendingReviewList = useMemo(
-    () => [...hotelReviews, ...restaurantReviews].filter((r) => !r.isApproved).slice(0, 4),
-    [hotelReviews, restaurantReviews]
+    () =>
+      [...hotelReviews, ...restaurantReviews, ...hallReviews]
+        .filter((r) => !r.isApproved)
+        .slice(0, 4),
+    [hotelReviews, restaurantReviews, hallReviews]
+  );
+
+  const openEnquiries = useMemo(
+    () =>
+      [...hallEnquiries]
+        .filter((e) => ["pending", "reviewing"].includes(e.status))
+        .sort(
+          (a, b) =>
+            new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime()
+        )
+        .slice(0, 5),
+    [hallEnquiries]
   );
 
   const firstName = admin?.name?.split(" ")[0] || "there";
@@ -76,7 +100,7 @@ export default function AdminDashboardPage() {
     <RequireAdmin>
       <PageHeader
         title={`Good to see you, ${firstName}`}
-        description="Everything that needs attention across Hotel and Restaurant, in one place."
+        description="Everything that needs attention across Hotel, Restaurant and Marriage Hall, in one place."
       />
 
       {/* Primary operational counters */}
@@ -100,12 +124,12 @@ export default function AdminDashboardPage() {
           loading={loading}
         />
         <StatCard
-          label="Awaiting payment"
-          value={stats.pendingBookings}
-          hint="Rooms are not held yet"
-          icon={<CalendarClock size={15} />}
-          tone={stats.pendingBookings > 0 ? "warning" : "neutral"}
-          href="/bookings?status=pending"
+          label="Hall enquiries to answer"
+          value={stats.pendingEnquiries}
+          hint="No date held until confirmed"
+          icon={<PartyPopper size={15} />}
+          tone={stats.pendingEnquiries > 0 ? "warning" : "neutral"}
+          href="/enquiries?open=true"
           loading={loading}
         />
         <StatCard
@@ -120,7 +144,7 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Revenue + content inventory */}
-      <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
         <StatCard
           label="Confirmed revenue"
           value={currency(stats.confirmedRevenue)}
@@ -137,6 +161,15 @@ export default function AdminDashboardPage() {
           icon={<IndianRupee size={15} />}
           tone="success"
           href="/analytics"
+          loading={loading}
+        />
+        <StatCard
+          label="Awaiting payment"
+          value={stats.pendingBookings}
+          hint="Hotel rooms not held yet"
+          icon={<CalendarClock size={15} />}
+          tone={stats.pendingBookings > 0 ? "warning" : "neutral"}
+          href="/bookings?status=pending"
           loading={loading}
         />
         <StatCard
@@ -186,9 +219,12 @@ export default function AdminDashboardPage() {
           title="Marriage Hall"
           href="/halls"
           icon={<PartyPopper size={17} />}
-          summary="Not started"
-          description="Planned vertical. Bookings there need admin approval before payment — unlike Hotel, which is instant."
-          disabled
+          summary={
+            propertiesLoading
+              ? "Loading…"
+              : `${halls.length} ${halls.length === 1 ? "venue" : "venues"} · ${content.packages} packages`
+          }
+          description="Packages, decoration, catering, gallery and the enquiry calendar. Approval-first — never instant."
         />
       </div>
 
@@ -273,6 +309,50 @@ export default function AdminDashboardPage() {
             </ul>
           )}
         </div>
+      </div>
+
+      {/* Hall enquiries needing a reply */}
+      <div className="mt-4 card">
+        <div className="card-header">
+          <div>
+            <h2 className="card-title">Hall enquiries awaiting a reply</h2>
+            <p className="card-subtitle">Soonest event first — no date is held yet</p>
+          </div>
+          <Link href="/enquiries?open=true" className="btn-ghost btn-sm">
+            Open the book
+            <ArrowRight size={13} />
+          </Link>
+        </div>
+        {loading ? (
+          <ListSkeleton />
+        ) : openEnquiries.length === 0 ? (
+          <EmptyState
+            compact
+            icon={<PartyPopper size={18} />}
+            title="Nothing waiting"
+            description="Every hall enquiry has been answered."
+          />
+        ) : (
+          <ul className="divide-y divide-line-subtle">
+            {openEnquiries.map((e) => (
+              <li key={e._id} className="flex items-center gap-3 px-5 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-base font-medium text-ink-800">
+                    {e.guestName}
+                    <span className="ml-2 font-mono text-xs font-normal text-ink-500">
+                      {e.enquiryReference}
+                    </span>
+                  </p>
+                  <p className="truncate text-xs text-ink-500">
+                    {e.eventType} · {dayMonth(e.eventDate)} ·{" "}
+                    {e.guestCount.toLocaleString("en-IN")} guests
+                  </p>
+                </div>
+                <Badge status={e.status} />
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* Recent activity */}

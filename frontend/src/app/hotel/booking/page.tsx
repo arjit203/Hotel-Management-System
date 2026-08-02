@@ -1,10 +1,11 @@
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { ShieldCheck, Clock, BadgeCheck } from "lucide-react";
+import { BadgeCheck, BedDouble, Clock, ShieldCheck } from "lucide-react";
 import { getTheHotel } from "@/lib/hotel";
 import BookingForm from "@/modules/hotel/components/BookingForm";
 import PageHeader from "@/components/PageHeader";
 import Reveal from "@/components/motion/Reveal";
+import PropertyUnavailable from "@/components/PropertyUnavailable";
 
 export const metadata: Metadata = {
   title: "Book Your Stay",
@@ -28,7 +29,19 @@ export default async function BookingPage({
   searchParams: { room?: string };
 }) {
   const data = await getTheHotel();
-  if (!data || data.rooms.length === 0) return notFound();
+  // Two different failures, two different answers. An unreachable API is not
+  // a missing page; a hotel with no rooms defined yet is a real 404.
+  if (!data) {
+    return (
+      <PropertyUnavailable
+        title="Booking is briefly unavailable"
+        message="We can't reach our booking system this moment. Please try again shortly, or call us and we'll take your booking directly."
+        retryHref="/hotel/booking"
+        icon={BedDouble}
+      />
+    );
+  }
+  if (data.rooms.length === 0) return notFound();
 
   // Pre-select the room passed via ?room=<slug> (e.g. from a Room Details page's
   // "Book Now" link); default to the first room if none/invalid.

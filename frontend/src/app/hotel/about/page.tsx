@@ -1,7 +1,7 @@
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { Award, Sparkles, HeartHandshake, ArrowRight } from "lucide-react";
+import { ArrowRight, Award, BedDouble, HeartHandshake, Sparkles } from "lucide-react";
 import { getTheHotel } from "@/lib/hotel";
 import StarRating from "@/components/StarRating";
 import PageHeader from "@/components/PageHeader";
@@ -10,6 +10,7 @@ import TextReveal from "@/components/motion/TextReveal";
 import Parallax from "@/components/motion/Parallax";
 import LuxeImage from "@/components/motion/LuxeImage";
 import { Stagger, StaggerItem } from "@/components/motion/Stagger";
+import PropertyUnavailable from "@/components/PropertyUnavailable";
 
 export const metadata: Metadata = {
   title: "About Us",
@@ -37,7 +38,17 @@ const VALUES = [
 
 export default async function AboutPage() {
   const data = await getTheHotel();
-  if (!data) return notFound();
+  // Not `notFound()`. The loader returns null both when the property does
+  // not exist and when the API is simply unreachable, and a 404 during a
+  // backend restart tells guests — and search engines — the page is gone.
+  if (!data) {
+    return (
+      <PropertyUnavailable
+        retryHref="/hotel/about"
+        icon={BedDouble}
+      />
+    );
+  }
 
   const { hotel, gallery } = data;
   const heroImage = gallery[0]?.imageUrl;

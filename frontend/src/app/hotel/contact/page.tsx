@@ -1,11 +1,12 @@
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { Phone, Mail, MapPin, MessageCircle, Clock } from "lucide-react";
+import { BedDouble, Clock, Mail, MapPin, MessageCircle, Phone } from "lucide-react";
 import { getTheHotel } from "@/lib/hotel";
 import MapPlaceholder from "@/components/MapPlaceholder";
 import ContactForm from "@/components/ContactForm";
 import PageHeader from "@/components/PageHeader";
 import Reveal from "@/components/motion/Reveal";
+import PropertyUnavailable from "@/components/PropertyUnavailable";
 
 export const metadata: Metadata = {
   title: "Contact Us",
@@ -15,7 +16,17 @@ export const metadata: Metadata = {
 
 export default async function ContactPage() {
   const data = await getTheHotel();
-  if (!data) return notFound();
+  // Not `notFound()`. The loader returns null both when the property does
+  // not exist and when the API is simply unreachable, and a 404 during a
+  // backend restart tells guests — and search engines — the page is gone.
+  if (!data) {
+    return (
+      <PropertyUnavailable
+        retryHref="/hotel/contact"
+        icon={BedDouble}
+      />
+    );
+  }
 
   const { hotel } = data;
   const whatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "";

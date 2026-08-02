@@ -112,6 +112,15 @@ export async function uploadRestaurantImage(
   return uploadTo("/admin/restaurants/upload-image", file, folder);
 }
 
+// Marriage Hall media, same arrangement again: its own RBAC-guarded route
+// (hall_manager is allowed here and nowhere else) filing into `7vachan/hall/*`.
+export async function uploadHallImage(
+  file: File,
+  folder: string
+): Promise<ApiResponse<{ url: string; publicId: string }>> {
+  return uploadTo("/admin/halls/upload-image", file, folder);
+}
+
 async function uploadTo(
   path: string,
   file: File,

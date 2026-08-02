@@ -1,6 +1,13 @@
 import { Schema, model, Document, Types } from "mongoose";
 
-export type AdminRole = "super_admin" | "branch_admin" | "staff";
+/**
+ * `hall_manager` was added for the Marriage Hall vertical (Phase 4).
+ *
+ * This is purely ADDITIVE: Hotel and Restaurant name their allowed roles
+ * explicitly (`["super_admin","branch_admin"]`), so a hall_manager token is
+ * refused there automatically. No existing role's permissions changed.
+ */
+export type AdminRole = "super_admin" | "branch_admin" | "staff" | "hall_manager";
 
 export interface IAdmin extends Document {
   name: string;
@@ -32,7 +39,7 @@ const adminSchema = new Schema<IAdmin>(
     passwordHash: { type: String, required: true, select: false },
     role: {
       type: String,
-      enum: ["super_admin", "branch_admin", "staff"],
+      enum: ["super_admin", "branch_admin", "staff", "hall_manager"],
       required: true,
     },
     branchId: { type: Schema.Types.ObjectId, ref: "Branch", default: null },

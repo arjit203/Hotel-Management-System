@@ -91,6 +91,16 @@ export default function Topbar({ admin, onOpenMobileNav }: Props) {
       tone: "warning",
     });
   }
+  if (stats.pendingEnquiries > 0) {
+    notifications.push({
+      id: "pending-enquiries",
+      title: `${stats.pendingEnquiries} hall enquir${stats.pendingEnquiries === 1 ? "y" : "ies"} to answer`,
+      detail: "No date is held until you confirm them.",
+      href: "/enquiries?open=true",
+      icon: CalendarClock,
+      tone: "warning",
+    });
+  }
   if (stats.pendingReviews > 0) {
     notifications.push({
       id: "pending-reviews",

@@ -9,6 +9,7 @@ import {
   Info,
   Monitor,
   PanelLeftClose,
+  PartyPopper,
   Server,
   UtensilsCrossed,
 } from "lucide-react";
@@ -37,7 +38,7 @@ const PUBLIC_SITE_URL = process.env.NEXT_PUBLIC_FRONTEND_URL || "http://localhos
  */
 export default function SettingsPage() {
   const { admin } = useAdminSession();
-  const { hotels, restaurants, business, activeProperty } = useBusiness();
+  const { hotels, restaurants, halls, business, activeProperty } = useBusiness();
   const { sidebarCollapsed, toggleSidebar } = useShellUi();
   const { toastSuccess } = useToast();
 
@@ -115,9 +116,31 @@ export default function SettingsPage() {
                 </Link>
               ))}
 
-              {hotels.length === 0 && restaurants.length === 0 && (
+              {halls.map((h) => (
+                <Link
+                  key={h._id}
+                  href={`/halls/${h._id}`}
+                  className="flex items-center gap-2.5 rounded-lg border border-line px-3.5 py-2.5 transition-colors hover:bg-surface-hover"
+                >
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-50 text-brand-600">
+                    <PartyPopper size={15} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-base font-medium text-ink-800">
+                      {h.name}
+                    </span>
+                    <span className="block text-xs text-ink-500">
+                      Venue details, capacity and enquiry lead time
+                    </span>
+                  </span>
+                  <ExternalLink size={14} className="shrink-0 text-ink-400" />
+                </Link>
+              ))}
+
+              {hotels.length === 0 && restaurants.length === 0 && halls.length === 0 && (
                 <p className="rounded-lg border border-line bg-surface-hover px-3.5 py-3 text-base text-ink-600">
-                  No properties yet. Create one from Hotel or Restaurant in the sidebar.
+                  No properties yet. Create one from Hotel, Restaurant or Marriage Hall in the
+                  sidebar.
                 </p>
               )}
             </div>
@@ -224,7 +247,8 @@ export default function SettingsPage() {
             <ul className="space-y-3 text-base text-ink-600">
               <Rule>
                 Hotel bookings are instant — a booking is confirmed the moment its Razorpay payment
-                signature verifies. Marriage Hall, when it exists, will need approval first.
+                signature verifies. Marriage Hall is the opposite: an enquiry reserves nothing, and
+                the date is held only when an admin sets it to confirmed.
               </Rule>
               <Rule>
                 Only the advance percentage is charged up front; the balance is collected at the
@@ -241,6 +265,11 @@ export default function SettingsPage() {
               <Rule>
                 Table reservations take no payment, and there is no online food ordering — that is a
                 later phase.
+              </Rule>
+              <Rule>
+                Hall packages carry a free-text price label, not a number. The venue has not
+                published pricing, so &ldquo;On request&rdquo; is the default and every quote is
+                given in conversation.
               </Rule>
             </ul>
           </div>

@@ -35,14 +35,19 @@ export interface NavSection {
 /**
  * Sidebar structure.
  *
- * `Bookings` is business-aware: the Hotel vertical books rooms
- * (`/bookings` → hotel bookings) and the Restaurant vertical books tables
- * (`/reservations`). Both routes always exist and can be linked directly; the
- * sidebar simply points at whichever matches the selected business so the
- * primary action is one click away.
+ * The Operations entry is business-aware, because each vertical's primary
+ * transaction is a different thing entirely:
+ *   Hotel      → Bookings      (`/bookings`)      — instant, paid
+ *   Restaurant → Reservations  (`/reservations`)  — instant, unpaid
+ *   Hall       → Enquiries     (`/enquiries`)     — approval-first, unpaid
+ *
+ * All three routes always exist and can be linked directly; the sidebar just
+ * points at whichever matches the selected business so the primary action is
+ * one click away.
  */
 export function buildNavSections(business: BusinessKey): NavSection[] {
   const isRestaurant = business === "restaurant";
+  const isHall = business === "hall";
 
   return [
     {
@@ -67,7 +72,7 @@ export function buildNavSections(business: BusinessKey): NavSection[] {
           label: "Marriage Hall",
           href: "/halls",
           icon: PartyPopper,
-          badge: "Soon",
+          matchPrefixes: ["/halls"],
         },
       ],
     },
@@ -75,10 +80,10 @@ export function buildNavSections(business: BusinessKey): NavSection[] {
       title: "Operations",
       items: [
         {
-          label: isRestaurant ? "Reservations" : "Bookings",
-          href: isRestaurant ? "/reservations" : "/bookings",
+          label: isHall ? "Enquiries" : isRestaurant ? "Reservations" : "Bookings",
+          href: isHall ? "/enquiries" : isRestaurant ? "/reservations" : "/bookings",
           icon: CalendarCheck,
-          matchPrefixes: ["/bookings", "/reservations"],
+          matchPrefixes: ["/bookings", "/reservations", "/enquiries"],
         },
         { label: "Customers", href: "/customers", icon: UsersRound },
       ],

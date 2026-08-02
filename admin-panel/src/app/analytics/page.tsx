@@ -16,7 +16,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { BarChart3, IndianRupee, TrendingUp, Users } from "lucide-react";
+import { BarChart3, IndianRupee, PartyPopper, TrendingUp, Users } from "lucide-react";
 import RequireAdmin from "@/components/RequireAdmin";
 import PageHeader from "@/components/ui/PageHeader";
 import StatCard from "@/components/ui/StatCard";
@@ -41,6 +41,7 @@ const SERIES = {
   revenue: "#4f46e5",
   bookings: "#12b76a",
   reservations: "#2e90fa",
+  enquiries: "#f79009",
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -54,6 +55,9 @@ const STATUS_COLORS: Record<string, string> = {
   refunded: "#667085",
   seated: "#2e90fa",
   no_show: "#d92d20",
+  reviewing: "#2e90fa",
+  approved: "#12b76a",
+  declined: "#f04438",
 };
 
 const REVENUE_STATUSES = new Set(["confirmed", "checked_in", "checked_out", "completed"]);
@@ -62,12 +66,13 @@ const REVENUE_STATUSES = new Set(["confirmed", "checked_in", "checked_out", "com
  * Analytics over the data the admin API already returns.
  *
  * There is no reporting endpoint in this backend, so every series is computed
- * client-side from the full booking and reservation lists. That is accurate at
+ * client-side from the full booking, reservation and hall-enquiry lists. That is accurate at
  * the current data volume; if these lists ever grow past a few thousand rows,
  * the right fix is a server-side aggregate route, not more work here.
  */
 export default function AnalyticsPage() {
-  const { bookings, reservations, hotelReviews, restaurantReviews, loading } = useSummary();
+  const { bookings, reservations, hallEnquiries, hotelReviews, restaurantReviews, hallReviews, loading } =
+    useSummary();
   const [range, setRange] = useState<Range>("90");
 
   const days = Number(range);
@@ -82,7 +87,10 @@ export default function AnalyticsPage() {
   const groupByMonth = days > 120;
 
   const timeSeries = useMemo(() => {
-    const buckets = new Map<string, { label: string; revenue: number; bookings: number; reservations: number }>();
+    const buckets = new Map<
+      string,
+      { label: string; revenue: number; bookings: number; reservations: number; enquiries: number }
+    >();
 
     function bucketKey(date: Date): { key: string; label: string } {
       if (groupByMonth) {
@@ -98,7 +106,9 @@ export default function AnalyticsPage() {
     const end = new Date();
     while (cursor <= end) {
       const { key, label } = bucketKey(cursor);
-      if (!buckets.has(key)) buckets.set(key, { label, revenue: 0, bookings: 0, reservations: 0 });
+      if (!buckets.has(key)) {
+        buckets.set(key, { label, revenue: 0, bookings: 0, reservations: 0, enquiries: 0 });
+      }
       if (groupByMonth) cursor.setMonth(cursor.getMonth() + 1);
       else cursor.setDate(cursor.getDate() + 1);
     }
@@ -107,7 +117,13 @@ export default function AnalyticsPage() {
       const when = new Date(b.createdAt || b.checkInDate);
       if (Number.isNaN(when.getTime()) || when.getTime() < since) continue;
       const { key, label } = bucketKey(when);
-      const bucket = buckets.get(key) ?? { label, revenue: 0, bookings: 0, reservations: 0 };
+      const bucket = buckets.get(key) ?? {
+        label,
+        revenue: 0,
+        bookings: 0,
+        reservations: 0,
+        enquiries: 0,
+      };
       bucket.bookings += 1;
       if (REVENUE_STATUSES.has(b.status)) bucket.revenue += b.totalAmount || 0;
       buckets.set(key, bucket);
@@ -117,15 +133,36 @@ export default function AnalyticsPage() {
       const when = new Date(r.createdAt || r.reservationDate);
       if (Number.isNaN(when.getTime()) || when.getTime() < since) continue;
       const { key, label } = bucketKey(when);
-      const bucket = buckets.get(key) ?? { label, revenue: 0, bookings: 0, reservations: 0 };
+      const bucket = buckets.get(key) ?? {
+        label,
+        revenue: 0,
+        bookings: 0,
+        reservations: 0,
+        enquiries: 0,
+      };
       bucket.reservations += 1;
+      buckets.set(key, bucket);
+    }
+
+    for (const e of hallEnquiries) {
+      const when = new Date(e.createdAt || e.eventDate);
+      if (Number.isNaN(when.getTime()) || when.getTime() < since) continue;
+      const { key, label } = bucketKey(when);
+      const bucket = buckets.get(key) ?? {
+        label,
+        revenue: 0,
+        bookings: 0,
+        reservations: 0,
+        enquiries: 0,
+      };
+      bucket.enquiries += 1;
       buckets.set(key, bucket);
     }
 
     return Array.from(buckets.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([, v]) => v);
-  }, [bookings, reservations, since, groupByMonth]);
+  }, [bookings, reservations, hallEnquiries, since, groupByMonth]);
 
   const bookingStatusMix = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -147,6 +184,14 @@ export default function AnalyticsPage() {
       .slice(0, 8);
   }, [reservations]);
 
+  const enquiryStatusMix = useMemo(() => {
+    const counts: Record<string, number> = {};
+    hallEnquiries.forEach((e) => (counts[e.status] = (counts[e.status] ?? 0) + 1));
+    return Object.entries(counts)
+      .map(([status, value]) => ({ name: humanise(status), value, status }))
+      .sort((a, b) => b.value - a.value);
+  }, [hallEnquiries]);
+
   const totals = useMemo(() => {
     const inRange = bookings.filter((b) => {
       const when = new Date(b.createdAt || b.checkInDate).getTime();
@@ -162,7 +207,14 @@ export default function AnalyticsPage() {
       return !Number.isNaN(when) && when >= since;
     });
 
-    const allReviews = [...hotelReviews, ...restaurantReviews].filter((r) => r.isApproved);
+    const allReviews = [...hotelReviews, ...restaurantReviews, ...hallReviews].filter(
+      (r) => r.isApproved
+    );
+
+    const enquiriesInRange = hallEnquiries.filter((e) => {
+      const when = new Date(e.createdAt || e.eventDate).getTime();
+      return !Number.isNaN(when) && when >= since;
+    });
 
     return {
       revenue,
@@ -175,14 +227,22 @@ export default function AnalyticsPage() {
         inRange.length > 0
           ? (inRange.filter((b) => b.status === "cancelled").length / inRange.length) * 100
           : 0,
+      enquiries: enquiriesInRange.length,
+      // Of the enquiries received in this window, how many became held dates.
+      enquiryConversion:
+        enquiriesInRange.length > 0
+          ? (enquiriesInRange.filter((e) => e.status === "confirmed").length /
+              enquiriesInRange.length) *
+            100
+          : 0,
       averageRating:
         allReviews.length > 0
           ? allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length
           : null,
     };
-  }, [bookings, reservations, hotelReviews, restaurantReviews, since]);
+  }, [bookings, reservations, hallEnquiries, hotelReviews, restaurantReviews, hallReviews, since]);
 
-  const hasData = bookings.length > 0 || reservations.length > 0;
+  const hasData = bookings.length > 0 || reservations.length > 0 || hallEnquiries.length > 0;
 
   return (
     <RequireAdmin>
@@ -203,7 +263,7 @@ export default function AnalyticsPage() {
         }
       />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
         <StatCard
           label={`Revenue · ${RANGE_LABEL[range].toLowerCase()}`}
           value={currency(totals.revenue)}
@@ -226,6 +286,14 @@ export default function AnalyticsPage() {
           hint="Guests seated or expected"
           icon={<Users size={15} />}
           tone="info"
+          loading={loading}
+        />
+        <StatCard
+          label="Hall enquiries"
+          value={totals.enquiries}
+          hint={`${totals.enquiryConversion.toFixed(0)}% became confirmed events`}
+          icon={<PartyPopper size={15} />}
+          tone="warning"
           loading={loading}
         />
         <StatCard
@@ -353,13 +421,20 @@ export default function AnalyticsPage() {
                       radius={[3, 3, 0, 0]}
                       maxBarSize={26}
                     />
+                    <Bar
+                      dataKey="enquiries"
+                      name="Hall enquiries"
+                      fill={SERIES.enquiries}
+                      radius={[3, 3, 0, 0]}
+                      maxBarSize={26}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-3">
             <div className="card">
               <div className="card-header">
                 <div>
@@ -383,6 +458,44 @@ export default function AnalyticsPage() {
                           paddingAngle={2}
                         >
                           {bookingStatusMix.map((entry) => (
+                            <Cell
+                              key={entry.status}
+                              fill={STATUS_COLORS[entry.status] || "#98a2b3"}
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip contentStyle={tooltipStyle} />
+                        <Legend wrapperStyle={{ fontSize: 12 }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-header">
+                <div>
+                  <h2 className="card-title">Hall enquiry funnel</h2>
+                  <p className="card-subtitle">All enquiries, not just this range</p>
+                </div>
+              </div>
+              <div className="card-body">
+                {enquiryStatusMix.length === 0 ? (
+                  <EmptyState compact title="No enquiries yet" />
+                ) : (
+                  <div className="h-56 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={enquiryStatusMix}
+                          dataKey="value"
+                          nameKey="name"
+                          innerRadius={48}
+                          outerRadius={78}
+                          paddingAngle={2}
+                        >
+                          {enquiryStatusMix.map((entry) => (
                             <Cell
                               key={entry.status}
                               fill={STATUS_COLORS[entry.status] || "#98a2b3"}

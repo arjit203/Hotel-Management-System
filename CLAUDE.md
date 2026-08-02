@@ -36,11 +36,23 @@ Per-workspace (`npm run <script> --workspace=backend|frontend|admin-panel`): `bu
 
 Type-check without emitting: `cd backend && npx tsc --noEmit` (this is the usual backend verification step); for the Next apps, `next build` is the real check.
 
-Seed the first Super Admin (root `npm run db:seed` is broken — `backend/package.json` has no `db:seed` script):
+Seeders (root `npm run db:seed` is broken — `backend/package.json` has no `db:seed` script). Run both from `backend/`, which is where they resolve `.env` from:
 
 ```bash
+# First Super Admin — connects to MongoDB directly.
 cd backend && npx ts-node ../database/seeders/seed-super-admin.ts
+
+# Demo content for all three verticals — needs the BACKEND RUNNING and admin credentials,
+# because it writes through /api/v1/admin/* rather than connecting to MongoDB itself.
+cd backend && npx ts-node ../database/seeders/seed-demo-content.ts \
+  --email you@example.com --password yourpassword
 ```
+
+`seed-demo-content.ts` is idempotent and deliberately never touches bookings, reservations, enquiries, users or any pricing field — see `docs/PROJECT_DOCUMENTATION.md` §9.
+
+**Two traps that cost real time here, both worth knowing before writing another seeder:**
+- **ts-node runs a `.ts` file only if it contains at least one `import` or `export`.** With none, it treats the file as a plain script and silently executes nothing — exit 0, no output, no error. `seed-demo-content.ts` carries a comment saying not to remove its imports.
+- **`mongodb+srv://` needs a DNS SRV lookup**, which some networks refuse (`querySrv ECONNREFUSED`) even while ordinary DNS works and an already-connected backend keeps running. That is why the demo seeder goes through the API instead of Mongoose.
 
 Health check: `GET http://localhost:5000/api/v1/health`.
 

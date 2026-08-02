@@ -1,7 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { BedDouble, Copy, Mail, Phone, UsersRound, UtensilsCrossed } from "lucide-react";
+import {
+  BedDouble,
+  Copy,
+  Mail,
+  PartyPopper,
+  Phone,
+  UsersRound,
+  UtensilsCrossed,
+} from "lucide-react";
 import RequireAdmin from "@/components/RequireAdmin";
 import PageHeader from "@/components/ui/PageHeader";
 import Button from "@/components/ui/Button";
@@ -19,10 +27,12 @@ interface CustomerRow {
   phone?: string;
   bookings: number;
   reservations: number;
+  enquiries: number;
   totalSpend: number;
   lastActivity: number;
   hasHotel: boolean;
   hasRestaurant: boolean;
+  hasHall: boolean;
 }
 
 /** Booking statuses that represent money the guest actually committed. */
@@ -34,11 +44,11 @@ const REVENUE_STATUSES = new Set(["confirmed", "checked_in", "checked_out", "com
  * IMPORTANT: this is not a user-accounts list. The backend has no admin route
  * that enumerates registered users, and guest checkout means most customers
  * never create an account at all. So this page derives a directory from the
- * bookings and reservations already loaded, keyed on the guest email that
- * ownership checks use everywhere else in the system.
+ * bookings, reservations and hall enquiries already loaded, keyed on the guest
+ * email that ownership checks use everywhere else in the system.
  */
 export default function CustomersPage() {
-  const { bookings, reservations, loading, error, reload } = useSummary();
+  const { bookings, reservations, hallEnquiries, loading, error, reload } = useSummary();
   const { toastSuccess } = useToast();
   const [selected, setSelected] = useState<CustomerRow | null>(null);
 
@@ -55,10 +65,12 @@ export default function CustomersPage() {
           phone,
           bookings: 0,
           reservations: 0,
+          enquiries: 0,
           totalSpend: 0,
           lastActivity: 0,
           hasHotel: false,
           hasRestaurant: false,
+          hasHall: false,
         };
         byEmail.set(key, row);
       }
@@ -87,14 +99,27 @@ export default function CustomersPage() {
       if (!Number.isNaN(when)) row.lastActivity = Math.max(row.lastActivity, when);
     }
 
+    for (const e of hallEnquiries) {
+      if (!e.guestEmail) continue;
+      // Declined and cancelled enquiries still identify a real family who
+      // approached the venue, so they belong in the directory too.
+      const row = ensure(e.guestEmail, e.guestName, e.guestPhone);
+      row.enquiries += 1;
+      row.hasHall = true;
+      const when = new Date(e.createdAt || e.eventDate).getTime();
+      if (!Number.isNaN(when)) row.lastActivity = Math.max(row.lastActivity, when);
+    }
+
     return Array.from(byEmail.values());
-  }, [bookings, reservations]);
+  }, [bookings, reservations, hallEnquiries]);
 
   const stats = useMemo(
     () => ({
       total: customers.length,
-      repeat: customers.filter((c) => c.bookings + c.reservations > 1).length,
-      crossVertical: customers.filter((c) => c.hasHotel && c.hasRestaurant).length,
+      repeat: customers.filter((c) => c.bookings + c.reservations + c.enquiries > 1).length,
+      crossVertical: customers.filter(
+        (c) => [c.hasHotel, c.hasRestaurant, c.hasHall].filter(Boolean).length > 1
+      ).length,
       lifetimeValue: customers.reduce((sum, c) => sum + c.totalSpend, 0),
     }),
     [customers]
@@ -114,6 +139,14 @@ export default function CustomersPage() {
         ? reservations.filter((r) => r.guestEmail?.toLowerCase() === selected.email)
         : [],
     [reservations, selected]
+  );
+
+  const selectedEnquiries = useMemo(
+    () =>
+      selected
+        ? hallEnquiries.filter((e) => e.guestEmail?.toLowerCase() === selected.email)
+        : [],
+    [hallEnquiries, selected]
   );
 
   function copy(value: string, label: string) {
@@ -154,7 +187,7 @@ export default function CustomersPage() {
     {
       key: "activity",
       header: "Activity",
-      accessor: (c) => c.bookings + c.reservations,
+      accessor: (c) => c.bookings + c.reservations + c.enquiries,
       sortable: true,
       hideBelow: "sm",
       render: (c) => (
@@ -167,6 +200,11 @@ export default function CustomersPage() {
           {c.reservations > 0 && (
             <Badge tone="info" icon={<UtensilsCrossed size={11} />}>
               {c.reservations} table{c.reservations === 1 ? "" : "s"}
+            </Badge>
+          )}
+          {c.enquiries > 0 && (
+            <Badge tone="warning" icon={<PartyPopper size={11} />}>
+              {c.enquiries} enquir{c.enquiries === 1 ? "y" : "ies"}
             </Badge>
           )}
         </div>
@@ -199,7 +237,7 @@ export default function CustomersPage() {
     <RequireAdmin>
       <PageHeader
         title="Customers"
-        description="Built from booking and reservation records, keyed on guest email."
+        description="Built from booking, reservation and hall enquiry records, keyed on guest email."
         breadcrumbs={[{ label: "Customers" }]}
       />
 
@@ -207,8 +245,8 @@ export default function CustomersPage() {
         <UsersRound size={15} className="mt-0.5 shrink-0 text-info-600" />
         <p className="text-base text-info-700">
           Guest checkout means most customers never register an account, and the API exposes no
-          user directory — so this list is assembled from what guests actually booked, not from
-          user records.
+          user directory — so this list is assembled from what guests actually booked or enquired
+          about, not from user records.
         </p>
       </div>
 
@@ -229,9 +267,9 @@ export default function CustomersPage() {
           loading={loading}
         />
         <StatCard
-          label="Hotel + restaurant"
+          label="Multi-vertical"
           value={stats.crossVertical}
-          hint="Used both verticals"
+          hint="Used more than one vertical"
           tone="info"
           loading={loading}
         />
@@ -295,14 +333,18 @@ export default function CustomersPage() {
       >
         {selected && (
           <div className="space-y-5">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div className="rounded-lg border border-line p-3">
                 <p className="text-xs text-ink-500">Hotel stays</p>
                 <p className="text-xl font-semibold text-ink-900">{selected.bookings}</p>
               </div>
               <div className="rounded-lg border border-line p-3">
-                <p className="text-xs text-ink-500">Table reservations</p>
+                <p className="text-xs text-ink-500">Tables</p>
                 <p className="text-xl font-semibold text-ink-900">{selected.reservations}</p>
+              </div>
+              <div className="rounded-lg border border-line p-3">
+                <p className="text-xs text-ink-500">Hall enquiries</p>
+                <p className="text-xl font-semibold text-ink-900">{selected.enquiries}</p>
               </div>
             </div>
 
@@ -366,6 +408,30 @@ export default function CustomersPage() {
                         </p>
                       </div>
                       <Badge status={r.status} />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {selectedEnquiries.length > 0 && (
+              <section>
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-500">
+                  Hall enquiries
+                </h3>
+                <ul className="divide-y divide-line-subtle rounded-lg border border-line">
+                  {selectedEnquiries.map((e) => (
+                    <li key={e._id} className="flex items-center gap-3 px-3.5 py-2.5">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-mono text-sm text-ink-700">
+                          {e.enquiryReference}
+                        </p>
+                        <p className="truncate text-xs text-ink-500">
+                          {e.eventType} · {shortDate(e.eventDate)} ·{" "}
+                          {e.guestCount.toLocaleString("en-IN")} guests
+                        </p>
+                      </div>
+                      <Badge status={e.status} />
                     </li>
                   ))}
                 </ul>

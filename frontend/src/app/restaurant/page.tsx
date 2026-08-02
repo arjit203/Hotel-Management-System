@@ -18,6 +18,7 @@ import OffersPreview from "@/components/sections/OffersPreview";
 import GalleryPreview from "@/components/sections/GalleryPreview";
 import Testimonials from "@/components/sections/Testimonials";
 import MapPlaceholder from "@/components/MapPlaceholder";
+import PropertyUnavailable from "@/components/PropertyUnavailable";
 
 // ── Restaurant-specific ──
 import SpecialsSection from "@/modules/restaurant/components/SpecialsSection";
@@ -40,7 +41,17 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function RestaurantPage() {
   const data = await getTheRestaurant();
-  if (!data) return notFound();
+  // Not `notFound()`. The loader returns null both when the property does
+  // not exist and when the API is simply unreachable, and a 404 during a
+  // backend restart tells guests — and search engines — the page is gone.
+  if (!data) {
+    return (
+      <PropertyUnavailable
+        retryHref="/restaurant"
+        icon={UtensilsCrossed}
+      />
+    );
+  }
 
   const { restaurant, gallery, offers, reviews, reviewSummary, chefSpecials, todaysSpecials } = data;
 

@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { BedDouble, Star, UtensilsCrossed } from "lucide-react";
+import { BedDouble, PartyPopper, Star, UtensilsCrossed } from "lucide-react";
 import RequireAdmin from "@/components/RequireAdmin";
 import PageHeader from "@/components/ui/PageHeader";
 import StatCard from "@/components/ui/StatCard";
@@ -13,14 +13,14 @@ import { NoPropertyState } from "@/components/layout/PropertyScopeNotice";
 import { useBusiness } from "@/lib/businessContext";
 import { useSummary } from "@/lib/summary";
 
-type Source = "hotel" | "restaurant";
+type Source = "hotel" | "restaurant" | "hall";
 
 /**
  * Cross-vertical review moderation.
  *
  * Reviews live in the shared polymorphic Review model, but the approve / reply /
  * delete routes are namespaced per vertical, so this page switches base path
- * with the source toggle rather than trying to mix both in one list.
+ * with the source toggle rather than trying to mix all three in one list.
  */
 /**
  * useSearchParams() forces client-side rendering, so Next requires a Suspense
@@ -47,21 +47,27 @@ function ReviewsFallback() {
 
 function ReviewsView() {
   const searchParams = useSearchParams();
-  const { business, hotels, restaurants } = useBusiness();
-  const { hotelReviews, restaurantReviews, loading, error, reload } = useSummary();
+  const { business, hotels, restaurants, halls } = useBusiness();
+  const { hotelReviews, restaurantReviews, hallReviews, loading, error, reload } = useSummary();
 
-  const [source, setSource] = useState<Source>(business === "restaurant" ? "restaurant" : "hotel");
+  const [source, setSource] = useState<Source>(business);
 
   // Follow the sidebar's business selector when it changes.
   useEffect(() => {
-    if (business === "hotel" || business === "restaurant") setSource(business);
+    setSource(business);
   }, [business]);
 
-  const items = source === "restaurant" ? restaurantReviews : hotelReviews;
-  const hasProperty = source === "restaurant" ? restaurants.length > 0 : hotels.length > 0;
+  const items =
+    source === "restaurant" ? restaurantReviews : source === "hall" ? hallReviews : hotelReviews;
+  const hasProperty =
+    source === "restaurant"
+      ? restaurants.length > 0
+      : source === "hall"
+        ? halls.length > 0
+        : hotels.length > 0;
 
   const stats = useMemo(() => {
-    const all = [...hotelReviews, ...restaurantReviews];
+    const all = [...hotelReviews, ...restaurantReviews, ...hallReviews];
     const approved = all.filter((r) => r.isApproved);
     return {
       total: all.length,
@@ -72,7 +78,7 @@ function ReviewsView() {
           : "—",
       unanswered: approved.filter((r) => !r.adminReply).length,
     };
-  }, [hotelReviews, restaurantReviews]);
+  }, [hotelReviews, restaurantReviews, hallReviews]);
 
   // `?status=pending` from the dashboard/notification tray is handled by the
   // manager's own filter; surface it here so the page opens on the queue.
@@ -95,6 +101,7 @@ function ReviewsView() {
             options={[
               { value: "hotel", label: "Hotel", icon: <BedDouble size={13} /> },
               { value: "restaurant", label: "Restaurant", icon: <UtensilsCrossed size={13} /> },
+              { value: "hall", label: "Hall", icon: <PartyPopper size={13} /> },
             ]}
           />
         }
@@ -140,12 +147,18 @@ function ReviewsView() {
       ) : (
         <ReviewsManager
           key={source}
-          basePath={source === "restaurant" ? "/admin/restaurants" : "/admin/hotels"}
+          basePath={
+            source === "restaurant"
+              ? "/admin/restaurants"
+              : source === "hall"
+                ? "/admin/halls"
+                : "/admin/hotels"
+          }
           items={items}
           loading={loading}
           onChanged={reload}
-          // Only the Hotel module exposes a remove-review-image route.
-          canRemoveImages={source === "hotel"}
+          // Hotel and Hall expose a remove-review-image route; Restaurant does not.
+          canRemoveImages={source !== "restaurant"}
         />
       )}
     </RequireAdmin>

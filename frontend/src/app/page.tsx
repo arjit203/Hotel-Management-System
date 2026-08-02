@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { getTheHotel } from "@/lib/hotel";
+import { getTheRestaurant } from "@/lib/restaurant";
+import { getTheHall } from "@/lib/hall";
 import Hero from "@/components/sections/Hero";
+import VerticalsPreview, { VerticalCard } from "@/components/sections/VerticalsPreview";
 import QuickBookingWidget from "@/modules/hotel/components/home/QuickBookingWidget";
 import Introduction from "@/components/sections/Introduction";
 import FeaturedRooms from "@/modules/hotel/components/home/FeaturedRooms";
@@ -31,7 +34,14 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function HomePage() {
-  const data = await getTheHotel();
+  // All three fetches are memoised by `cache()` and independent, so running
+  // them together costs one round-trip set rather than three sequential ones.
+  // A vertical that fails or isn't seeded simply drops out of the estate band.
+  const [data, restaurantData, hallData] = await Promise.all([
+    getTheHotel(),
+    getTheRestaurant(),
+    getTheHall(),
+  ]);
 
   if (!data) {
     return (
@@ -59,6 +69,50 @@ export default async function HomePage() {
   // doesn't duplicate the opening frame.
   const introImage = gallery[1]?.imageUrl || gallery[0]?.imageUrl || rooms[0]?.images?.[0];
 
+  // The estate band. Hotel is always present (we returned early otherwise);
+  // the other two appear only once they exist, so an unseeded install shows a
+  // one-card row rather than two broken tiles.
+  const verticalCards: VerticalCard[] = [
+    {
+      icon: "hotel",
+      label: "Stay",
+      title: "The Hotel",
+      description:
+        "Rooms and suites for a night, a week or a wedding party — with breakfast, a pool and a team that remembers your name.",
+      href: "/hotel/rooms",
+      ctaLabel: "Explore rooms",
+      image: rooms[0]?.images?.[0] || gallery[0]?.imageUrl,
+    },
+  ];
+
+  if (restaurantData) {
+    verticalCards.push({
+      icon: "restaurant",
+      label: "Dine",
+      title: restaurantData.restaurant.name,
+      description:
+        "North Indian and Awadhi cooking from a live tandoor, with a short seasonal menu that follows the morning market.",
+      href: "/restaurant/menu",
+      ctaLabel: "See the menu",
+      image:
+        restaurantData.gallery?.[0]?.imageUrl ||
+        restaurantData.restaurant.images?.[0],
+    });
+  }
+
+  if (hallData) {
+    verticalCards.push({
+      icon: "hall",
+      label: "Celebrate",
+      title: hallData.hall.name,
+      description:
+        "A pillarless banquet hall and open-air lawn for up to 1,200 guests, with decoration and catering handled in-house.",
+      href: "/marriage-hall",
+      ctaLabel: "Check your date",
+      image: hallData.hall.heroImages?.[0] || hallData.gallery?.[0]?.imageUrl,
+    });
+  }
+
   return (
     <main>
       <Hero
@@ -79,6 +133,13 @@ export default async function HomePage() {
       />
 
       <FeaturedRooms rooms={rooms} />
+
+      {/* The estate: hotel, restaurant and banquet hall. Placed after the rooms
+          so the home page still leads with the stay, but before amenities so a
+          visitor who came for a wedding venue finds it above the fold-and-a-bit
+          rather than only in the top navigation. */}
+      <VerticalsPreview cards={verticalCards} />
+
       <ValueProps points={HOTEL_VALUE_POINTS} />
       <AmenitiesPreview amenities={hotel.amenities} href="/hotel/amenities" />
       <OffersPreview offers={offers} viewAllHref="/hotel/offers" reserveHref="/hotel/booking" />

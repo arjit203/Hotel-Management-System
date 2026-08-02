@@ -230,3 +230,96 @@ export function buildReservationCancellationEmailHtml(details: {
     <p>No charge was made. We hope to welcome you another time.</p>
   `;
 }
+
+// ============================================================
+// Marriage Hall module (added 2026-08-03). Additive only — every builder above
+// is untouched.
+//
+// These deliberately never say "booked" or "confirmed" on submission, and carry
+// no amount, advance or payment figure. Per RULES.md §14 a hall enquiry is a
+// request to talk: nothing is reserved and nothing is charged until an admin
+// approves and the family has spoken to the venue.
+// ============================================================
+
+export function buildHallEnquiryReceivedEmailHtml(details: {
+  guestName: string;
+  hallName: string;
+  enquiryReference: string;
+  eventDate: string;
+  eventType: string;
+  guestCount: number;
+  packageName?: string;
+  contactPhone: string;
+  /** Renders the internal-facing variant for the admin notification. */
+  forAdmin?: boolean;
+  guestEmail?: string;
+  guestPhone?: string;
+}): string {
+  if (details.forAdmin) {
+    return `
+      <p>A new marriage hall enquiry has been submitted.</p>
+      <ul>
+        <li><strong>Reference:</strong> ${details.enquiryReference}</li>
+        <li><strong>Venue:</strong> ${details.hallName}</li>
+        <li><strong>Guest:</strong> ${details.guestName} (${details.guestEmail || "—"}${
+          details.guestPhone ? `, ${details.guestPhone}` : ""
+        })</li>
+        <li><strong>Event:</strong> ${details.eventType} on ${details.eventDate}</li>
+        <li><strong>Expected guests:</strong> ${details.guestCount}</li>
+        <li><strong>Package of interest:</strong> ${details.packageName || "Not specified"}</li>
+      </ul>
+      <p>The date is <strong>not held</strong> yet. Review the enquiry in the admin panel and
+      confirm it once the family has been spoken to.</p>
+    `;
+  }
+
+  return `
+    <p>Dear ${details.guestName},</p>
+    <p>Thank you for considering <strong>${details.hallName}</strong> for your ${details.eventType.toLowerCase()}.</p>
+    <p>We have received your enquiry and one of our event managers will call you shortly to
+    discuss the details.</p>
+    <ul>
+      <li><strong>Reference:</strong> ${details.enquiryReference}</li>
+      <li><strong>Preferred date:</strong> ${details.eventDate}</li>
+      <li><strong>Occasion:</strong> ${details.eventType}</li>
+      <li><strong>Expected guests:</strong> ${details.guestCount}</li>
+      ${details.packageName ? `<li><strong>Package of interest:</strong> ${details.packageName}</li>` : ""}
+    </ul>
+    <p><strong>Please note:</strong> this is an enquiry, not a confirmed booking. Your date is
+    reserved only once we have spoken and confirmed it with you. No payment has been taken.</p>
+    <p>If you'd like to speak to us sooner, call ${details.contactPhone}.</p>
+    <p>We would be honoured to host your celebration.</p>
+  `;
+}
+
+export function buildHallEnquiryStatusEmailHtml(details: {
+  guestName: string;
+  hallName: string;
+  enquiryReference: string;
+  eventDate: string;
+  status: string;
+  contactPhone: string;
+}): string {
+  const body: Record<string, string> = {
+    approved: `<p>Good news — <strong>${details.hallName}</strong> is available for your date and we
+      would be delighted to host you.</p>
+      <p>Our event manager will be in touch to finalise the arrangements. Your date is held
+      tentatively and becomes a confirmed booking once we complete that conversation.</p>`,
+    confirmed: `<p>Your booking at <strong>${details.hallName}</strong> is now confirmed and the date
+      is held in your name.</p>
+      <p>Our team will guide you through the remaining arrangements.</p>`,
+    declined: `<p>We're sorry — we aren't able to host your event at <strong>${details.hallName}</strong>
+      on that date.</p>
+      <p>Please do call us; we may be able to suggest a nearby date that works beautifully.</p>`,
+  };
+
+  return `
+    <p>Dear ${details.guestName},</p>
+    ${body[details.status] || `<p>There is an update on your enquiry.</p>`}
+    <ul>
+      <li><strong>Reference:</strong> ${details.enquiryReference}</li>
+      <li><strong>Date:</strong> ${details.eventDate}</li>
+    </ul>
+    <p>Questions? Call us on ${details.contactPhone}.</p>
+  `;
+}

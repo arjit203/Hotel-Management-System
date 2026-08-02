@@ -43,6 +43,20 @@ export const NAV_LINKS: NavEntry[] = [
     ],
   },
   {
+    href: "/marriage-hall",
+    label: "Marriage Hall",
+    children: [
+      { href: "/marriage-hall", label: "Overview" },
+      { href: "/marriage-hall/gallery", label: "Gallery" },
+      { href: "/marriage-hall/packages", label: "Packages" },
+      { href: "/marriage-hall/decorations", label: "Decoration Themes" },
+      { href: "/marriage-hall/catering", label: "Catering & Dining" },
+      { href: "/marriage-hall/availability", label: "Check Your Date" },
+      { href: "/marriage-hall/reviews", label: "Reviews" },
+      { href: "/marriage-hall/contact", label: "Contact" },
+    ],
+  },
+  {
     href: "/restaurant",
     label: "Restaurant",
     children: [

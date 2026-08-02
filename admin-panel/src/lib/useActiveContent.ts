@@ -20,8 +20,8 @@ const EMPTY: ActiveContent = { gallery: [], offers: [], faqs: [] };
  * pointing at, so the cross-vertical Gallery, Offers and FAQs pages can reuse
  * the same managers the property workspaces use.
  *
- * Both verticals' aggregates are shaped the same for these three collections,
- * which is why one hook covers Hotel and Restaurant.
+ * All three verticals' aggregates are shaped the same for these collections,
+ * which is why one hook covers Hotel, Restaurant and Marriage Hall.
  */
 export function useActiveContent() {
   const { business, activeProperty, loading: propertiesLoading } = useBusiness();
@@ -32,7 +32,8 @@ export function useActiveContent() {
   const [reloadToken, setReloadToken] = useState(0);
 
   const slug = activeProperty?.slug;
-  const collection = business === "restaurant" ? "restaurants" : "hotels";
+  const collection =
+    business === "restaurant" ? "restaurants" : business === "hall" ? "halls" : "hotels";
 
   useEffect(() => {
     if (propertiesLoading) return;
@@ -78,8 +79,13 @@ export function useActiveContent() {
     loading: loading || propertiesLoading,
     error,
     reload,
-    /** "/admin/hotels" or "/admin/restaurants" for the content managers. */
-    basePath: business === "restaurant" ? "/admin/restaurants" : "/admin/hotels",
+    /** The admin base path the content managers post to. */
+    basePath:
+      business === "restaurant"
+        ? "/admin/restaurants"
+        : business === "hall"
+          ? "/admin/halls"
+          : "/admin/hotels",
     ownerId: activeProperty?._id ?? "",
     property: activeProperty,
   };

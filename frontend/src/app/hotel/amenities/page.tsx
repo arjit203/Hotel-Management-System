@@ -5,6 +5,8 @@ import { getAmenityIcon } from "@/lib/amenityIcons";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import { Stagger, StaggerScaleItem } from "@/components/motion/Stagger";
+import { BedDouble } from "lucide-react";
+import PropertyUnavailable from "@/components/PropertyUnavailable";
 
 export const metadata: Metadata = {
   title: "Amenities",
@@ -14,7 +16,17 @@ export const metadata: Metadata = {
 
 export default async function AmenitiesPage() {
   const data = await getTheHotel();
-  if (!data) return notFound();
+  // Not `notFound()`. The loader returns null both when the property does
+  // not exist and when the API is simply unreachable, and a 404 during a
+  // backend restart tells guests — and search engines — the page is gone.
+  if (!data) {
+    return (
+      <PropertyUnavailable
+        retryHref="/hotel/amenities"
+        icon={BedDouble}
+      />
+    );
+  }
 
   return (
     <main>

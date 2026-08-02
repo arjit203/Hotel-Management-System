@@ -4,13 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { publicGet } from "./api";
 import { useAdminSession } from "./adminSession";
 
-/**
- * Which vertical the admin is currently working in.
- *
- * `hall` is listed so the sidebar can show it as a disabled placeholder — the
- * Marriage Hall module does not exist in the backend yet (there is no
- * /api/v1/admin/halls route), so nothing may select it.
- */
+/** Which vertical the admin is currently working in. All three are live. */
 export type BusinessKey = "hotel" | "restaurant" | "hall";
 
 export interface BusinessProperty {
@@ -27,6 +21,7 @@ interface BusinessContextValue {
 
   hotels: BusinessProperty[];
   restaurants: BusinessProperty[];
+  halls: BusinessProperty[];
 
   /** Properties for the currently selected vertical. */
   properties: BusinessProperty[];
@@ -60,16 +55,18 @@ export const BUSINESS_LABEL: Record<BusinessKey, string> = {
  * Loads the property lists once for the whole session and remembers which
  * vertical/property the admin last worked in.
  *
- * Both lists come from the PUBLIC listing endpoints (`/hotels`, `/restaurants`)
- * because those are the only routes that enumerate properties — the admin
- * routers only expose create/update/delete by id. That matches what the
- * existing hotels page already did; no new endpoint is involved.
+ * All three lists come from the PUBLIC listing endpoints (`/hotels`,
+ * `/restaurants`, `/halls`) because those are the only routes that enumerate
+ * properties — the admin routers only expose create/update/delete by id. That
+ * matches what the existing hotels page already did; no new endpoint is
+ * involved.
  */
 export function BusinessProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, ready: sessionReady } = useAdminSession();
   const [business, setBusinessState] = useState<BusinessKey>("hotel");
   const [hotels, setHotels] = useState<BusinessProperty[]>([]);
   const [restaurants, setRestaurants] = useState<BusinessProperty[]>([]);
+  const [halls, setHalls] = useState<BusinessProperty[]>([]);
   const [activeIds, setActiveIds] = useState<Partial<Record<BusinessKey, string>>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -78,7 +75,11 @@ export function BusinessProvider({ children }: { children: React.ReactNode }) {
   // Restore the last-used vertical/property before the first paint of the shell.
   useEffect(() => {
     const storedBusiness = localStorage.getItem(BUSINESS_STORAGE_KEY);
-    if (storedBusiness === "hotel" || storedBusiness === "restaurant") {
+    if (
+      storedBusiness === "hotel" ||
+      storedBusiness === "restaurant" ||
+      storedBusiness === "hall"
+    ) {
       setBusinessState(storedBusiness);
     }
     const storedProperty = localStorage.getItem(PROPERTY_STORAGE_KEY);
@@ -98,6 +99,7 @@ export function BusinessProvider({ children }: { children: React.ReactNode }) {
     if (!isAuthenticated) {
       setHotels([]);
       setRestaurants([]);
+      setHalls([]);
       setLoading(false);
       return;
     }
@@ -108,18 +110,20 @@ export function BusinessProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       setError(null);
 
-      const [hotelRes, restaurantRes] = await Promise.all([
+      const [hotelRes, restaurantRes, hallRes] = await Promise.all([
         publicGet<BusinessProperty[]>("/hotels"),
         publicGet<BusinessProperty[]>("/restaurants"),
+        publicGet<BusinessProperty[]>("/halls"),
       ]);
 
       if (cancelled) return;
 
-      if (!hotelRes.success && !restaurantRes.success) {
+      if (!hotelRes.success && !restaurantRes.success && !hallRes.success) {
         setError(hotelRes.message || "Could not load your properties.");
       }
       setHotels(hotelRes.success ? hotelRes.data || [] : []);
       setRestaurants(restaurantRes.success ? restaurantRes.data || [] : []);
+      setHalls(hallRes.success ? hallRes.data || [] : []);
       setLoading(false);
     }
 
@@ -130,12 +134,12 @@ export function BusinessProvider({ children }: { children: React.ReactNode }) {
   }, [reloadToken, isAuthenticated, sessionReady]);
 
   const setBusiness = useCallback((next: BusinessKey) => {
-    if (next === "hall") return; // placeholder only — no backend module yet
     setBusinessState(next);
     localStorage.setItem(BUSINESS_STORAGE_KEY, next);
   }, []);
 
-  const properties = business === "restaurant" ? restaurants : business === "hotel" ? hotels : [];
+  const properties =
+    business === "restaurant" ? restaurants : business === "hall" ? halls : hotels;
 
   const activeProperty = useMemo(() => {
     if (properties.length === 0) return null;
@@ -160,6 +164,7 @@ export function BusinessProvider({ children }: { children: React.ReactNode }) {
       setBusiness,
       hotels,
       restaurants,
+      halls,
       properties,
       activeProperty,
       setActivePropertyId,
@@ -172,6 +177,7 @@ export function BusinessProvider({ children }: { children: React.ReactNode }) {
       setBusiness,
       hotels,
       restaurants,
+      halls,
       properties,
       activeProperty,
       setActivePropertyId,

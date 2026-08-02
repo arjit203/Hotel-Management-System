@@ -4,6 +4,163 @@ Format: newest entries on top. Categories: Added / Changed / Fixed / Security / 
 
 ---
 
+## [2026-08-03 (d)] — Cinematic Hotel landing page + graceful degradation when the API is down
+
+### Fixed — an unreachable backend no longer breaks the public site
+Reported as "frontend error on startup". The cause was ordinary — `npm run dev:all` launches all three apps at once, the frontend was ready in 3.3s and started server-rendering before the backend had finished connecting, so its fetches hit `ECONNREFUSED`. But the *response* to that was wrong in two ways:
+
+- **`frontend/src/lib/api.ts` had no try/catch around `fetch`.** Every caller checks `if (!res.success)`, so nobody caught the rejection — a backend that was down, restarting, or merely slower to boot produced `unhandledRejection` and `⨯ Error: failed to pipe response` instead of the form's own error message. It now returns the standard `{ success: false, message }` envelope, and separately guards `res.json()` against a non-JSON error page.
+- **21 pages called `notFound()` when their loader returned null.** That loader returns null for two unrelated reasons — the property does not exist, or the API is unreachable — so a thirty-second backend restart served "page not found" for a live hotel, to guests and to search engines alike.
+
+Added **`components/PropertyUnavailable.tsx`**: an honest "we can't load this right now" panel with a retry link and the venue's phone number, so a guest who came to book still can. Applied to all 19 property-level pages across Hotel and Restaurant.
+
+The three `[reference]` confirmation pages keep `notFound()` — there, null genuinely means no booking with that reference, and 404 is correct. `/hotel/booking`, `/restaurant/reserve` and `/hotel/rooms/[roomSlug]` had compound guards that conflated the two cases; those are now split, so an unreachable API degrades while a genuinely missing room or an unconfigured venue still 404s.
+
+**Verified by running a second frontend instance against a dead API port** (leaving the real dev servers untouched): every page returned 200 with its empty state, and the log recorded zero `unhandledRejection` and zero `failed to pipe response`. Before the fix those were exactly what appeared.
+
+### Changed — `/hotel` rebuilt to the Marriage Hall's standard
+It had a static scrim-over-a-still masthead while `/marriage-hall` had a full-screen cinematic opener. Now matched:
+
+- Full-screen **Ken Burns hero** with crossfading slides, word-mask headline reveal, slide indicators and scroll cue — the shared `<Hero>`, the same one the hall and home page use.
+- **Counted stat tiles** (room types, amenities, star rating, guest reviews) via `AnimatedNumber`.
+- **Parallax editorial band** pairing a portrait image with check-in/check-out, lowest rate and reception hours.
+- **Full-bleed parallax quote band** between the rooms and amenities.
+- **Guest pull-quote** from the highest-profile approved review.
+- **Closing invitation** over a dimmed parallax image, mirroring the hall's.
+
+No new motion vocabulary — everything reuses `Hero`, `Reveal`, `Parallax`, `TextReveal`, `Stagger` and `AnimatedNumber`, so `prefers-reduced-motion` handling comes for free. Still a Server Component; the motion wrappers remain the only client islands.
+
+### Verification
+- Frontend `tsc --noEmit` → 0 errors; `next build` → compiled successfully.
+- Live: `/hotel` renders the Ken Burns hero, all new sections and 57 Pexels images. Every hotel, restaurant and hall route returns 200.
+
+---
+
+## [2026-08-03 (c)] — Demo content: Pexels photography for all three verticals
+
+Makes the site presentable for review before the owner's own photographs exist. Content and imagery only — no route, model, service, validation schema, RBAC rule or business logic changed anywhere.
+
+### Added
+- **`database/seeders/seed-demo-content.ts`** — one idempotent seeder covering Hotel, Restaurant and Marriage Hall:
+
+  | Vertical | What it fills |
+  |---|---|
+  | Hotel | Room photographs by category, 17 gallery images across 5 categories, 5 FAQs, 2 offers |
+  | Restaurant | Hero images, dish photographs matched by name, dining-area photographs, 18 gallery images across 5 categories, 4 FAQs, 2 offers |
+  | Marriage Hall | The venue, 4 packages, 8 decoration themes with colour palettes and before/after frames, 5 catering sections, 6 dining arrangements, 6 floral setups, 28 gallery images across 9 categories, 7 FAQs, 2 offers |
+
+  ```bash
+  cd backend && npx ts-node ../database/seeders/seed-demo-content.ts
+  ```
+
+- **`frontend/src/components/sections/VerticalsPreview.tsx`** and an estate band on the home page. The home page previously sold only the Hotel — the Restaurant and Marriage Hall were reachable solely through the top navigation, so a visitor arriving from a wedding-venue search had no reason to believe this site had one. Three cards, placed after Featured Rooms. Additive: no existing section was modified, and a vertical that isn't seeded simply drops out of the row.
+
+### Changed
+- **Home page** now fetches all three verticals in a single `Promise.all`. Each call is already `cache()`-memoised, so this costs one round-trip set rather than three sequential ones.
+- **`CLAUDE.md`** — the seeding section now lists both seeders and notes they must run from `backend/`.
+
+### Removed
+- **`database/seeders/seed-marriage-hall.ts`** — superseded by `seed-demo-content.ts`, which covers all three verticals. Keeping both would have let their imagery drift apart, since the old one used a different image source.
+
+### On the images
+Pexels, free for commercial use with no attribution required (https://www.pexels.com/license/). Served straight from `images.pexels.com` with a width transform — nothing is uploaded to Cloudinary, so replacing them later is just uploading real photographs through the admin panel, which overwrites these URLs. No seeder edit will be needed.
+
+Non-Cloudinary URLs pass through `cldImage()` untouched and `LuxeImage` renders a plain `<img>`, so no `next.config.js` remote-host whitelisting is involved.
+
+**All 124 photo IDs were verified to return HTTP 200 before being written into the file.** One candidate (`15323383`) 404'd and was replaced with a checked alternative. Photo IDs and their subjects were pulled from Pexels' own search pages rather than guessed.
+
+### Safety — what the seeder will not do
+Never touches, under any circumstance: `HotelBooking` · `TableReservation` · `HallEnquiry` · `User` · `Admin` · room pricing or capacity · menu prices · any Hotel/Restaurant business field. Live operational data is out of scope for a content seeder.
+
+Hotel and Restaurant FAQs and offers are added **only when none exist**, so hand-written entries survive a re-run. Galleries are replaced wholesale — those held placeholder URLs. Hall content is fully rewritten, since this script creates the hall.
+
+Hall packages still ship with `priceLabel: "On request"`. The seeder must never invent a price.
+
+### Fixed — the seeder actually runs now
+Three defects found while diagnosing "nothing went into the database":
+
+1. **ts-node was silently executing nothing.** The file had no `import` or `export`, so ts-node treated it as a plain script: exit 0, no output, no error, empty database. Adding a `path`/`dotenv` import fixed it, and a comment now warns against removing them. This was the actual reason the first run appeared to do nothing.
+2. **It would have created a duplicate hall.** The hall section upserted on slug `7-vachan-banquets`, which would have sat next to the hall already created in the admin panel — and since `getTheHall()` takes the first row of a newest-first list, the seeded one would have hidden the real one on the public site. It now enriches the existing hall and adds only missing packages/showcases, matched on slug and on `showcaseType`+title, so hand-made entries survive.
+3. **It could not connect at all.** `mongodb+srv://` needs a DNS SRV lookup, which this network refuses (`querySrv ECONNREFUSED`) even though the already-running backend keeps working. **Rewritten to write through `/api/v1/admin/*`** using the backend's live connection — no DNS lookup, no connection string, and every write now passes real Zod validation and RBAC. It needs the backend running plus admin credentials:
+
+```bash
+cd backend && npx ts-node ../database/seeders/seed-demo-content.ts \
+  --email you@example.com --password yourpassword
+```
+
+Also: `process.exit()` on the error path tripped a libuv assertion on Windows while an undici socket was still closing, printing a fake crash on top of the real error. Now sets `process.exitCode` and lets Node drain.
+
+### Verification
+- Seeder type-checks clean; all three workspaces still `tsc --noEmit` with **0 errors** and build.
+- Executed end-to-end against the running backend: reaches the API, authenticates, and fails with a precise message on bad credentials (`POST /auth/admin/login → Invalid email or password.`). Clean exit, no assertion.
+- **Not executed with real credentials** — none were available in this session, so the write paths are verified by build, types and endpoint shapes rather than by a completed run.
+
+---
+
+## [2026-08-03 (b)] — Phase 4: Marriage Hall module
+
+The third vertical, built frontend-first per the brief (80% experience, 20% backend). **Hotel and Restaurant are untouched** — `git diff` over `backend/src/modules/hotel/`, `backend/src/modules/restaurant/`, `frontend/src/app/hotel/`, `frontend/src/app/restaurant/` and `frontend/src/modules/{hotel,restaurant}/` is empty.
+
+### Added — Backend (`backend/src/modules/hall/`)
+- **Models** — `hall`, `hallPackage`, `hallShowcase`, `hallAvailability`, `hallEnquiry`. Same conventions as the other two verticals: `branchId` multi-tenancy, slug scoping, `isActive` soft delete, midnight-UTC dates.
+- **`hall.validation.ts`** — Zod schemas for every route, including a hex-colour validator for decoration palettes and a 1-12 month calendar query.
+- **`hall.service.ts`** — venue / package / showcase CRUD, the computed availability calendar, `isDateOpenForEnquiry`.
+- **`enquiry.service.ts`** — enquiry creation, reference generation (`7VH-`), guest lookup, admin list, status transitions with their calendar side effects, guest-initiated withdrawal.
+- **`hall.controller.ts`** / **`hall.routes.ts`** — three routers matching the Hotel and Restaurant split: public content, public enquiries, admin.
+- **`email.util.ts`** — two additive builders (`buildHallEnquiryReceivedEmailHtml`, `buildHallEnquiryStatusEmailHtml`). No existing builder changed. Neither ever says "booked" on submission.
+- **`database/seeders/seed-marriage-hall.ts`** — idempotent seed: one venue, 4 packages, 8 decoration themes, 5 catering sections, 6 dining arrangements, 6 floral setups, 22 gallery images across 10 categories, 6 FAQs. *(Superseded same day by `seed-demo-content.ts` — see the entry above.)*
+
+### Added — Public site (`frontend/src/app/marriage-hall/`)
+Eight routes: `/marriage-hall` plus `gallery`, `packages`, `decorations`, `catering`, `availability`, `reviews`, `contact`. Every one is a Server Component with its own `generateMetadata`; interactive pieces are separate client islands.
+
+- **Landing page** — cinematic: full-screen Ken Burns hero, counted stat tiles, parallax space-by-space editorial, gallery mosaic, decoration preview, packages, catering, testimonial, FAQs, closing CTA.
+- **Gallery** — the priority surface. CSS-column masonry, category filters with counts, lightbox with keyboard paging, lazy loading, hover zoom and caption reveal, progressive "show more".
+- **Decorations** — filterable theme grid with real colour-swatch palettes, an expanding detail panel, and a **draggable before/after comparison** of the bare hall against the dressed room. Floral styling shares the page.
+- **Catering** — alternating editorial spreads for cuisine groups and dining arrangements, sample dishes as chips. No prices anywhere.
+- **Availability** — a four-step process strip, then the live calendar and a four-step enquiry form.
+- New components in `frontend/src/modules/hall/components/`: `MasonryGallery`, `AvailabilityCalendar`, `EnquiryForm`, `DecorationThemes`, `BeforeAfter`, `ShowcaseSection`, `PackageCards`, `FloatingEnquiry`, `HallEmpty`.
+- `lib/hall.ts` mirrors `lib/hotel.ts`: one `cache()`-memoised aggregate on a 120s revalidate, with the calendar deliberately `no-store`.
+- **Nothing was forked.** `Hero`, `Reveal`, `Parallax`, `TextReveal`, `Stagger`, `LuxeImage`, `Lightbox`, `PageHeader`, `Breadcrumbs`, `FaqAccordion`, `ReviewsList`, `ReviewForm`, `ContactForm`, `MapPlaceholder`, `AnimatedNumber`, `EmptyState` and the whole `ink`/`gold`/`cream` design system are reused as-is. New file count in `frontend/src/components/`: one (`HallSchema.tsx`, JSON-LD `EventVenue`).
+
+### Added — Admin Console
+- `/halls` venue list, `/halls/[hallId]` workspace with eleven tabs (Overview · Packages · Decoration · Catering · Dining · Floral · Gallery · Calendar · Offers · FAQs · Reviews), and `/enquiries` — the enquiry book with status filters, a detail drawer, internal notes and status transitions.
+- New components: `hall/PackagesPanel`, `hall/ShowcasePanel` (one panel serving all four showcase types via a config table), `hall/CalendarPanel`.
+- `GalleryManager`, `OffersManager`, `FaqManager` and `ReviewsManager` now serve a third vertical with **no changes** beyond passing `/admin/halls` as the base path — the payoff for having written them polymorphically.
+- Marriage Hall unlocked in the business selector, sidebar and command palette. The Operations nav entry is now three-way: Bookings (Hotel) · Reservations (Restaurant) · Enquiries (Hall).
+- Dashboard, Analytics, Customers, Reviews and Settings all extended to cover the third vertical. Analytics gains a hall enquiry funnel chart and an enquiry-to-confirmed conversion figure.
+
+### Changed — shared files (all additive)
+- **`admin.model.ts`** — `hall_manager` added to the `AdminRole` union and the schema enum. Additive only: no existing role's permissions changed.
+- **`server.ts`** — three additive mounts on non-overlapping namespaces (`/halls`, `/hall-enquiries`, `/admin/halls`).
+- **`email.util.ts`** — two additive exports.
+- **`navLinks.ts`**, **`sitemap.ts`** — a Marriage Hall group and eight routes.
+- **`admin-panel/src/lib/api.ts`** — `uploadHallImage()` added beside the existing two.
+- No content model changed: `reviewableType`, `ownerType` and `applicableTo` already accepted `"hall"`.
+
+### Security
+- **RBAC as briefed, with no new middleware.** `HALL_MANAGER_ROLES = ["super_admin","branch_admin","hall_manager"]`. Because Hotel and Restaurant name their managers explicitly, a `hall_manager` token is refused there by the same `requireRole` check every other route uses — the isolation falls out of the existing pattern instead of being special-cased. Super Admin retains access everywhere.
+- Guest enquiry cancellation proves ownership by matching the enquiry email or the logged-in user, never by the reference alone — the same rule as hotel bookings and table reservations.
+- `adminNotes` is stripped from the public enquiry lookup.
+- No new npm package, no new environment variable.
+
+### Deliberately absent — do not add without a `RULES.md` change
+- **No payment anywhere in this module.** No amount, advance, `paymentStatus`, Razorpay order or invoice field on `HallEnquiry`. `RULES.md` §14: hall bookings are approval-first, and payment is triggered only after approval, offline.
+- **No numeric price field.** `HallPackage.priceLabel` is free text defaulting to `"On request"` because the owner has not set pricing and the model may turn out to be per-plate rather than per-event. Catering carries no price at all — it is showcase content with no cart, order or quote endpoint.
+- **`approved` does not hold the date.** Only `confirmed` writes a calendar block. Several families can be in conversation about the same auspicious date, and showing it as gone would lose the others.
+
+### Verification — what was actually exercised
+- `tsc --noEmit` in **backend**, **frontend** and **admin-panel** → **0 errors** in all three.
+- `next build` → **frontend 40 routes** (8 new under `/marriage-hall`), **admin-panel 22 routes** (`/halls`, `/halls/[hallId]`, `/enquiries` new). Both succeed.
+- Live HTTP against the running server:
+  - `GET /halls` → 200 · `GET /halls/nope` → 404 · `GET /hall-enquiries/reference/NOPE` → 404
+  - `GET /admin/halls/enquiries/list` → **401** without a token · same for `/calendar` and `/reviews`
+  - `POST /hall-enquiries` with `{}` → **400** with all seven per-field errors
+  - **Hotel/Restaurant regression:** `/health` 200 · `/hotels` 200 · `/restaurants` 200 · `/hotel-bookings/reference/NOPE` 404 · `/table-reservations/reference/NOPE` 404
+- **Not done — the seed did not run, and no page was viewed with real hall data.** `npx ts-node ../database/seeders/seed-marriage-hall.ts` fails from this environment with `querySrv ECONNREFUSED` — the shell cannot resolve the MongoDB Atlas SRV record (the already-running backend, started earlier, connects fine). The script itself compiles and reaches the connection step. **Run it once and the whole vertical populates.** Until then `/halls` returns `[]` and every hall page renders its empty state.
+- Consequently: no browser click-through of the public pages or the admin write paths. Build, types, route wiring and endpoint shapes are verified; visual rendering and CRUD execution are not. Manual test steps are in the handover.
+
+---
+
 ## [2026-08-03] — Phase 5.0: Admin Console — full UI/UX redesign + Restaurant Admin
 
 **Frontend-only, admin-panel-only.** No backend file, model, service, controller, route, validation schema, RBAC rule, auth flow, database schema or business rule was touched. `git diff` over `backend/`, `frontend/`, `database/` and `deployment/` is empty. Every screen calls the API endpoints that already existed.

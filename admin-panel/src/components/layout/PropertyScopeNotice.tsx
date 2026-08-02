@@ -34,7 +34,13 @@ export default function PropertyScopeNotice() {
         </span>
       )}
       <Link
-        href={business === "restaurant" ? `/restaurants/${activeProperty._id}` : `/hotels/${activeProperty._id}`}
+        href={
+          business === "restaurant"
+            ? `/restaurants/${activeProperty._id}`
+            : business === "hall"
+              ? `/halls/${activeProperty._id}`
+              : `/hotels/${activeProperty._id}`
+        }
         className="btn-ghost btn-sm"
       >
         Open property
@@ -46,7 +52,8 @@ export default function PropertyScopeNotice() {
 /** Shown in place of a content manager when the selected vertical has no property. */
 export function NoPropertyState({ what }: { what: string }) {
   const { business } = useBusiness();
-  const href = business === "restaurant" ? "/restaurants" : "/hotels";
+  const href =
+    business === "restaurant" ? "/restaurants" : business === "hall" ? "/halls" : "/hotels";
 
   return (
     <div className="card">

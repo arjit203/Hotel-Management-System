@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BedDouble, Check, ChevronsUpDown, Lock, PartyPopper, UtensilsCrossed } from "lucide-react";
+import { BedDouble, Check, ChevronsUpDown, PartyPopper, UtensilsCrossed } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { BUSINESS_LABEL, useBusiness, type BusinessKey } from "@/lib/businessContext";
 
@@ -17,15 +17,13 @@ const ORDER: BusinessKey[] = ["hotel", "restaurant", "hall"];
  * Vertical + property switcher.
  *
  * Two levels, because the backend is multi-tenant by mandate even though only
- * one property exists today: pick the business (Hotel / Restaurant), then the
- * property within it. When a vertical has a single property the property list
- * is still shown — adding a second one must not require a UI change.
- *
- * Marriage Hall is rendered but locked: there is no `/api/v1/admin/halls`
- * module yet, so selecting it would have nothing to show.
+ * one property exists per vertical today: pick the business (Hotel /
+ * Restaurant / Marriage Hall), then the property within it. When a vertical has
+ * a single property the property list is still shown — adding a second one must
+ * not require a UI change.
  */
 export default function BusinessSelector({ collapsed = false }: { collapsed?: boolean }) {
-  const { business, setBusiness, hotels, restaurants, activeProperty, setActivePropertyId, loading } =
+  const { business, setBusiness, hotels, restaurants, halls, activeProperty, setActivePropertyId, loading } =
     useBusiness();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -47,7 +45,9 @@ export default function BusinessSelector({ collapsed = false }: { collapsed?: bo
   }, [open]);
 
   const CurrentIcon = ICON[business];
-  const propertyCount = business === "restaurant" ? restaurants.length : hotels.length;
+  const propertiesForBusiness =
+    business === "restaurant" ? restaurants : business === "hall" ? halls : hotels;
+  const propertyCount = propertiesForBusiness.length;
 
   return (
     <div ref={rootRef} className="relative">
@@ -94,34 +94,20 @@ export default function BusinessSelector({ collapsed = false }: { collapsed?: bo
           {ORDER.map((key) => {
             const Icon = ICON[key];
             const isCurrent = key === business;
-            const isLocked = key === "hall";
             return (
               <button
                 key={key}
                 type="button"
                 role="menuitem"
-                disabled={isLocked}
                 onClick={() => {
                   setBusiness(key);
                   setOpen(false);
                 }}
-                className={cn(
-                  "flex w-full items-center gap-2.5 px-3 py-2 text-left text-base transition-colors",
-                  isLocked
-                    ? "cursor-not-allowed text-ink-400"
-                    : "text-ink-700 hover:bg-surface-muted hover:text-ink-800"
-                )}
+                className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-base text-ink-700 transition-colors hover:bg-surface-muted hover:text-ink-800"
               >
                 <Icon size={15} className="shrink-0" />
                 <span className="flex-1 truncate">{BUSINESS_LABEL[key]}</span>
-                {isLocked ? (
-                  <span className="flex items-center gap-1 text-xs text-ink-400">
-                    <Lock size={11} />
-                    Soon
-                  </span>
-                ) : (
-                  isCurrent && <Check size={14} className="text-brand-600" />
-                )}
+                {isCurrent && <Check size={14} className="text-brand-600" />}
               </button>
             );
           })}
@@ -132,7 +118,7 @@ export default function BusinessSelector({ collapsed = false }: { collapsed?: bo
               <p className="px-3 pb-1 pt-1.5 text-xs font-semibold uppercase tracking-wide text-ink-400">
                 Property
               </p>
-              {(business === "restaurant" ? restaurants : hotels).map((property) => (
+              {propertiesForBusiness.map((property) => (
                 <button
                   key={property._id}
                   type="button"

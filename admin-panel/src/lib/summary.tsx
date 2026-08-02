@@ -14,8 +14,10 @@ import { isToday } from "./format";
  * Everything comes from existing admin GET routes that `staff` can also read:
  *   GET /admin/hotels/bookings
  *   GET /admin/restaurants/reservations
+ *   GET /admin/halls/enquiries/list
  *   GET /admin/hotels/:hotelId/reviews
  *   GET /admin/restaurants/:restaurantId/reviews
+ *   GET /admin/halls/:hallId/reviews
  *
  * There is no aggregate/stats endpoint in the backend and this redesign does
  * not add one, so every figure below is computed client-side from these lists.
@@ -54,6 +56,26 @@ export interface ReservationSummary {
   createdAt?: string;
 }
 
+export interface HallEnquirySummary {
+  _id: string;
+  enquiryReference: string;
+  guestName: string;
+  guestEmail: string;
+  guestPhone?: string;
+  eventDate: string;
+  alternateDate?: string | null;
+  eventType: string;
+  guestCount: number;
+  packageName?: string;
+  decorationThemeName?: string;
+  cateringPreference?: string;
+  budgetRange?: string;
+  specialRequirements?: string;
+  status: string;
+  adminNotes?: string;
+  createdAt?: string;
+}
+
 export interface ReviewSummaryItem {
   _id: string;
   guestName?: string;
@@ -64,7 +86,7 @@ export interface ReviewSummaryItem {
   adminReply?: string;
   createdAt: string;
   /** Added client-side so the cross-vertical Reviews page can label each row. */
-  source?: "hotel" | "restaurant";
+  source?: "hotel" | "restaurant" | "hall";
   ownerId?: string;
 }
 
@@ -76,13 +98,16 @@ export interface ContentTotals {
   rooms: number;
   menuItems: number;
   diningAreas: number;
+  packages: number;
 }
 
 interface SummaryContextValue {
   bookings: HotelBookingSummary[];
   reservations: ReservationSummary[];
+  hallEnquiries: HallEnquirySummary[];
   hotelReviews: ReviewSummaryItem[];
   restaurantReviews: ReviewSummaryItem[];
+  hallReviews: ReviewSummaryItem[];
   content: ContentTotals;
 
   loading: boolean;
@@ -95,6 +120,8 @@ interface SummaryContextValue {
     todaysReservations: number;
     pendingBookings: number;
     pendingReservationApprovals: number;
+    pendingEnquiries: number;
+    upcomingHallEvents: number;
     pendingReviews: number;
     confirmedRevenue: number;
     monthRevenue: number;
@@ -117,6 +144,13 @@ interface RestaurantAggregate {
   diningAreas?: unknown[];
 }
 
+interface HallAggregate {
+  gallery?: unknown[];
+  offers?: unknown[];
+  faqs?: unknown[];
+  packages?: unknown[];
+}
+
 const EMPTY_CONTENT: ContentTotals = {
   gallery: 0,
   offers: 0,
@@ -124,6 +158,7 @@ const EMPTY_CONTENT: ContentTotals = {
   rooms: 0,
   menuItems: 0,
   diningAreas: 0,
+  packages: 0,
 };
 
 const SummaryContext = createContext<SummaryContextValue | null>(null);
@@ -139,12 +174,14 @@ const REVENUE_STATUSES = new Set(["confirmed", "checked_in", "checked_out", "com
 
 export function SummaryProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, ready: sessionReady } = useAdminSession();
-  const { hotels, restaurants, loading: propertiesLoading } = useBusiness();
+  const { hotels, restaurants, halls, loading: propertiesLoading } = useBusiness();
 
   const [bookings, setBookings] = useState<HotelBookingSummary[]>([]);
   const [reservations, setReservations] = useState<ReservationSummary[]>([]);
+  const [hallEnquiries, setHallEnquiries] = useState<HallEnquirySummary[]>([]);
   const [hotelReviews, setHotelReviews] = useState<ReviewSummaryItem[]>([]);
   const [restaurantReviews, setRestaurantReviews] = useState<ReviewSummaryItem[]>([]);
+  const [hallReviews, setHallReviews] = useState<ReviewSummaryItem[]>([]);
   const [content, setContent] = useState<ContentTotals>(EMPTY_CONTENT);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -154,6 +191,8 @@ export function SummaryProvider({ children }: { children: React.ReactNode }) {
   const restaurantIds = useMemo(() => restaurants.map((r) => r._id).join(","), [restaurants]);
   const hotelSlugs = useMemo(() => hotels.map((h) => h.slug).join(","), [hotels]);
   const restaurantSlugs = useMemo(() => restaurants.map((r) => r.slug).join(","), [restaurants]);
+  const hallIds = useMemo(() => halls.map((h) => h._id).join(","), [halls]);
+  const hallSlugs = useMemo(() => halls.map((h) => h.slug).join(","), [halls]);
 
   useEffect(() => {
     if (!sessionReady) return;
@@ -172,17 +211,23 @@ export function SummaryProvider({ children }: { children: React.ReactNode }) {
       const restaurantIdList = restaurantIds ? restaurantIds.split(",") : [];
       const hotelSlugList = hotelSlugs ? hotelSlugs.split(",") : [];
       const restaurantSlugList = restaurantSlugs ? restaurantSlugs.split(",") : [];
+      const hallIdList = hallIds ? hallIds.split(",") : [];
+      const hallSlugList = hallSlugs ? hallSlugs.split(",") : [];
 
       const [
         bookingsRes,
         reservationsRes,
+        enquiriesRes,
         hotelReviewSets,
         restaurantReviewSets,
+        hallReviewSets,
         hotelAggregates,
         restaurantAggregates,
+        hallAggregates,
       ] = await Promise.all([
           adminApi.get<HotelBookingSummary[]>("/admin/hotels/bookings"),
           adminApi.get<ReservationSummary[]>("/admin/restaurants/reservations"),
+          adminApi.get<HallEnquirySummary[]>("/admin/halls/enquiries/list"),
           Promise.all(
             hotelIdList.map((id) =>
               adminApi
@@ -201,6 +246,17 @@ export function SummaryProvider({ children }: { children: React.ReactNode }) {
                 )
             )
           ),
+          Promise.all(
+            hallIdList.map((id) =>
+              adminApi
+                .get<ReviewSummaryItem[]>(`/admin/halls/${id}/reviews`)
+                .then((r) =>
+                  r.success
+                    ? (r.data || []).map((x) => ({ ...x, source: "hall" as const, ownerId: id }))
+                    : []
+                )
+            )
+          ),
           // Public aggregates — the only endpoints that return gallery/offer/
           // FAQ/room/menu collections in one call. Used purely for the
           // dashboard's content totals.
@@ -212,6 +268,7 @@ export function SummaryProvider({ children }: { children: React.ReactNode }) {
               publicGet<RestaurantAggregate>(`/restaurants/${slug}`)
             )
           ),
+          Promise.all(hallSlugList.map((slug) => publicGet<HallAggregate>(`/halls/${slug}`))),
         ]);
 
       if (cancelled) return;
@@ -219,14 +276,16 @@ export function SummaryProvider({ children }: { children: React.ReactNode }) {
       // A staff-role admin is allowed to read all four of these, so a failure
       // here is a real problem (API down / token expired), not a permission
       // nuance we should swallow silently.
-      if (!bookingsRes.success && !reservationsRes.success) {
+      if (!bookingsRes.success && !reservationsRes.success && !enquiriesRes.success) {
         setError(bookingsRes.message || "Could not load operational data.");
       }
 
       setBookings(bookingsRes.success ? bookingsRes.data || [] : []);
       setReservations(reservationsRes.success ? reservationsRes.data || [] : []);
+      setHallEnquiries(enquiriesRes.success ? enquiriesRes.data || [] : []);
       setHotelReviews(hotelReviewSets.flat());
       setRestaurantReviews(restaurantReviewSets.flat());
+      setHallReviews(hallReviewSets.flat());
 
       const totals = { ...EMPTY_CONTENT };
       for (const res of hotelAggregates) {
@@ -244,6 +303,13 @@ export function SummaryProvider({ children }: { children: React.ReactNode }) {
         totals.menuItems += res.data.menuItems?.length ?? 0;
         totals.diningAreas += res.data.diningAreas?.length ?? 0;
       }
+      for (const res of hallAggregates) {
+        if (!res.success || !res.data) continue;
+        totals.gallery += res.data.gallery?.length ?? 0;
+        totals.offers += res.data.offers?.length ?? 0;
+        totals.faqs += res.data.faqs?.length ?? 0;
+        totals.packages += res.data.packages?.length ?? 0;
+      }
       setContent(totals);
 
       setLoading(false);
@@ -258,6 +324,8 @@ export function SummaryProvider({ children }: { children: React.ReactNode }) {
     restaurantIds,
     hotelSlugs,
     restaurantSlugs,
+    hallIds,
+    hallSlugs,
     propertiesLoading,
     reloadToken,
     isAuthenticated,
@@ -281,9 +349,18 @@ export function SummaryProvider({ children }: { children: React.ReactNode }) {
       ).length,
       pendingBookings: bookings.filter((b) => b.status === "pending").length,
       pendingReservationApprovals: reservations.filter((r) => r.status === "confirmed").length,
+      // Hall enquiries an admin has not actioned yet. `approved` is excluded —
+      // that one has been answered and is mid-conversation, not waiting.
+      pendingEnquiries: hallEnquiries.filter((e) =>
+        ["pending", "reviewing"].includes(e.status)
+      ).length,
+      upcomingHallEvents: hallEnquiries.filter(
+        (e) => e.status === "confirmed" && new Date(e.eventDate).getTime() >= Date.now()
+      ).length,
       pendingReviews:
         hotelReviews.filter((r) => !r.isApproved).length +
-        restaurantReviews.filter((r) => !r.isApproved).length,
+        restaurantReviews.filter((r) => !r.isApproved).length +
+        hallReviews.filter((r) => !r.isApproved).length,
       confirmedRevenue: revenueBookings.reduce((sum, b) => sum + (b.totalAmount || 0), 0),
       monthRevenue: revenueBookings
         .filter((b) => {
@@ -292,14 +369,16 @@ export function SummaryProvider({ children }: { children: React.ReactNode }) {
         })
         .reduce((sum, b) => sum + (b.totalAmount || 0), 0),
     };
-  }, [bookings, reservations, hotelReviews, restaurantReviews]);
+  }, [bookings, reservations, hallEnquiries, hotelReviews, restaurantReviews, hallReviews]);
 
   const value = useMemo<SummaryContextValue>(
     () => ({
       bookings,
       reservations,
+      hallEnquiries,
       hotelReviews,
       restaurantReviews,
+      hallReviews,
       content,
       loading: loading || propertiesLoading,
       error,
@@ -309,8 +388,10 @@ export function SummaryProvider({ children }: { children: React.ReactNode }) {
     [
       bookings,
       reservations,
+      hallEnquiries,
       hotelReviews,
       restaurantReviews,
+      hallReviews,
       content,
       loading,
       propertiesLoading,

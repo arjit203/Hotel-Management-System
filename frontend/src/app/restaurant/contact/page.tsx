@@ -1,12 +1,13 @@
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { Phone, Mail, MapPin, MessageCircle, CalendarCheck } from "lucide-react";
+import { CalendarCheck, Mail, MapPin, MessageCircle, Phone, UtensilsCrossed } from "lucide-react";
 import Link from "next/link";
 import { getTheRestaurant } from "@/lib/restaurant";
 import MapPlaceholder from "@/components/MapPlaceholder";
 import ContactForm from "@/components/ContactForm";
 import PageHeader from "@/components/PageHeader";
 import Reveal from "@/components/motion/Reveal";
+import PropertyUnavailable from "@/components/PropertyUnavailable";
 import TimingsTable from "@/modules/restaurant/components/TimingsTable";
 
 export const metadata: Metadata = {
@@ -17,7 +18,17 @@ export const metadata: Metadata = {
 
 export default async function RestaurantContactPage() {
   const data = await getTheRestaurant();
-  if (!data) return notFound();
+  // Not `notFound()`. The loader returns null both when the property does
+  // not exist and when the API is simply unreachable, and a 404 during a
+  // backend restart tells guests — and search engines — the page is gone.
+  if (!data) {
+    return (
+      <PropertyUnavailable
+        retryHref="/restaurant/contact"
+        icon={UtensilsCrossed}
+      />
+    );
+  }
 
   const { restaurant } = data;
   // Prefer the restaurant's own WhatsApp number, falling back to the site-wide

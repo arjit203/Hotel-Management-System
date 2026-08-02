@@ -6,6 +6,8 @@ import ReviewForm from "@/components/ReviewForm";
 import StarRating from "@/components/StarRating";
 import PageHeader from "@/components/PageHeader";
 import Reveal from "@/components/motion/Reveal";
+import { BedDouble } from "lucide-react";
+import PropertyUnavailable from "@/components/PropertyUnavailable";
 
 export const metadata: Metadata = {
   title: "Guest Reviews",
@@ -15,7 +17,17 @@ export const metadata: Metadata = {
 
 export default async function ReviewsPage() {
   const data = await getTheHotel();
-  if (!data) return notFound();
+  // Not `notFound()`. The loader returns null both when the property does
+  // not exist and when the API is simply unreachable, and a 404 during a
+  // backend restart tells guests — and search engines — the page is gone.
+  if (!data) {
+    return (
+      <PropertyUnavailable
+        retryHref="/hotel/reviews"
+        icon={BedDouble}
+      />
+    );
+  }
 
   const { hotel, reviews, reviewSummary } = data;
 

@@ -17,6 +17,11 @@ import {
   publicReservationRouter,
   adminRestaurantRouter,
 } from "./modules/restaurant/restaurant.routes";
+import {
+  publicHallRouter,
+  publicEnquiryRouter,
+  adminHallRouter,
+} from "./modules/hall/hall.routes";
 
 dotenv.config();
 
@@ -42,7 +47,14 @@ app.use("/api/v1/restaurants", publicRestaurantRouter);
 app.use("/api/v1/table-reservations", publicReservationRouter);
 app.use("/api/v1/admin/restaurants", adminRestaurantRouter);
 
-// 404 handler                          // ← NEW
+// Marriage Hall module (Phase 4) — additive. The Hotel and Restaurant mounts
+// above are unchanged and these namespaces don't overlap them, so no existing
+// route behaviour shifts.
+app.use("/api/v1/halls", publicHallRouter);
+app.use("/api/v1/hall-enquiries", publicEnquiryRouter);
+app.use("/api/v1/admin/halls", adminHallRouter);
+
+// 404 handler                        // ← NEW
 app.use((req, res) => {                 // ← NEW
   res.status(404).json({ success: false, message: "Route not found." }); // ← NEW
 });                                      // ← NEW

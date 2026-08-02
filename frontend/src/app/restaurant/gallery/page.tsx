@@ -4,6 +4,8 @@ import { getTheRestaurant } from "@/lib/restaurant";
 import GalleryGrid from "@/components/GalleryGrid";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
+import { UtensilsCrossed } from "lucide-react";
+import PropertyUnavailable from "@/components/PropertyUnavailable";
 
 export const metadata: Metadata = {
   title: "Restaurant Gallery",
@@ -13,7 +15,17 @@ export const metadata: Metadata = {
 
 export default async function RestaurantGalleryPage() {
   const data = await getTheRestaurant();
-  if (!data) return notFound();
+  // Not `notFound()`. The loader returns null both when the property does
+  // not exist and when the API is simply unreachable, and a 404 during a
+  // backend restart tells guests — and search engines — the page is gone.
+  if (!data) {
+    return (
+      <PropertyUnavailable
+        retryHref="/restaurant/gallery"
+        icon={UtensilsCrossed}
+      />
+    );
+  }
 
   return (
     <main>

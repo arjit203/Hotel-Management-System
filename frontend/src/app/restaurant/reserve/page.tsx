@@ -1,11 +1,12 @@
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { CalendarCheck, MessageCircle, Clock } from "lucide-react";
+import { CalendarCheck, Clock, MessageCircle, UtensilsCrossed } from "lucide-react";
 import { getTheRestaurant, todaysHours } from "@/lib/restaurant";
 import PageHeader from "@/components/PageHeader";
 import Reveal from "@/components/motion/Reveal";
 import ReservationForm from "@/modules/restaurant/components/ReservationForm";
 import TimingsTable from "@/modules/restaurant/components/TimingsTable";
+import PropertyUnavailable from "@/components/PropertyUnavailable";
 
 export const metadata: Metadata = {
   title: "Reserve A Table",
@@ -35,7 +36,19 @@ export default async function ReservePage({
   searchParams: { area?: string };
 }) {
   const data = await getTheRestaurant();
-  if (!data || data.diningAreas.length === 0) return notFound();
+  // An unreachable API is not a missing page. A restaurant with no dining
+  // areas configured yet genuinely has nothing to reserve, so that stays a 404.
+  if (!data) {
+    return (
+      <PropertyUnavailable
+        title="Reservations are briefly unavailable"
+        message="We can't reach our reservation system this moment. Please try again shortly, or call us and we'll hold a table for you."
+        retryHref="/restaurant/reserve"
+        icon={UtensilsCrossed}
+      />
+    );
+  }
+  if (data.diningAreas.length === 0) return notFound();
 
   const { restaurant, diningAreas } = data;
 

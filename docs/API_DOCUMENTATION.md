@@ -375,3 +375,97 @@ A party occupies `ceil(partySize / area.maxPartySize)` tables. This mirrors the 
 
 ### Environment variables
 No new variables. The module reuses `MONGODB_URI`, `JWT_SECRET`/`ADMIN_JWT_SECRET`, `SMTP_*`, `EMAIL_FROM`, `CLOUDINARY_*` and `ADMIN_NOTIFICATION_EMAIL` — all already required by the Auth and Hotel modules.
+
+---
+
+## Marriage Hall — Public
+Mounted at `/api/v1/halls`. No authentication required.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/halls` | List active venues. Optional `?branchId=`. |
+| GET | `/halls/:slug` | **The aggregate.** Returns `{ hall, packages, decorationThemes, catering, dining, floral, gallery, faqs, offers, reviewSummary, reviews }` — everything the landing page needs in one request. |
+| GET | `/halls/:slug/packages` | Package tiers only. |
+| GET | `/halls/:slug/showcase` | Showcase entries. Optional `?type=decoration\|catering\|dining\|floral` and `?category=`. |
+| GET | `/halls/:slug/showcase/:type` | One section grouped by category → `{ showcaseType, categories, entries }`. |
+| GET | `/halls/:slug/calendar` | Availability calendar. Required `?year=YYYY&month=1-12`, optional `?months=1-12`. Returns `{ from, to, days: [{ date: "YYYY-MM-DD", status }] }`. Internal block reasons are **stripped** on this route. |
+| POST | `/halls/:hallId/reviews` | Create a review. `optionalAuthenticate("user")` — guests may review. Body `{ rating 1-5, comment, guestName?, images?[≤5] }`. Starts unapproved. |
+| POST | `/halls/reviews/upload-image` | Review photo upload (multipart `image`). Public — guests review too. |
+
+`status` on a calendar day is one of `available` · `tentative` · `booked` · `blocked`.
+
+## Marriage Hall — Enquiries (Public, guest checkout supported)
+Mounted at `/api/v1/hall-enquiries`.
+
+> **These endpoints do not book anything.** Per `RULES.md` §14 a hall booking is approval-first: submitting an enquiry reserves no date and takes no payment. There is deliberately no amount, advance, Razorpay or invoice field anywhere in this group. The date is held only when an admin sets the enquiry to `confirmed`.
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/hall-enquiries` | Submit an enquiry. `optionalAuthenticate("user")`. Body `{ hallId, eventDate, alternateDate?, eventType, guestCount, packageId?, decorationThemeId?, cateringPreference?, budgetRange?, guestName, guestEmail, guestPhone, specialRequirements? }`. Returns a `7VH-XXXXXXXX` reference. |
+| GET | `/hall-enquiries/reference/:reference` | Public lookup. `adminNotes` is **excluded**. |
+| GET | `/hall-enquiries/me` | `authenticate("user")`. The signed-in user's enquiries. |
+| PUT | `/hall-enquiries/reference/:reference/cancel` | Guest withdrawal. Body `{ guestEmail?, cancellationReason? }`. Ownership is proved by matching the enquiry email or the logged-in user — never by the reference alone. |
+
+**Rejections on create:** `400` past date · `400` inside the venue's `minimumNoticeDays` window · `400` guest count above `floatingCapacity` · `409` the date is already booked or blocked.
+
+**Cancellation rules:** `409` if already cancelled, `409` if already `confirmed` (the family must call), `403` if the email doesn't match.
+
+## Marriage Hall — Admin
+Mounted at `/api/v1/admin/halls`. All routes require `authenticate("admin")`.
+
+**RBAC.** `HALL_MANAGER_ROLES = ["super_admin", "branch_admin", "hall_manager"]`. `hall_manager` is a **new role**, added additively to the Admin model's enum. Because Hotel and Restaurant list their managers explicitly as `["super_admin","branch_admin"]`, a `hall_manager` token is refused by those modules automatically — no new middleware was needed. `staff` gets the read-only additions marked below.
+
+| Method | Path | Roles |
+|---|---|---|
+| POST | `/admin/halls` | manager |
+| GET | `/admin/halls/:hallId` | manager + staff |
+| PUT | `/admin/halls/:hallId` | manager |
+| DELETE | `/admin/halls/:hallId` | manager — soft delete, **refused (409)** while open enquiries exist |
+| POST/DELETE | `/admin/halls/upload-image` | manager (multipart `image`, `?folder=`) |
+| GET | `/admin/halls/enquiries/list` | manager + staff — optional `?hallId=&status=&date=` |
+| PUT | `/admin/halls/enquiries/:enquiryId/status` | manager — body `{ status, adminNotes? }` |
+| POST | `/admin/halls/:hallId/packages` | manager |
+| GET/PUT/DELETE | `/admin/halls/packages/:packageId` | GET manager + staff; PUT/DELETE manager |
+| GET/POST | `/admin/halls/:hallId/showcase` | GET manager + staff; POST manager |
+| GET/PUT/DELETE | `/admin/halls/showcase/:showcaseId` | GET manager + staff; PUT/DELETE manager |
+| GET | `/admin/halls/:hallId/calendar` | manager + staff — same query as the public route, but **includes** block reasons |
+| PUT | `/admin/halls/:hallId/availability` | manager — body `{ date, status, reason? }` |
+| GET | `/admin/halls/:hallId/availability` | manager + staff — raw override rows |
+| POST | `/admin/halls/:hallId/gallery` · DELETE `/admin/halls/gallery/:itemId` | manager |
+| POST | `/admin/halls/:hallId/offers` · PUT/DELETE `/admin/halls/offers/:offerId` | manager |
+| POST | `/admin/halls/:hallId/faqs` · DELETE `/admin/halls/faqs/:faqId` | manager |
+| GET | `/admin/halls/:hallId/reviews` | manager + staff |
+| PUT | `/admin/halls/reviews/:reviewId/approve` · `/reply` | manager |
+| DELETE | `/admin/halls/reviews/:reviewId` · `/reviews/:reviewId/images` | manager |
+
+### Enquiry status lifecycle
+```
+pending → reviewing → approved → confirmed
+                   ↘ declined
+(any)  → cancelled                (guest-initiated withdrawal)
+```
+
+**`approved` ≠ `confirmed`, and the difference matters.** `approved` means the venue is willing and the offline conversation has started; the date stays *tentative* on the public calendar because several families can be discussing the same auspicious date. `confirmed` is the only status that writes a `booked` override onto the calendar — and moving away from `confirmed` releases it again, but only if that override was created by this enquiry (a hand-placed staff block on the same day is never silently removed).
+
+Guests are emailed on `approved`, `confirmed` and `declined` only. There is no email for `reviewing` — it means nothing to them.
+
+### Availability model
+`HallAvailability` stores **manual overrides only**, exactly as `RoomAvailability` and `TableAvailability` do. A day's public status is computed on read:
+
+```
+override (blocked/booked/tentative/available)   — always wins
+else confirmed enquiry on that date             → booked
+else pending or reviewing enquiry               → tentative
+else                                            → available
+```
+
+Setting a date back to `available` **deletes** the row rather than storing an "available" marker, so an empty collection genuinely means "nothing is held". No pre-generation job exists.
+
+### Showcase model
+Decoration themes, catering, dining and floral all live in one `HallShowcase` collection keyed by `showcaseType`, with `category` sub-grouping within each. They are the same shape — a titled, illustrated, ordered card — so four near-identical models, services and route groups were not written. Type-specific fields (`colorPalette` and `beforeImageUrl` for decoration, `sampleItems` for catering) are optional columns rather than a loose `Mixed` bag, so they stay validated.
+
+### Pricing — deliberately absent
+There is **no numeric price field anywhere in this module**. `HallPackage.priceLabel` is a free-text string defaulting to `"On request"`, because the owner has not set pricing and the eventual model may be per-plate rather than per-event. Catering carries no price at all — it is showcase content, with no cart, order or quote endpoint. Do not add one without a `RULES.md` change.
+
+### Environment variables
+No new variables. The module reuses `MONGODB_URI`, `JWT_SECRET`/`ADMIN_JWT_SECRET`, `SMTP_*`, `EMAIL_FROM`, `CLOUDINARY_*` and `ADMIN_NOTIFICATION_EMAIL`.

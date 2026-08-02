@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { getTheHotel } from "@/lib/hotel";
 import RoomSearch from "@/modules/hotel/components/RoomSearch";
 import PageHeader from "@/components/PageHeader";
+import { BedDouble } from "lucide-react";
+import PropertyUnavailable from "@/components/PropertyUnavailable";
 
 export const metadata: Metadata = {
   title: "Rooms & Suites",
@@ -13,7 +15,17 @@ export const metadata: Metadata = {
 
 export default async function RoomsListingPage() {
   const data = await getTheHotel();
-  if (!data) return notFound();
+  // Not `notFound()`. The loader returns null both when the property does
+  // not exist and when the API is simply unreachable, and a 404 during a
+  // backend restart tells guests — and search engines — the page is gone.
+  if (!data) {
+    return (
+      <PropertyUnavailable
+        retryHref="/hotel/rooms"
+        icon={BedDouble}
+      />
+    );
+  }
 
   return (
     <main>

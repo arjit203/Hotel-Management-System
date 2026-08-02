@@ -1,7 +1,7 @@
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { Users, ArrowRight, ArrowLeft } from "lucide-react";
+import { ArrowLeft, ArrowRight, BedDouble, Users } from "lucide-react";
 import { getAmenityIcon } from "@/lib/amenityIcons";
 import { getTheHotelRoom, getTheHotel } from "@/lib/hotel";
 import MediaGallery from "@/components/MediaGallery";
@@ -12,6 +12,7 @@ import Breadcrumbs from "@/components/Breadcrumbs";
 import Reveal from "@/components/motion/Reveal";
 import TextReveal from "@/components/motion/TextReveal";
 import { Stagger, StaggerItem } from "@/components/motion/Stagger";
+import PropertyUnavailable from "@/components/PropertyUnavailable";
 
 export async function generateMetadata({
   params,
@@ -33,7 +34,16 @@ export async function generateMetadata({
 
 export default async function RoomDetailsPage({ params }: { params: { roomSlug: string } }) {
   const data = await getTheHotelRoom(params.roomSlug);
-  if (!data) return notFound();
+  // The hotel-level fetch failing means the API is unreachable, not that this
+  // room is missing — the roomSlug check below is the real 404.
+  if (!data) {
+    return (
+      <PropertyUnavailable
+        retryHref={`/hotel/rooms/${params.roomSlug}`}
+        icon={BedDouble}
+      />
+    );
+  }
 
   const { hotel, room } = data;
 
