@@ -1,12 +1,15 @@
 "use client";
 
-import { createContext, useCallback, useContext, useState } from "react";
-import { AlertTriangle } from "lucide-react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { AlertTriangle, HelpCircle } from "lucide-react";
+import Button from "./Button";
+import { cn } from "@/lib/cn";
 
 interface ConfirmOptions {
   title: string;
   description?: string;
   confirmLabel?: string;
+  cancelLabel?: string;
   danger?: boolean;
 }
 
@@ -16,6 +19,11 @@ interface ConfirmContextValue {
 
 const ConfirmContext = createContext<ConfirmContextValue | null>(null);
 
+/**
+ * Replaces window.confirm() everywhere in the admin panel. Returns a promise so
+ * call-sites keep the same `if (!(await confirm(...))) return;` shape that the
+ * old native dialogs had.
+ */
 export function useConfirm() {
   const ctx = useContext(ConfirmContext);
   if (!ctx) throw new Error("useConfirm must be used within ConfirmProvider");
@@ -27,56 +35,82 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
     options: ConfirmOptions;
     resolve: (value: boolean) => void;
   } | null>(null);
+  const confirmButtonRef = useRef<HTMLButtonElement>(null);
 
   const confirm = useCallback((options: ConfirmOptions): Promise<boolean> => {
-    return new Promise((resolve) => {
-      setState({ options, resolve });
-    });
+    return new Promise((resolve) => setState({ options, resolve }));
   }, []);
 
-  function handleClose(result: boolean) {
-    state?.resolve(result);
-    setState(null);
-  }
+  const handleClose = useCallback(
+    (result: boolean) => {
+      setState((current) => {
+        current?.resolve(result);
+        return null;
+      });
+    },
+    []
+  );
+
+  // Escape cancels; focus lands on the confirm button so Enter completes the
+  // action without reaching for the mouse.
+  useEffect(() => {
+    if (!state) return;
+    confirmButtonRef.current?.focus();
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") handleClose(false);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [state, handleClose]);
 
   return (
     <ConfirmContext.Provider value={{ confirm }}>
       {children}
       {state && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-charcoal/50 px-6 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
-            <div className="flex items-start gap-3">
+        <div
+          className="fixed inset-0 z-modal flex animate-fade-in items-center justify-center bg-ink-900/40 p-4 backdrop-blur-[2px]"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) handleClose(false);
+          }}
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="confirm-title"
+            className="w-full max-w-md animate-scale-in rounded-xl border border-line bg-white shadow-xl"
+          >
+            <div className="flex gap-3.5 p-5">
               <div
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
-                  state.options.danger ? "bg-red-100 text-red-600" : "bg-beige text-gold"
-                }`}
+                className={cn(
+                  "flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
+                  state.options.danger
+                    ? "bg-danger-50 text-danger-600"
+                    : "bg-brand-50 text-brand-600"
+                )}
               >
-                <AlertTriangle size={18} />
+                {state.options.danger ? <AlertTriangle size={19} /> : <HelpCircle size={19} />}
               </div>
-              <div>
-                <h3 className="font-display text-lg text-charcoal">{state.options.title}</h3>
+              <div className="min-w-0 pt-0.5">
+                <h2 id="confirm-title" className="text-md font-semibold text-ink-800">
+                  {state.options.title}
+                </h2>
                 {state.options.description && (
-                  <p className="mt-1 font-body text-sm text-warmgray">
-                    {state.options.description}
-                  </p>
+                  <p className="mt-1 text-base text-ink-600">{state.options.description}</p>
                 )}
               </div>
             </div>
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={() => handleClose(false)}
-                className="rounded-full border border-beige px-5 py-2 font-body text-sm text-warmgray hover:border-gold hover:text-gold"
-              >
-                Cancel
-              </button>
-              <button
+            <div className="card-footer rounded-b-xl">
+              <Button variant="secondary" onClick={() => handleClose(false)}>
+                {state.options.cancelLabel || "Cancel"}
+              </Button>
+              <Button
+                ref={confirmButtonRef}
+                variant={state.options.danger ? "danger" : "primary"}
                 onClick={() => handleClose(true)}
-                className={`rounded-full px-5 py-2 font-body text-sm text-white ${
-                  state.options.danger ? "bg-red-600 hover:bg-red-700" : "bg-charcoal hover:bg-gold"
-                }`}
               >
                 {state.options.confirmLabel || "Confirm"}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

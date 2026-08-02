@@ -27,10 +27,10 @@ Unified booking + management platform for Hotel, Marriage Hall, and Restaurant u
 | **Hotel (listing, details, rooms, availability, booking, admin management)** | ✅ Complete |
 | Shared Content module (Reviews/Gallery/FAQs/Offers — polymorphic, reused by Hotel now, Hall/Restaurant later) | ✅ Complete (backing Hotel; not yet consumed by other verticals) |
 | Marriage Hall | ⬜ Not started |
-| **Restaurant (backend: menu, dining areas, table availability, instant reservations)** | ✅ Backend complete — frontend not started |
+| **Restaurant (backend: menu, dining areas, table availability, instant reservations)** | ✅ Backend complete — public frontend complete |
 | Booking Engine (shared conflict/locking hardening) | ⬜ Not started — see Known Limitations below |
 | Payments | ⬜ Not started |
-| Admin Panel UI (frontend for Hotel Management) | ⬜ Not started — backend admin APIs exist; admin-panel frontend pages not yet built |
+| **Admin Console UI (Hotel + Restaurant, shared Admin Design System)** | ✅ Built — see §7. Awaiting a manual click-through of the write paths |
 
 ---
 
@@ -219,8 +219,116 @@ See `API_DOCUMENTATION.md`.
   category → menu items → dining areas → availability grid → reserve → overbook
   rejection → cancel → tables released → admin override → delete guards, followed
   by full cleanup. See CHANGELOG for the result table.
-- **No Restaurant admin-panel UI** — the admin APIs exist; the `admin-panel` pages
-  do not. Same position the Hotel module was in after its backend phase.
-- **Restaurant frontend not started.**
+- ~~**No Restaurant admin-panel UI**~~ — resolved 2026-08-03; see §7.
+
+---
+
+## 7. Module: Admin Console (`admin-panel/`)
+
+### Purpose
+The back-office UI for staff. It is a **productivity tool**, not a brand surface:
+speed, density and readability come before decoration. It never touches MongoDB
+— every screen calls `/api/v1` like any other client.
+
+### Design system — separate from the public site, on purpose
+`docs/DESIGN_SYSTEM.md` (ink / gold / cream, display serif, luxury hospitality)
+governs `frontend/` **only**. The console uses its own neutral SaaS token set in
+`admin-panel/tailwind.config.js` — white cards on light grey, one indigo accent,
+semantic status colours, system font stack, 12px type floor.
+
+**Do not cross-import between the two.** Both config files carry a header
+comment saying so. The reason the rule needs stating: the panel previously
+contained copies of the public site's `Toast` and `ConfirmDialog` that referenced
+`charcoal` / `gold` / `beige` / `font-body` — classes the admin Tailwind config
+never defined, so they would have rendered unstyled. Those components have been
+rewritten against the admin tokens.
+
+Shared component classes live in `admin-panel/src/app/globals.css`
+(`.btn-*`, `.card*`, `.input`, `.dt`, `.badge-*`, `.nav-item*`, `.tab*`,
+`.skeleton`, `.page-shell`). Compose from these; don't re-declare padding,
+border and colour per page.
+
+### Design Decisions
+- **`RequireAdmin` is the gate *and* the shell.** Its import contract is
+  unchanged — every page still wraps itself in it — so no page had to be
+  restructured. What changed is what it renders.
+- **Providers live in the root layout, not in `RequireAdmin`.** Each page mounts
+  its own `RequireAdmin`, so providers placed there would remount and refetch on
+  every navigation. `AdminSessionProvider` gates the data providers so `/login`
+  issues no authenticated requests.
+- **`SummaryProvider` is the session-level operational cache.** Bookings,
+  reservations, reviews and content totals load once and back the Dashboard,
+  notification tray, Bookings, Reservations, Customers, Reviews and Analytics.
+  Every figure in the console is computed from these lists — **there is no
+  analytics, stats or notifications endpoint in this backend and none was
+  added.**
+- **`DataTable` searches, sorts and pages client-side.** Every admin list route
+  returns a complete array; there is no `?page=` to hook into. If one ever gains
+  server pagination, replace the `pageRows` memo with props.
+- **Content managers are written once for both verticals.** `GalleryManager`,
+  `OffersManager`, `FaqManager` and `ReviewsManager` take `/admin/hotels` or
+  `/admin/restaurants` as a base path, mirroring the polymorphic content module
+  server-side. `ReviewsManager` hides per-image removal for Restaurant because
+  only Hotel exposes `DELETE /reviews/:id/images`.
+- **The business selector is two-level** (vertical, then property) even though
+  each vertical has one property today — matching the multi-tenant mandate.
+  Marriage Hall is rendered but locked; there is no `/api/v1/admin/halls`.
+- **The console is `noindex`.** Opposite of the public site's SEO requirement,
+  and deliberate: these pages sit behind auth.
+- **Authorization is never re-implemented client-side.** `RequireAdmin` and any
+  hidden control are UX only; the API re-checks `authenticate("admin")` +
+  `requireRole(...)` on every request.
+
+### Dependencies
+No new npm packages. Uses what `admin-panel/package.json` already had:
+`next`, `react`, `lucide-react`, `recharts`. `axios`, `react-hook-form`, `zod`,
+`@hookform/resolvers` and `react-table` remain declared but unused by these
+pages (forms are controlled React; the table is the in-house `DataTable`).
+
+### Environment Variables Added
+| Var | Purpose | Example |
+|---|---|---|
+| `NEXT_PUBLIC_FRONTEND_URL` | Public site origin, used only for "View public page" links. Optional. | `http://localhost:3000` |
+
+Existing: `NEXT_PUBLIC_API_BASE_URL` (defaults to `http://localhost:5000/api/v1`).
+
+### Folder Locations
+- `admin-panel/src/app/` — routes (20). Hotel: `/hotels`, `/hotels/[hotelId]`,
+  `/hotels/[hotelId]/rooms/[roomId]`, `/bookings`. Restaurant: `/restaurants`,
+  `/restaurants/[restaurantId]`,
+  `/restaurants/[restaurantId]/dining-areas/[areaId]`, `/reservations`.
+  Cross-vertical: `/`, `/customers`, `/gallery`, `/reviews`, `/offers`, `/faqs`,
+  `/analytics`, `/users`, `/settings`, `/halls`, `/login`.
+- `admin-panel/src/components/ui/` — design-system primitives
+- `admin-panel/src/components/layout/` — sidebar, topbar, business selector,
+  command palette, navigation definition
+- `admin-panel/src/components/content/` — the four shared content managers
+- `admin-panel/src/components/restaurant/` — menu categories, dishes, dining areas
+- `admin-panel/src/lib/` — `api`, `adminSession`, `businessContext`, `summary`,
+  `shellUi`, `useActiveContent`, `format`, `cn`
+
+### Full Endpoint List
+None. The console adds no endpoints — see `API_DOCUMENTATION.md` for the routes
+it consumes.
+
+### Known Limitations (by design, not gaps)
+- **SEO meta fields cannot be pre-filled when editing** a hotel or restaurant.
+  The public aggregates don't return `metaTitle` / `metaDescription`, so both
+  forms start blank and only send those fields when filled. Unchanged from the
+  previous panel; fixing it needs an admin read route.
+- **Offers list shows currently-valid offers only** — `getActiveOffers` filters
+  by date server-side, so expired offers exist but cannot be listed or edited.
+- **FAQs cannot be edited**, only created and deleted — there is no FAQ update
+  route.
+- **Bulk actions loop client-side**, one request per record; no batch endpoint
+  exists. Partial failures are counted and reported.
+- **`/customers` is derived from bookings and reservations**, not from user
+  records. No admin route lists users, and guest checkout means most customers
+  never register.
+- **`/users` cannot create or edit admins.** No signup route, no admin-list
+  route — accounts are provisioned by the seeder.
+- **Write paths are not yet verified by execution.** Build, types and live
+  payload shapes were checked; a manual click-through of create / edit / delete /
+  upload / status-change is still outstanding.
 
 ---

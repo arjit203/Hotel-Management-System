@@ -33,17 +33,23 @@ export function setStoredAdmin(admin: { name: string; email: string; role: strin
 async function request<T>(path: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
   const token = getToken();
 
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
-    },
-    cache: "no-store",
-  });
-
-  const json = await res.json();
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options.headers || {}),
+      },
+      cache: "no-store",
+    });
+  } catch {
+    // A dead backend used to reject this promise, which surfaced as an
+    // unhandled error inside whichever page was loading. Returning the standard
+    // envelope instead lets pages render their normal error state.
+    return { success: false, message: "Cannot reach the API. Is the backend running?" };
+  }
 
   // Global handling: an expired/invalid admin token should bounce to login.
   if (res.status === 401 && typeof window !== "undefined") {
@@ -53,7 +59,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<ApiR
     }
   }
 
-  return json as ApiResponse<T>;
+  try {
+    return (await res.json()) as ApiResponse<T>;
+  } catch {
+    return { success: false, message: `Unexpected response from the server (${res.status}).` };
+  }
 }
 
 export const adminApi = {
@@ -88,11 +98,30 @@ export async function uploadImage(
   file: File,
   folder: string
 ): Promise<ApiResponse<{ url: string; publicId: string }>> {
+  return uploadTo("/admin/hotels/upload-image", file, folder);
+}
+
+// Restaurant media goes through the Restaurant module's own upload route, which
+// is guarded by RESTAURANT_MANAGER_ROLES and files into `7vachan/restaurant/*`
+// on Cloudinary. Same request shape and same `{ url, publicId }` response as the
+// hotel route — only the endpoint differs, so both share uploadTo() below.
+export async function uploadRestaurantImage(
+  file: File,
+  folder: string
+): Promise<ApiResponse<{ url: string; publicId: string }>> {
+  return uploadTo("/admin/restaurants/upload-image", file, folder);
+}
+
+async function uploadTo(
+  path: string,
+  file: File,
+  folder: string
+): Promise<ApiResponse<{ url: string; publicId: string }>> {
   const token = getToken();
   const formData = new FormData();
   formData.append("image", file);
 
-  const res = await fetch(`${API_BASE_URL}/admin/hotels/upload-image?folder=${folder}`, {
+  const res = await fetch(`${API_BASE_URL}${path}?folder=${encodeURIComponent(folder)}`, {
     method: "POST",
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -100,5 +129,30 @@ export async function uploadImage(
     body: formData,
   });
 
+  // Mirror request()'s global 401 handling so an expired token during an upload
+  // bounces to /login instead of silently failing.
+  if (res.status === 401 && typeof window !== "undefined") {
+    clearToken();
+    if (window.location.pathname !== "/login") window.location.href = "/login";
+  }
+
   return (await res.json()) as ApiResponse<{ url: string; publicId: string }>;
+}
+
+/**
+ * Unauthenticated GET against a public endpoint.
+ *
+ * Several admin screens read from the public `/hotels` and `/restaurants`
+ * routes because those are the only endpoints that return the full aggregate
+ * (rooms + gallery + offers + FAQs in one call). Behaviour is unchanged from
+ * the raw `fetch` calls the pages used before — this just centralises the base
+ * URL and the no-store cache policy.
+ */
+export async function publicGet<T>(path: string): Promise<ApiResponse<T>> {
+  try {
+    const res = await fetch(`${API_BASE_URL}${path}`, { cache: "no-store" });
+    return (await res.json()) as ApiResponse<T>;
+  } catch {
+    return { success: false, message: "Cannot reach the API. Is the backend running?" };
+  }
 }

@@ -4,6 +4,99 @@ Format: newest entries on top. Categories: Added / Changed / Fixed / Security / 
 
 ---
 
+## [2026-08-03] — Phase 5.0: Admin Console — full UI/UX redesign + Restaurant Admin
+
+**Frontend-only, admin-panel-only.** No backend file, model, service, controller, route, validation schema, RBAC rule, auth flow, database schema or business rule was touched. `git diff` over `backend/`, `frontend/`, `database/` and `deployment/` is empty. Every screen calls the API endpoints that already existed.
+
+Two things happened together, because the second could not be described as a redesign without the first being true:
+
+1. The Hotel Admin was rebuilt on a proper Admin Design System.
+2. **The Restaurant Admin was built.** It did not exist — `admin-panel/src` contained only Login, Dashboard, Hotels, Hotel detail, Room detail and Bookings. The Restaurant backend (`/api/v1/admin/restaurants`) had been complete since Phase 4.0 with zero UI consuming it.
+
+### Added — Admin Design System
+- **`admin-panel/tailwind.config.js`** — a neutral SaaS token set: `surface` / `line` / `ink` neutral ramps, an indigo `brand` accent, semantic `success` / `warning` / `danger` / `info`, a 12px type floor, soft shadow scale, named z-index layers and four motion primitives.
+  **This is deliberately NOT the public site's palette.** `docs/DESIGN_SYSTEM.md` (ink / gold / cream, display serif, luxury hospitality) governs `frontend/` and is unchanged. An admin console is a productivity tool, so it follows Stripe / Linear / Vercel conventions instead. The two systems must not be cross-imported; both config files now say so in a header comment.
+- **`admin-panel/src/app/globals.css`** — the component layer every page composes from: `.btn-*`, `.card*`, `.input` / `.field-*`, `.dt` (data table), `.badge-*`, `.nav-item*`, `.tab*`, `.skeleton`, `.page-shell`. Includes a global focus-visible ring and a `prefers-reduced-motion` block.
+
+### Added — UI primitives (`admin-panel/src/components/ui/`)
+`Button`, `Field` (TextInput / TextArea / Select / Toggle / Checkbox), `Modal` + `Drawer`, `Tabs` + `SegmentedControl`, `Accordion`, `Dropdown` (row action menus), `DataTable`, `ImageUploader`, `StatCard`, `PageHeader` + `Breadcrumbs`, `Lightbox`, `States` (skeletons / empty / error).
+
+- **`DataTable`** is the single table used everywhere: search, multi-column sort, pagination, checkbox selection with a bulk-action bar, per-row action menu, per-column responsive hiding, and its own loading / empty / error / no-search-match states. Search, sort and paging are **client-side by design** — every admin list endpoint in this backend returns a complete array and there is no `?page=` to hook into. Noted in the component so nobody "fixes" it blindly.
+- **`ImageUploader`** replaces the old `<input type="file">` + `file / camera / URL` radio group. Drag & drop, multi-select, device camera, paste-a-URL, thumbnail previews, per-file progress bars, reorder, set-cover and delete. It still emits a plain `string[]` of Cloudinary `secure_url`s, because that is exactly what the models store — the upload contract did not change.
+- **`Toast`** and **`ConfirmDialog`** were rewritten. The previous versions referenced Tailwind classes (`charcoal`, `gold`, `beige`, `font-body`) that **did not exist in the admin panel's config** (`theme.extend` was empty) — they were unused copies of public-site components and would have rendered unstyled. Every `alert()` and `window.confirm()` in the panel now routes through them.
+
+### Added — Application shell
+- **Permanent collapsible left sidebar** with the agreed structure: Dashboard · Business (Hotel / Restaurant / Marriage Hall) · Operations (Bookings, Customers) · Content (Gallery, Reviews, Offers, FAQs) · Workspace (Analytics, Users, Settings). Collapses to a 64px icon rail; becomes an off-canvas drawer below `lg`. Collapse state persists.
+- **Sticky top header** — global search, data refresh, public-site link, notification tray, profile dropdown.
+- **Business selector** — two levels: vertical (Hotel / Restaurant) then property within it. Marriage Hall is rendered but locked, because no `/api/v1/admin/halls` module exists. The property level exists even with one property per vertical so a second one needs no UI change.
+- **Command palette (Ctrl/⌘-K)** — jumps to any page, property, booking reference or reservation reference. Issues no requests; it filters data the session already holds.
+- **Notification tray** — derived from real state (bookings awaiting payment, reviews awaiting moderation, today's check-ins, today's covers). Each entry deep-links to the filtered list. There is no notifications endpoint and none was invented.
+- **`Bookings` is business-aware** — points at `/bookings` for Hotel and `/reservations` for Restaurant, labelled to match. Both routes always exist and can be linked directly.
+
+### Added — Restaurant Admin (new)
+- **`/restaurants`** — property list with create.
+- **`/restaurants/[restaurantId]`** — tabbed workspace: Overview · Categories · Menu · Dining areas · Gallery · Offers · FAQs · Reviews.
+- **`/restaurants/[restaurantId]/dining-areas/[areaId]`** — details · photos · table-availability overrides.
+- **`/reservations`** — the reservation book: status filters, date-window filters, dining-area filter, bulk seat / complete / no-show / cancel, and a detail drawer showing occasion and special requests.
+- Menu management covers categories (with per-category dish counts, so a delete the API would reject with a 409 is explained up front) and dishes (veg/non-veg/egg marker, spice level, chef's special, today's special, availability toggle, tags, photo, duplicate-as-new).
+- The dining-area availability form exposes the "omit the time slot to block the whole day" contract explicitly rather than leaving it implicit.
+
+### Added — Cross-vertical pages
+`/customers`, `/analytics`, `/gallery`, `/reviews`, `/offers`, `/faqs`, `/users`, `/settings`, `/halls`.
+
+- **`/customers` is derived, not fetched.** There is no admin route that lists users, and guest checkout means most customers never register. The directory is assembled from bookings and reservations keyed on guest email — the same identity the backend's ownership checks use. The page says so on its face rather than implying a CRM exists.
+- **`/analytics`** — revenue trend, volume, booking-status mix and covers-by-area, computed client-side with `recharts` (already a dependency). There is no reporting endpoint; if these lists ever outgrow client-side aggregation the fix is a server-side route, which the page notes.
+- **`/users`** shows the signed-in account from `GET /auth/admin/me` and documents the three roles. It **cannot** create or edit admins — there is no signup route and no admin-list route, by design. Stated plainly instead of shipping a dead form.
+- **`/halls`** is an honest placeholder that records how Hall bookings must differ from Hotel (approval before payment, reuse the polymorphic content module).
+
+### Changed — existing pages
+- **Dashboard** — from two inline-styled links to summary tiles (today's check-ins, today's reservations, awaiting payment, reviews to moderate, confirmed revenue, month revenue, live offers, gallery images), business cards and four live activity lists.
+- **`/hotels`** — data table with search, sort and row actions, replacing the inline stacked create form.
+- **`/hotels/[hotelId]`** — was a single 1,003-line page rendering the property form, rooms, offers, gallery, FAQs and reviews all at once. Now a tabbed workspace over the **same endpoints**, with property counters. Gallery / Offers / FAQs / Reviews moved into shared managers.
+- **`/hotels/[hotelId]/rooms/[roomId]`** — split into Details · Photos · Availability, so the availability tool is no longer below a long form.
+- **`/bookings`** — filters (status + date window), stat tiles, bulk check-in / check-out / complete / cancel, and a detail drawer. Status changes still go through `PUT /admin/hotels/bookings/:id/status` only.
+- **`/login`** — two-column sign-in with inline validation and a show-password toggle. Same `POST /auth/admin/login` call and same token storage.
+- **`RequireAdmin`** keeps its exact import contract (every page still wraps itself in it) but now renders the shell instead of a bare header. Providers moved to the root layout so they are not remounted — and refetched — on every navigation.
+
+### Changed — shared content managers
+`GalleryManager`, `OffersManager`, `FaqManager` and `ReviewsManager` (`admin-panel/src/components/content/`) are written once and used by both verticals, taking `/admin/hotels` or `/admin/restaurants` as a base path. This mirrors the backend's polymorphic content module rather than forking per vertical — the same rule `RULES.md` applies server-side.
+
+`ReviewsManager` hides the per-image remove control for Restaurant, because only the Hotel module exposes `DELETE /reviews/:id/images`. Rendering a button that would 404 was the alternative.
+
+### Changed — `admin-panel/src/lib/api.ts` (additive)
+- `uploadRestaurantImage()` added for `POST /admin/restaurants/upload-image`; `uploadImage()` now delegates to a shared `uploadTo()` helper and is otherwise unchanged. `adminApi.upload` still points at the hotel route, so existing call-sites behave identically.
+- Uploads now honour the same global 401 → `/login` bounce that `request()` already had.
+- `publicGet()` added for the public aggregate reads several admin screens depend on.
+- `request()` no longer rejects when the API is unreachable; it returns the standard `{ success: false, message }` envelope so pages render their error state instead of throwing.
+
+### Fixed
+- `alert()` / `window.confirm()` are gone from the admin panel — every success, failure and destructive confirmation now uses the toast and dialog system, with per-field validation errors from `formatApiError()` shown as a second line rather than one blob.
+- Deleting a room, hotel, review or gallery image no longer relies on a native browser dialog whose text could not explain the backend's guard rules.
+
+### Security
+- No change to authentication, authorization or RBAC. `RequireAdmin` remains **UX only**; every request is re-authorised server-side by `authenticate("admin")` + `requireRole(...)`. The `/users` page documents the role model but cannot alter it.
+- The admin console is marked `robots: { index: false, follow: false }` in the root layout. This is the opposite of the public site's SEO requirement and is intentional — admin pages sit behind auth and must never be indexed.
+- No new dependency was added. No secret is read or printed client-side.
+
+### Environment
+- `NEXT_PUBLIC_FRONTEND_URL` (optional, new) — public site origin, used only by the "View public page" links. Falls back to `http://localhost:3000`. Documented in `admin-panel/.env.example`.
+
+### Verification — what was actually exercised
+- `npx tsc --noEmit` in `admin-panel` → **0 errors**.
+- `npx next build` → **succeeds, 20 routes** (16 static, 4 dynamic). Three pages (`/bookings`, `/reservations`, `/reviews`) needed a `Suspense` boundary around `useSearchParams()` to prerender; added with skeleton fallbacks.
+- `git diff --stat -- backend database frontend deployment` → **empty**, confirming the no-backend-change constraint.
+- Live-payload field verification against the running API — every field the new screens read was confirmed present in the real responses: hotel aggregate (`hotel`, `rooms` incl. `maxOccupancy` / `totalRooms` / `images`, `gallery`, `faqs`, `offers`), restaurant aggregate (`restaurant`, `menuCategories`, `menuItems` incl. `categoryId` / `foodType` / `isChefSpecial` / `isTodaysSpecial` / `isAvailable` / `tags`, `diningAreas` incl. `areaType` / `totalTables` / `maxPartySize` / `minPartySize` / `features`, `gallery`, `faqs`, `offers`), and `reservationSlots` / `reservationDurationMinutes` / `maxPartySize` / `averageCostForTwo` / `cuisineTypes`.
+- **Not done: no browser-driven click-through of the authenticated screens.** Browser tooling was unavailable in this session and no admin credentials were used, so every write path (create / edit / delete / upload / status change) is verified by build, types and endpoint-shape review — **not by execution**. `TESTING_GUIDE.md` does not exist in this repo and `jest` has no tests or config, so per `AI_INSTRUCTIONS.md` §16 a manual test script is supplied in the handover instead. Sign the redesign off only after running it.
+
+### Known limitations carried forward (not introduced here)
+- **SEO meta fields can't be pre-filled on edit.** The public aggregates don't return `metaTitle` / `metaDescription`, so both property forms start blank and only send those fields when filled. Identical to the previous behaviour; fixing it needs an admin read route.
+- **Offers list shows current offers only.** `contentService.getActiveOffers` filters by date server-side, so expired offers exist in the database but cannot be listed or edited. The empty state says so.
+- **FAQs have no update route** — editing means delete and re-add. The form says so instead of offering an Edit action that would 404.
+- **Bulk actions loop client-side**, one request per record, because no batch endpoint exists. Partial failures are counted and reported.
+- The **booking / reservation double-book race** is untouched and still belongs to the shared Booking Engine item.
+
+---
+
 ## [2026-08-02 (c)] — Phase 4.0: Restaurant module — backend
 
 **Hotel module untouched.** No Hotel model, service, controller, route, API contract, payment or auth code was modified. `server.ts` gained three additive `app.use` mounts on non-overlapping namespaces; `email.util.ts` gained two additive exports. Everything else is new files under `backend/src/modules/restaurant/`.

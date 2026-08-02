@@ -1,17 +1,24 @@
 "use client";
 
-import { createContext, useCallback, useContext, useState } from "react";
-import { CheckCircle2, XCircle, Info, X } from "lucide-react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { CheckCircle2, XCircle, Info, AlertTriangle, X } from "lucide-react";
+import { cn } from "@/lib/cn";
 
-type ToastType = "success" | "error" | "info";
+type ToastType = "success" | "error" | "info" | "warning";
+
 interface ToastItem {
   id: string;
   type: ToastType;
-  message: string;
+  title: string;
+  /** Optional second line — used for the multi-line field errors formatApiError returns. */
+  detail?: string;
 }
 
 interface ToastContextValue {
   showToast: (message: string, type?: ToastType) => void;
+  /** Convenience wrappers so call-sites read well. */
+  toastSuccess: (message: string) => void;
+  toastError: (message: string) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -22,45 +29,87 @@ export function useToast() {
   return ctx;
 }
 
-const ICONS: Record<ToastType, any> = {
+const ICONS: Record<ToastType, typeof CheckCircle2> = {
   success: CheckCircle2,
   error: XCircle,
+  warning: AlertTriangle,
   info: Info,
 };
 
-const STYLES: Record<ToastType, string> = {
-  success: "bg-charcoal text-cream border-gold/40",
-  error: "bg-red-600 text-white border-red-500",
-  info: "bg-charcoal text-cream border-white/20",
+const ICON_TONE: Record<ToastType, string> = {
+  success: "text-success-600",
+  error: "text-danger-600",
+  warning: "text-warning-600",
+  info: "text-info-600",
 };
+
+const AUTO_DISMISS_MS = 5000;
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
-  const showToast = useCallback((message: string, type: ToastType = "info") => {
-    const id = Math.random().toString(36).slice(2);
-    setToasts((prev) => [...prev, { id, type, message }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4000);
+  const dismiss = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+    const timer = timers.current[id];
+    if (timer) {
+      clearTimeout(timer);
+      delete timers.current[id];
+    }
   }, []);
 
-  const dismiss = (id: string) => setToasts((prev) => prev.filter((t) => t.id !== id));
+  const showToast = useCallback(
+    (message: string, type: ToastType = "info") => {
+      // formatApiError() joins per-field validation errors with "\n" — show the
+      // first line as the title and the rest as detail rather than one blob.
+      const [title, ...rest] = message.split("\n");
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+      setToasts((prev) => [...prev, { id, type, title, detail: rest.join("\n") || undefined }]);
+      timers.current[id] = setTimeout(() => dismiss(id), AUTO_DISMISS_MS);
+    },
+    [dismiss]
+  );
+
+  const toastSuccess = useCallback((m: string) => showToast(m, "success"), [showToast]);
+  const toastError = useCallback((m: string) => showToast(m, "error"), [showToast]);
+
+  // Clear pending timers if the provider unmounts (e.g. logout → login page).
+  useEffect(() => {
+    const pending = timers.current;
+    return () => {
+      Object.values(pending).forEach(clearTimeout);
+    };
+  }, []);
 
   return (
-    <ToastContext.Provider value={{ showToast }}>
+    <ToastContext.Provider value={{ showToast, toastSuccess, toastError }}>
       {children}
-      <div className="pointer-events-none fixed bottom-6 right-6 z-[100] flex flex-col gap-2">
+      <div
+        aria-live="polite"
+        aria-atomic="false"
+        className="pointer-events-none fixed bottom-4 right-4 z-toast flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2"
+      >
         {toasts.map((t) => {
           const Icon = ICONS[t.type];
           return (
             <div
               key={t.id}
-              className={`toast-in pointer-events-auto flex items-center gap-2 rounded-xl border px-4 py-3 font-body text-sm shadow-lg ${STYLES[t.type]}`}
+              role="status"
+              className="pointer-events-auto flex animate-slide-in-right items-start gap-2.5 rounded-lg border border-line bg-white p-3.5 shadow-lg"
             >
-              <Icon size={16} />
-              <span>{t.message}</span>
-              <button onClick={() => dismiss(t.id)} className="ml-2 opacity-70 hover:opacity-100">
+              <Icon size={17} className={cn("mt-px shrink-0", ICON_TONE[t.type])} aria-hidden />
+              <div className="min-w-0 flex-1">
+                <p className="text-base font-medium text-ink-800">{t.title}</p>
+                {t.detail && (
+                  <p className="mt-0.5 whitespace-pre-line text-sm text-ink-600">{t.detail}</p>
+                )}
+              </div>
+              <button
+                onClick={() => dismiss(t.id)}
+                aria-label="Dismiss notification"
+                className="btn-icon h-6 w-6"
+              >
                 <X size={14} />
               </button>
             </div>

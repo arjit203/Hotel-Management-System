@@ -1,10 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { CalendarOff, Images, Info, Plus, Save } from "lucide-react";
 import RequireAdmin from "@/components/RequireAdmin";
-import { adminApi, formatApiError } from "@/lib/api";
+import PageHeader from "@/components/ui/PageHeader";
+import Button from "@/components/ui/Button";
+import Badge from "@/components/ui/Badge";
+import Modal from "@/components/ui/Modal";
+import Tabs from "@/components/ui/Tabs";
+import DataTable, { Column } from "@/components/ui/DataTable";
+import ImageUploader from "@/components/ui/ImageUploader";
+import StatCard from "@/components/ui/StatCard";
+import { Select, TextArea, TextInput } from "@/components/ui/Field";
+import { CardSkeleton } from "@/components/ui/States";
+import { useToast } from "@/components/ui/Toast";
+import { adminApi, formatApiError, uploadImage } from "@/lib/api";
+import { currency, shortDate, todayInputValue } from "@/lib/format";
+
+const ROOM_CATEGORIES = ["Deluxe", "Executive", "Luxury", "Suite"];
 
 interface AvailabilityOverride {
   _id: string;
@@ -25,18 +39,39 @@ interface RoomDetails {
   images: string[];
 }
 
+const TAB_KEYS = ["details", "images", "availability"] as const;
+type TabKey = (typeof TAB_KEYS)[number];
+
+/**
+ * Room workspace: details, photos and manual availability overrides.
+ *
+ * Same three endpoints as before —
+ *   GET/PUT /admin/hotels/rooms/:roomId
+ *   GET/PUT /admin/hotels/rooms/:roomId/availability
+ * — reorganised into tabs so the availability tool isn't buried below a long
+ * edit form.
+ */
 export default function ManageRoomPage() {
   const params = useParams();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const hotelId = params.hotelId as string;
   const roomId = params.roomId as string;
 
-  const [overrides, setOverrides] = useState<AvailabilityOverride[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ date: "", blockedCount: "0", reason: "" });
+  const { toastSuccess, toastError } = useToast();
 
-  // Edit Room Details — pre-filled from GET /admin/hotels/rooms/:roomId,
-  // saved via the existing PUT /admin/hotels/rooms/:roomId (updateRoomSchema
-  // is a partial of createRoomSchema, so any subset of fields can be sent).
+  const tabParam = searchParams.get("tab");
+  const activeTab: TabKey = TAB_KEYS.includes(tabParam as TabKey) ? (tabParam as TabKey) : "details";
+
+  function setTab(key: string) {
+    router.replace(`/hotels/${hotelId}/rooms/${roomId}?tab=${key}`, { scroll: false });
+  }
+
+  // ---- room ---------------------------------------------------------------
+  const [loadingRoom, setLoadingRoom] = useState(true);
+  const [savingRoom, setSavingRoom] = useState(false);
+  const [roomError, setRoomError] = useState<string | null>(null);
+  const [roomName, setRoomName] = useState("");
   const [editForm, setEditForm] = useState({
     categoryName: "Deluxe",
     name: "",
@@ -47,19 +82,14 @@ export default function ManageRoomPage() {
     totalRooms: "",
     amenities: "",
   });
+  const [images, setImages] = useState<string[]>([]);
 
-  const [roomEditImages, setRoomEditImages] = useState<string[]>([]);
-  const [roomEditUploadMethod, setRoomEditUploadMethod] = useState<"file" | "camera" | "url">("file");
-  const [roomEditImageUrlInput, setRoomEditImageUrlInput] = useState("");
-  const [uploadingRoomEditImage, setUploadingRoomEditImage] = useState(false);
-  const [loadingRoom, setLoadingRoom] = useState(true);
-  const [savingRoom, setSavingRoom] = useState(false);
-
-  async function loadRoom() {
+  const loadRoom = useCallback(async () => {
     setLoadingRoom(true);
     const res = await adminApi.get<RoomDetails>(`/admin/hotels/rooms/${roomId}`);
     if (res.success && res.data) {
       const r = res.data;
+      setRoomName(r.name);
       setEditForm({
         categoryName: r.categoryName,
         name: r.name,
@@ -70,41 +100,40 @@ export default function ManageRoomPage() {
         totalRooms: String(r.totalRooms),
         amenities: (r.amenities || []).join(", "),
       });
-      setRoomEditImages(r.images || []);
+      setImages(r.images || []);
+    } else {
+      setRoomError(formatApiError(res));
     }
     setLoadingRoom(false);
-  }
+  }, [roomId]);
 
-  async function handleRoomEditImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files || []);
-    e.target.value = "";
-    if (files.length === 0) return;
-    setUploadingRoomEditImage(true);
-    for (const file of files) {
-      const res = await adminApi.upload(file, "rooms");
-      if (res.success && res.data) {
-        setRoomEditImages((prev) => [...prev, res.data!.url]);
-      } else {
-        alert(formatApiError(res));
-      }
-    }
-    setUploadingRoomEditImage(false);
-  }
+  // ---- availability -------------------------------------------------------
+  const [overrides, setOverrides] = useState<AvailabilityOverride[]>([]);
+  const [loadingOverrides, setLoadingOverrides] = useState(true);
+  const [blockOpen, setBlockOpen] = useState(false);
+  const [blockForm, setBlockForm] = useState({ date: "", blockedCount: "1", reason: "" });
+  const [savingBlock, setSavingBlock] = useState(false);
+  const [blockError, setBlockError] = useState<string | null>(null);
 
-  function handleAddRoomEditImageUrl() {
-    const url = roomEditImageUrlInput.trim();
-    if (!url) return;
-    setRoomEditImages((prev) => [...prev, url]);
-    setRoomEditImageUrlInput("");
-  }
+  const loadOverrides = useCallback(async () => {
+    setLoadingOverrides(true);
+    const res = await adminApi.get<AvailabilityOverride[]>(
+      `/admin/hotels/rooms/${roomId}/availability`
+    );
+    if (res.success) setOverrides(res.data || []);
+    setLoadingOverrides(false);
+  }, [roomId]);
 
-  function removeRoomEditImage(url: string) {
-    setRoomEditImages((prev) => prev.filter((u) => u !== url));
-  }
+  useEffect(() => {
+    void loadRoom();
+    void loadOverrides();
+  }, [loadRoom, loadOverrides]);
 
   async function handleUpdateRoom(e: React.FormEvent) {
     e.preventDefault();
+    setRoomError(null);
     setSavingRoom(true);
+
     const res = await adminApi.put(`/admin/hotels/rooms/${roomId}`, {
       categoryName: editForm.categoryName,
       name: editForm.name,
@@ -117,321 +146,387 @@ export default function ManageRoomPage() {
         .split(",")
         .map((a) => a.trim())
         .filter(Boolean),
-      images: roomEditImages,
+      images,
     });
     setSavingRoom(false);
+
     if (!res.success) {
-      alert(formatApiError(res));
+      setRoomError(formatApiError(res));
+      toastError(formatApiError(res));
       return;
     }
-    alert("Room updated successfully.");
+
+    toastSuccess("Room updated.");
+    setRoomName(editForm.name);
   }
 
-  async function loadOverrides() {
-    setLoading(true);
-    const res = await adminApi.get<AvailabilityOverride[]>(`/admin/hotels/rooms/${roomId}/availability`);
-    if (res.success) setOverrides(res.data || []);
-    setLoading(false);
+  /** Saving the images tab reuses the same PUT — updateRoomSchema is a partial. */
+  async function handleSaveImages() {
+    setSavingRoom(true);
+    const res = await adminApi.put(`/admin/hotels/rooms/${roomId}`, { images });
+    setSavingRoom(false);
+
+    if (!res.success) {
+      toastError(formatApiError(res));
+      return;
+    }
+    toastSuccess(`${images.length} photo${images.length === 1 ? "" : "s"} saved.`);
   }
 
-  useEffect(() => {
-    loadOverrides();
-    loadRoom();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomId]);
+  function openBlockForm() {
+    setBlockForm({ date: todayInputValue(), blockedCount: "1", reason: "" });
+    setBlockError(null);
+    setBlockOpen(true);
+  }
 
   async function handleSetAvailability(e: React.FormEvent) {
     e.preventDefault();
+    setBlockError(null);
+    setSavingBlock(true);
+
     const res = await adminApi.put(`/admin/hotels/rooms/${roomId}/availability`, {
-      date: form.date,
-      blockedCount: Number(form.blockedCount),
-      reason: form.reason || undefined,
+      date: blockForm.date,
+      blockedCount: Number(blockForm.blockedCount),
+      reason: blockForm.reason || undefined,
     });
+    setSavingBlock(false);
+
     if (!res.success) {
-      alert(formatApiError(res));
+      setBlockError(formatApiError(res));
       return;
     }
-    setForm({ date: "", blockedCount: "0", reason: "" });
-    loadOverrides();
+
+    toastSuccess(
+      Number(blockForm.blockedCount) === 0
+        ? "Override cleared for that date."
+        : `${blockForm.blockedCount} unit(s) blocked on ${shortDate(blockForm.date)}.`
+    );
+    setBlockOpen(false);
+    void loadOverrides();
+  }
+
+  const overrideColumns: Column<AvailabilityOverride>[] = [
+    {
+      key: "date",
+      header: "Date",
+      sortable: true,
+      accessor: (o) => new Date(o.date).getTime(),
+      render: (o) => <span className="whitespace-nowrap font-medium">{shortDate(o.date)}</span>,
+    },
+    {
+      key: "blocked",
+      header: "Units blocked",
+      sortable: true,
+      accessor: (o) => o.blockedCount,
+      align: "right",
+      render: (o) => (
+        <Badge tone={o.blockedCount > 0 ? "warning" : "neutral"}>
+          {o.blockedCount} of {editForm.totalRooms || "?"}
+        </Badge>
+      ),
+    },
+    {
+      key: "reason",
+      header: "Reason",
+      accessor: (o) => o.reason ?? "",
+      hideBelow: "sm",
+      render: (o) => <span className="text-ink-600">{o.reason || "—"}</span>,
+    },
+  ];
+
+  if (loadingRoom && !roomName) {
+    return (
+      <RequireAdmin>
+        <PageHeader
+          title="Loading room…"
+          loading
+          breadcrumbs={[{ label: "Hotel", href: "/hotels" }, { label: "Room" }]}
+        />
+        <CardSkeleton />
+      </RequireAdmin>
+    );
   }
 
   return (
     <RequireAdmin>
-      <p>
-        <Link href={`/hotels/${hotelId}`}>← Back to Hotel</Link>
-      </p>
-      <h1>Manage Room</h1>
+      <PageHeader
+        title={roomName || "Room"}
+        description={`${editForm.categoryName} · ${editForm.totalRooms} unit${editForm.totalRooms === "1" ? "" : "s"}`}
+        breadcrumbs={[
+          { label: "Hotel", href: "/hotels" },
+          { label: "Property", href: `/hotels/${hotelId}?tab=rooms` },
+          { label: roomName || "Room" },
+        ]}
+        actions={
+          <Button
+            variant="primary"
+            icon={<CalendarOff size={15} />}
+            onClick={() => {
+              setTab("availability");
+              openBlockForm();
+            }}
+          >
+            Block dates
+          </Button>
+        }
+      />
 
-      {/* EDIT ROOM DETAILS */}
-      <h2>Room Details</h2>
-      {loadingRoom ? (
-        <p>Loading room...</p>
-      ) : (
-        <form
-          onSubmit={handleUpdateRoom}
-          style={{ border: "1px solid #e5e5e5", padding: 16, borderRadius: 8, maxWidth: 420, margin: "16px 0" }}
-        >
-          <label style={{ display: "block", marginBottom: 10 }}>
-            Category
-            <select
-              value={editForm.categoryName}
-              onChange={(e) => setEditForm({ ...editForm, categoryName: e.target.value })}
-              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
-            >
-              <option>Deluxe</option>
-              <option>Executive</option>
-              <option>Luxury</option>
-              <option>Suite</option>
-            </select>
-          </label>
-          <label style={{ display: "block", marginBottom: 10 }}>
-            Name
-            <input
-              required
-              value={editForm.name}
-              onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
-            />
-          </label>
-          <label style={{ display: "block", marginBottom: 10 }}>
-            Slug
-            <input
+      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard
+          label="Base price"
+          value={currency(Number(editForm.basePrice) || 0)}
+          hint="Per night"
+          tone="brand"
+        />
+        <StatCard label="Total units" value={editForm.totalRooms || "—"} hint="Physical rooms" />
+        <StatCard label="Sleeps" value={editForm.maxOccupancy || "—"} hint="Guests per room" />
+        <StatCard
+          label="Date overrides"
+          value={overrides.length}
+          hint="Manual blocks"
+          tone={overrides.length > 0 ? "warning" : "neutral"}
+        />
+      </div>
+
+      <Tabs
+        className="mb-5"
+        active={activeTab}
+        onChange={setTab}
+        tabs={[
+          { key: "details", label: "Details", icon: <Info size={14} /> },
+          { key: "images", label: "Photos", icon: <Images size={14} />, count: images.length },
+          {
+            key: "availability",
+            label: "Availability",
+            icon: <CalendarOff size={14} />,
+            count: overrides.length,
+          },
+        ]}
+      />
+
+      {activeTab === "details" && (
+        <form onSubmit={handleUpdateRoom} className="card">
+          <div className="card-header">
+            <div>
+              <h2 className="card-title">Room details</h2>
+              <p className="card-subtitle">Pricing, capacity and public copy</p>
+            </div>
+            <Button variant="primary" type="submit" icon={<Save size={14} />} loading={savingRoom}>
+              Save changes
+            </Button>
+          </div>
+
+          <div className="card-body space-y-4">
+            {roomError && (
+              <p className="rounded-md border border-danger-100 bg-danger-50 px-3 py-2 text-sm text-danger-700">
+                {roomError}
+              </p>
+            )}
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Select
+                label="Category"
+                value={editForm.categoryName}
+                onChange={(e) => setEditForm({ ...editForm, categoryName: e.target.value })}
+              >
+                {ROOM_CATEGORIES.map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
+                {/* Preserve a category the backend already holds but this list doesn't. */}
+                {!ROOM_CATEGORIES.includes(editForm.categoryName) && (
+                  <option>{editForm.categoryName}</option>
+                )}
+              </Select>
+              <TextInput
+                label="Room name"
+                required
+                value={editForm.name}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+              />
+            </div>
+
+            <TextInput
+              label="URL slug"
               required
               value={editForm.slug}
               onChange={(e) => setEditForm({ ...editForm, slug: e.target.value })}
-              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+              hint="Changing this changes the room's public URL — existing links and bookmarks to the old one will break. Leave as-is unless you specifically need to change it."
             />
-            <small style={{ color: "#888" }}>
-              Changing this changes the room's public URL — existing links/bookmarks to the old
-              URL will break. Leave as-is unless you specifically need to change it.
-            </small>
-          </label>
-          <label style={{ display: "block", marginBottom: 10 }}>
-            Description
-            <textarea
+
+            <TextArea
+              label="Description"
               required
+              rows={4}
               value={editForm.description}
               onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
             />
-          </label>
-          <label style={{ display: "block", marginBottom: 10 }}>
-            Base Price (₹/night)
-            <input
-              required
-              type="number"
-              value={editForm.basePrice}
-              onChange={(e) => setEditForm({ ...editForm, basePrice: e.target.value })}
-              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
-            />
-          </label>
-          <label style={{ display: "block", marginBottom: 10 }}>
-            Max Occupancy
-            <input
-              required
-              type="number"
-              value={editForm.maxOccupancy}
-              onChange={(e) => setEditForm({ ...editForm, maxOccupancy: e.target.value })}
-              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
-            />
-          </label>
-          <label style={{ display: "block", marginBottom: 10 }}>
-            Total Rooms
-            <input
-              required
-              type="number"
-              value={editForm.totalRooms}
-              onChange={(e) => setEditForm({ ...editForm, totalRooms: e.target.value })}
-              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
-            />
-          </label>
-          <label style={{ display: "block", marginBottom: 10 }}>
-            Amenities
-            <input
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              <TextInput
+                label="Base price"
+                type="number"
+                min={0}
+                required
+                value={editForm.basePrice}
+                onChange={(e) => setEditForm({ ...editForm, basePrice: e.target.value })}
+                hint="₹ per night"
+              />
+              <TextInput
+                label="Max occupancy"
+                type="number"
+                min={1}
+                required
+                value={editForm.maxOccupancy}
+                onChange={(e) => setEditForm({ ...editForm, maxOccupancy: e.target.value })}
+                hint="Guests per room"
+              />
+              <TextInput
+                label="Total units"
+                type="number"
+                min={1}
+                required
+                value={editForm.totalRooms}
+                onChange={(e) => setEditForm({ ...editForm, totalRooms: e.target.value })}
+                hint="Reducing this reduces availability"
+              />
+            </div>
+
+            <TextInput
+              label="Amenities"
               value={editForm.amenities}
               onChange={(e) => setEditForm({ ...editForm, amenities: e.target.value })}
-              placeholder="e.g. AC, Free WiFi, Mini Bar"
-              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+              placeholder="AC, Free WiFi, Mini Bar"
+              hint="Comma-separated."
             />
-            <small style={{ color: "#888" }}>Comma-separated list.</small>
-          </label>
-
-          <label style={{ display: "block", marginBottom: 10 }}>
-            Add Room Image Via
-            <div style={{ display: "flex", gap: 16, marginTop: 4, marginBottom: 8 }}>
-              <label style={{ fontWeight: "normal" }}>
-                <input
-                  type="radio"
-                  name="roomEditUploadMethod"
-                  checked={roomEditUploadMethod === "file"}
-                  onChange={() => setRoomEditUploadMethod("file")}
-                />{" "}
-                Upload Files
-              </label>
-              <label style={{ fontWeight: "normal" }}>
-                <input
-                  type="radio"
-                  name="roomEditUploadMethod"
-                  checked={roomEditUploadMethod === "camera"}
-                  onChange={() => setRoomEditUploadMethod("camera")}
-                />{" "}
-                Take Photo
-              </label>
-              <label style={{ fontWeight: "normal" }}>
-                <input
-                  type="radio"
-                  name="roomEditUploadMethod"
-                  checked={roomEditUploadMethod === "url"}
-                  onChange={() => setRoomEditUploadMethod("url")}
-                />{" "}
-                Image URL
-              </label>
-            </div>
-          </label>
-
-          {roomEditUploadMethod === "url" ? (
-            <label style={{ display: "block", marginBottom: 10 }}>
-              Image URL
-              <div style={{ display: "flex", gap: 8 }}>
-                <input
-                  value={roomEditImageUrlInput}
-                  onChange={(e) => setRoomEditImageUrlInput(e.target.value)}
-                  placeholder="https://example.com/photo.jpg"
-                  style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
-                />
-                <button
-                  type="button"
-                  onClick={handleAddRoomEditImageUrl}
-                  disabled={!roomEditImageUrlInput.trim()}
-                  style={{ background: "#111", color: "#fff", border: "none", padding: "8px 16px", borderRadius: 6, whiteSpace: "nowrap" }}
-                >
-                  Add
-                </button>
-              </div>
-            </label>
-          ) : (
-            <label style={{ display: "block", marginBottom: 10 }}>
-              {roomEditUploadMethod === "camera" ? "Take Photo" : "Image Files (multiple allowed)"}
-              <input
-                key={roomEditUploadMethod}
-                type="file"
-                accept="image/*"
-                multiple={roomEditUploadMethod === "file"}
-                capture={roomEditUploadMethod === "camera" ? "environment" : undefined}
-                onChange={handleRoomEditImageSelect}
-                disabled={uploadingRoomEditImage}
-                style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
-              />
-            </label>
-          )}
-
-          {(roomEditImages.length > 0 || uploadingRoomEditImage) && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-              {roomEditImages.map((url) => (
-                <div key={url} style={{ position: "relative" }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={url} alt="" style={{ width: 70, height: 70, objectFit: "cover", borderRadius: 6 }} />
-                  <button
-                    type="button"
-                    onClick={() => removeRoomEditImage(url)}
-                    style={{ position: "absolute", top: 2, right: 2, background: "#c00", color: "#fff", border: "none", borderRadius: 4, fontSize: 11, cursor: "pointer" }}
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
-              {uploadingRoomEditImage && (
-                <div style={{ width: 70, height: 70, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#888", border: "1px dashed #ccc", borderRadius: 6 }}>
-                  Uploading...
-                </div>
-              )}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={savingRoom}
-            style={{ background: "#111", color: "#fff", border: "none", padding: "8px 16px", borderRadius: 6 }}
-          >
-            {savingRoom ? "Saving..." : "Save Changes"}
-          </button>
+          </div>
         </form>
       )}
 
-      {/* AVAILABILITY */}
-      <h2 style={{ marginTop: 32 }}>Room Availability</h2>
-      <p style={{ color: "#666" }}>
-        Block units of this room category for maintenance/hold on specific dates. Real-time
-        bookable availability is automatically computed as: total rooms − blocked − overlapping
-        bookings.
-      </p>
+      {activeTab === "images" && (
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <h2 className="card-title">Room photos</h2>
+              <p className="card-subtitle">
+                Drag to upload several at once. The first photo is the cover.
+              </p>
+            </div>
+            <Button
+              variant="primary"
+              icon={<Save size={14} />}
+              loading={savingRoom}
+              onClick={handleSaveImages}
+            >
+              Save photos
+            </Button>
+          </div>
+          <div className="card-body">
+            <ImageUploader
+              value={images}
+              onChange={setImages}
+              folder="rooms"
+              upload={uploadImage}
+              hint="Uploads reach Cloudinary immediately, but the room only points at them once you press Save."
+            />
+          </div>
+        </div>
+      )}
 
-      <form
-        onSubmit={handleSetAvailability}
-        style={{ border: "1px solid #e5e5e5", padding: 16, borderRadius: 8, maxWidth: 420, margin: "16px 0" }}
-      >
-        <label style={{ display: "block", marginBottom: 10 }}>
-          Date
-          <input
-            required
-            type="date"
-            value={form.date}
-            onChange={(e) => setForm({ ...form, date: e.target.value })}
-            style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+      {activeTab === "availability" && (
+        <div className="space-y-4">
+          <div className="card">
+            <div className="card-body flex flex-wrap items-start gap-3">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-info-50 text-info-600">
+                <Info size={15} />
+              </span>
+              <p className="min-w-0 flex-1 text-base text-ink-600">
+                Overrides hold units back for maintenance or a private hold. Real bookable
+                availability is computed on every read as{" "}
+                <span className="font-medium text-ink-800">
+                  total units − blocked − overlapping bookings
+                </span>
+                , so you never need a row per room per day. Setting a date&apos;s blocked count back
+                to <span className="font-medium text-ink-800">0</span> clears its override.
+              </p>
+            </div>
+          </div>
+
+          <DataTable
+            columns={overrideColumns}
+            rows={overrides}
+            rowKey={(o) => o._id}
+            loading={loadingOverrides}
+            searchable={(o) => `${shortDate(o.date)} ${o.reason || ""}`}
+            searchPlaceholder="Search overrides…"
+            initialSort={{ key: "date", direction: "asc" }}
+            toolbarActions={
+              <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={openBlockForm}>
+                Block dates
+              </Button>
+            }
+            emptyIcon={<CalendarOff size={19} />}
+            emptyTitle="No manual overrides"
+            emptyDescription="Every unit of this room type is available except where guest bookings already overlap."
+            emptyAction={
+              <Button variant="primary" icon={<Plus size={15} />} onClick={openBlockForm}>
+                Block dates
+              </Button>
+            }
           />
-        </label>
-        <label style={{ display: "block", marginBottom: 10 }}>
-          Blocked Count
-          <input
+        </div>
+      )}
+
+      <Modal
+        open={blockOpen}
+        onClose={() => setBlockOpen(false)}
+        title="Set availability override"
+        description="Hold units back on a specific date."
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setBlockOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" type="submit" form="block-form" loading={savingBlock}>
+              Save override
+            </Button>
+          </>
+        }
+      >
+        <form id="block-form" onSubmit={handleSetAvailability} className="space-y-4">
+          {blockError && (
+            <p className="rounded-md border border-danger-100 bg-danger-50 px-3 py-2 text-sm text-danger-700">
+              {blockError}
+            </p>
+          )}
+
+          <TextInput
+            label="Date"
+            type="date"
             required
+            value={blockForm.date}
+            onChange={(e) => setBlockForm({ ...blockForm, date: e.target.value })}
+          />
+
+          <TextInput
+            label="Units to block"
             type="number"
             min={0}
-            value={form.blockedCount}
-            onChange={(e) => setForm({ ...form, blockedCount: e.target.value })}
-            style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+            max={Number(editForm.totalRooms) || undefined}
+            required
+            value={blockForm.blockedCount}
+            onChange={(e) => setBlockForm({ ...blockForm, blockedCount: e.target.value })}
+            hint={`This room type has ${editForm.totalRooms || "?"} unit(s). Set 0 to clear an existing override.`}
           />
-        </label>
-        <label style={{ display: "block", marginBottom: 10 }}>
-          Reason (optional)
-          <input
-            value={form.reason}
-            onChange={(e) => setForm({ ...form, reason: e.target.value })}
-            style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
-          />
-        </label>
-        <button
-          type="submit"
-          style={{ background: "#111", color: "#fff", border: "none", padding: "8px 16px", borderRadius: 6 }}
-        >
-          Set Availability Override
-        </button>
-      </form>
 
-      <h3>Current Overrides</h3>
-      {loading ? (
-        <p>Loading...</p>
-      ) : overrides.length === 0 ? (
-        <p style={{ color: "#888" }}>No manual overrides set.</p>
-      ) : (
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th style={{ textAlign: "left", padding: 8, borderBottom: "2px solid #e5e5e5" }}>Date</th>
-              <th style={{ textAlign: "left", padding: 8, borderBottom: "2px solid #e5e5e5" }}>Blocked</th>
-              <th style={{ textAlign: "left", padding: 8, borderBottom: "2px solid #e5e5e5" }}>Reason</th>
-            </tr>
-          </thead>
-          <tbody>
-            {overrides.map((o) => (
-              <tr key={o._id} style={{ borderBottom: "1px solid #eee" }}>
-                <td style={{ padding: 8 }}>{new Date(o.date).toDateString()}</td>
-                <td style={{ padding: 8 }}>{o.blockedCount}</td>
-                <td style={{ padding: 8 }}>{o.reason || "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+          <TextInput
+            label="Reason"
+            value={blockForm.reason}
+            onChange={(e) => setBlockForm({ ...blockForm, reason: e.target.value })}
+            placeholder="Deep clean / maintenance / owner hold"
+            hint="Optional, internal only."
+          />
+        </form>
+      </Modal>
     </RequireAdmin>
   );
 }

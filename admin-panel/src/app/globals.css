@@ -1,3 +1,246 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ==========================================================================
+   7 Vachan — Admin Design System
+   --------------------------------------------------------------------------
+   Component classes shared by the Hotel Admin, Restaurant Admin and every
+   cross-vertical page. This is the ONLY place base control styling lives —
+   pages compose these classes rather than re-declaring padding/border/colour.
+
+   This is not the public website's design system (see docs/DESIGN_SYSTEM.md
+   for that one). Nothing here should be copied into frontend/.
+   ========================================================================== */
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-surface-sunken text-base text-ink-800 antialiased;
+  }
+
+  /* Consistent focus ring across every interactive element. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand-500/50 ring-offset-1 ring-offset-white;
+  }
+
+  /* Slim scrollbars so dense tables/sidebars don't lose horizontal space. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #d0d5dd transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-line-strong;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer components {
+  /* ---------------------------------------------------------------- Buttons */
+  .btn {
+    @apply inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-md
+           border border-transparent px-3.5 py-2 text-sm font-medium leading-5
+           transition-colors duration-100 disabled:pointer-events-none disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn border-brand-600 bg-brand-600 text-white shadow-xs hover:border-brand-700 hover:bg-brand-700;
+  }
+  .btn-secondary {
+    @apply btn border-line-strong bg-white text-ink-700 shadow-xs hover:bg-surface-hover hover:text-ink-800;
+  }
+  .btn-ghost {
+    @apply btn text-ink-600 hover:bg-surface-muted hover:text-ink-800;
+  }
+  .btn-danger {
+    @apply btn border-danger-600 bg-danger-600 text-white shadow-xs hover:border-danger-700 hover:bg-danger-700;
+  }
+  .btn-danger-ghost {
+    @apply btn text-danger-600 hover:bg-danger-50;
+  }
+  .btn-sm {
+    @apply px-2.5 py-1.5 text-xs;
+  }
+  .btn-lg {
+    @apply px-4 py-2.5 text-md;
+  }
+  .btn-icon {
+    @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-ink-500
+           transition-colors hover:bg-surface-muted hover:text-ink-800 disabled:opacity-50;
+  }
+
+  /* ---------------------------------------------------------------- Surfaces */
+  .card {
+    @apply rounded-xl border border-line bg-white shadow-xs;
+  }
+  .card-header {
+    @apply flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4;
+  }
+  .card-title {
+    @apply text-md font-semibold text-ink-800;
+  }
+  .card-subtitle {
+    @apply mt-0.5 text-sm text-ink-500;
+  }
+  .card-body {
+    @apply p-5;
+  }
+  .card-footer {
+    @apply flex items-center justify-end gap-2 border-t border-line bg-surface-hover px-5 py-3;
+  }
+
+  /* ------------------------------------------------------------------ Forms */
+  .field-label {
+    @apply mb-1.5 block text-sm font-medium text-ink-700;
+  }
+  .field-hint {
+    @apply mt-1.5 block text-xs text-ink-500;
+  }
+  .field-error {
+    @apply mt-1.5 block text-xs font-medium text-danger-600;
+  }
+  .input {
+    @apply block w-full rounded-md border border-line-strong bg-white px-3 py-2 text-base
+           text-ink-800 shadow-xs transition-shadow placeholder:text-ink-400
+           focus:border-brand-500 focus:shadow-ring focus:outline-none
+           disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-500;
+  }
+  .input-invalid {
+    @apply border-danger-500 focus:border-danger-500;
+  }
+  textarea.input {
+    @apply min-h-[84px] resize-y leading-6;
+  }
+  select.input {
+    @apply cursor-pointer appearance-none bg-[length:16px] bg-[right_0.65rem_center] bg-no-repeat pr-9;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  }
+  .checkbox {
+    @apply h-4 w-4 shrink-0 cursor-pointer rounded-sm border-line-strong text-brand-600
+           focus:ring-brand-500/40;
+  }
+
+  /* ------------------------------------------------------------------ Tables */
+  .table-wrap {
+    @apply w-full overflow-x-auto;
+  }
+  .dt {
+    @apply w-full border-collapse text-left text-base;
+  }
+  .dt thead th {
+    @apply whitespace-nowrap border-b border-line bg-surface-muted px-4 py-2.5 text-xs
+           font-semibold uppercase tracking-wide text-ink-600;
+  }
+  .dt tbody td {
+    @apply border-b border-line-subtle px-4 py-3 align-middle text-ink-700;
+  }
+  .dt tbody tr:last-child td {
+    @apply border-b-0;
+  }
+  .dt tbody tr {
+    @apply transition-colors hover:bg-surface-hover;
+  }
+  .dt tbody tr[data-selected="true"] {
+    @apply bg-brand-50/60 hover:bg-brand-50;
+  }
+
+  /* ------------------------------------------------------------------ Badges */
+  .badge {
+    @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5
+           text-xs font-medium capitalize;
+  }
+  .badge-neutral {
+    @apply badge border-line bg-surface-muted text-ink-600;
+  }
+  .badge-success {
+    @apply badge border-success-100 bg-success-50 text-success-700;
+  }
+  .badge-warning {
+    @apply badge border-warning-100 bg-warning-50 text-warning-700;
+  }
+  .badge-danger {
+    @apply badge border-danger-100 bg-danger-50 text-danger-700;
+  }
+  .badge-info {
+    @apply badge border-info-100 bg-info-50 text-info-700;
+  }
+  .badge-brand {
+    @apply badge border-brand-100 bg-brand-50 text-brand-700;
+  }
+
+  /* -------------------------------------------------------------- Navigation */
+  .nav-item {
+    @apply flex items-center gap-2.5 rounded-md px-2.5 py-2 text-base font-medium
+           text-ink-600 transition-colors hover:bg-surface-muted hover:text-ink-800;
+  }
+  .nav-item-active {
+    @apply bg-brand-50 text-brand-700 hover:bg-brand-50 hover:text-brand-700;
+  }
+  .nav-section-label {
+    @apply px-2.5 pb-1 pt-4 text-xs font-semibold uppercase tracking-wide text-ink-400;
+  }
+
+  /* ------------------------------------------------------------------- Tabs */
+  .tab-bar {
+    @apply flex gap-1 overflow-x-auto border-b border-line;
+  }
+  .tab {
+    @apply -mb-px whitespace-nowrap border-b-2 border-transparent px-3 py-2.5 text-base
+           font-medium text-ink-500 transition-colors hover:border-line-strong hover:text-ink-700;
+  }
+  .tab-active {
+    @apply border-brand-600 text-brand-700 hover:border-brand-600 hover:text-brand-700;
+  }
+
+  /* ---------------------------------------------------------------- Skeleton */
+  .skeleton {
+    @apply relative overflow-hidden rounded-md bg-surface-muted;
+  }
+  .skeleton::after {
+    content: "";
+    @apply absolute inset-0 -translate-x-full;
+    background-image: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0,
+      rgba(255, 255, 255, 0.65) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    animation: admin-shimmer 1.4s infinite;
+  }
+
+  /* ------------------------------------------------------------------ Misc */
+  .divider {
+    @apply h-px w-full bg-line;
+  }
+  .kbd {
+    @apply inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded border
+           border-line-strong bg-surface-muted px-1 font-mono text-xs text-ink-500;
+  }
+  .page-shell {
+    @apply mx-auto w-full max-w-[1400px] px-4 py-5 sm:px-6 lg:px-8;
+  }
+}
+
+@keyframes admin-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

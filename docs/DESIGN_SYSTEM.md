@@ -5,6 +5,13 @@
 **Scope:** the public customer-facing site (`frontend/`). The Admin Panel is a
 separate, utilitarian UI and deliberately does **not** follow this system.
 
+> **The Admin Console has its own design system** (added 2026-08-03): neutral
+> SaaS tokens in `admin-panel/tailwind.config.js` + component classes in
+> `admin-panel/src/app/globals.css`, documented in
+> `PROJECT_DOCUMENTATION.md` §7. The two are intentionally separate — never
+> import `gold` / `cream` / `font-display` into `admin-panel/`, and never import
+> the admin's neutral ramp into `frontend/`.
+
 > **Documentation only.** This file describes what the code already does. It
 > introduces no new rules that the Hotel Module does not already follow.
 

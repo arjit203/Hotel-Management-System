@@ -1,21 +1,46 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import {
+  BedDouble,
+  Building2,
+  ExternalLink,
+  Image as ImageIcon,
+  MessageSquareQuote,
+  Plus,
+  PowerOff,
+  Settings2,
+  Sliders,
+  Star,
+  Tag,
+} from "lucide-react";
 import RequireAdmin from "@/components/RequireAdmin";
-import { adminApi, formatApiError } from "@/lib/api";
+import PageHeader from "@/components/ui/PageHeader";
+import Button from "@/components/ui/Button";
+import Badge from "@/components/ui/Badge";
+import Modal from "@/components/ui/Modal";
+import Tabs from "@/components/ui/Tabs";
+import Accordion from "@/components/ui/Accordion";
+import DataTable, { Column } from "@/components/ui/DataTable";
+import ImageUploader from "@/components/ui/ImageUploader";
+import StatCard from "@/components/ui/StatCard";
+import { Select, TextArea, TextInput } from "@/components/ui/Field";
+import { CardSkeleton, ErrorState } from "@/components/ui/States";
+import { useToast } from "@/components/ui/Toast";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
+import GalleryManager, { GalleryItem } from "@/components/content/GalleryManager";
+import OffersManager, { OfferItem } from "@/components/content/OffersManager";
+import FaqManager, { FaqItem } from "@/components/content/FaqManager";
+import ReviewsManager, { ReviewItem } from "@/components/content/ReviewsManager";
+import { adminApi, formatApiError, publicGet, uploadImage } from "@/lib/api";
+import { useBusiness } from "@/lib/businessContext";
+import { currency, slugify } from "@/lib/format";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000/api/v1";
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-");
-}
+const PUBLIC_SITE_URL = process.env.NEXT_PUBLIC_FRONTEND_URL || "http://localhost:3000";
+const ROOM_CATEGORIES = ["Deluxe", "Executive", "Luxury", "Suite"];
+const GALLERY_CATEGORIES = ["Exterior", "Interior", "Rooms", "Food", "Building"];
 
 interface HotelData {
   _id: string;
@@ -26,172 +51,197 @@ interface HotelData {
   contactPhone: string;
   contactEmail: string;
   starRating?: number;
+  metaTitle?: string;
+  metaDescription?: string;
+  isActive?: boolean;
 }
+
 interface RoomData {
   _id: string;
   name: string;
   slug: string;
   categoryName: string;
   basePrice: number;
+  maxOccupancy?: number;
   totalRooms: number;
-}
-interface OfferData {
-  _id: string;
-  title: string;
-  description?: string;
-  validFrom: string;
-  validTo: string;
-}
-interface FaqData {
-  _id: string;
-  question: string;
-  answer: string;
-}
-interface GalleryData {
-  _id: string;
-  imageUrl: string;
-  category: string;
-}
-interface ReviewData {
-  _id: string;
-  guestName?: string;
-  rating: number;
-  comment: string;
   images?: string[];
-  isApproved: boolean;
-  adminReply?: string;
-  createdAt: string;
 }
 
+interface HotelAggregate {
+  hotel: HotelData;
+  rooms: RoomData[];
+  offers: OfferItem[];
+  faqs: FaqItem[];
+  gallery: GalleryItem[];
+}
+
+const TAB_KEYS = ["overview", "rooms", "gallery", "offers", "faqs", "reviews"] as const;
+type TabKey = (typeof TAB_KEYS)[number];
+
+const EMPTY_ROOM_FORM = {
+  categoryName: "Deluxe",
+  name: "",
+  slug: "",
+  description: "",
+  basePrice: "",
+  maxOccupancy: "2",
+  totalRooms: "1",
+  amenities: "",
+};
+
+/**
+ * Hotel property workspace.
+ *
+ * Replaces the single stacked page (property form + rooms + offers + gallery +
+ * FAQs + reviews all rendered at once) with tabs over the same data and the
+ * same endpoints. The aggregate still comes from the public
+ * `GET /hotels/:slug` route — the only one that returns rooms, gallery, offers
+ * and FAQs together — with reviews pulled from the admin route beside it.
+ */
 export default function ManageHotelPage() {
   const params = useParams();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const hotelId = params.hotelId as string;
 
-  const [hotel, setHotel] = useState<HotelData | null>(null);
-  const [rooms, setRooms] = useState<RoomData[]>([]);
-  const [offers, setOffers] = useState<OfferData[]>([]);
-  const [faqs, setFaqs] = useState<FaqData[]>([]);
-  const [gallery, setGallery] = useState<GalleryData[]>([]);
-  const [reviews, setReviews] = useState<ReviewData[]>([]);
-  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const { toastSuccess, toastError } = useToast();
+  const confirm = useConfirm();
+  const { reload: reloadBusinesses } = useBusiness();
+
+  const [data, setData] = useState<HotelAggregate | null>(null);
+  const [reviews, setReviews] = useState<ReviewItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const [showEditHotel, setShowEditHotel] = useState(false);
-const [hotelForm, setHotelForm] = useState({
-  name: "", description: "", address: "", contactPhone: "", contactEmail: "",
-  starRating: "", metaTitle: "", metaDescription: "",
-});
-const [savingHotel, setSavingHotel] = useState(false);
+  const tabParam = searchParams.get("tab");
+  const activeTab: TabKey = TAB_KEYS.includes(tabParam as TabKey) ? (tabParam as TabKey) : "overview";
 
-  const [showRoomForm, setShowRoomForm] = useState(false);
-  const [roomForm, setRoomForm] = useState({
-    categoryName: "Deluxe",
-    name: "",
-    slug: "",
-    description: "",
-    basePrice: "",
-    maxOccupancy: "2",
-    totalRooms: "1",
-    amenities: "",
-  });
-  const [roomImages, setRoomImages] = useState<string[]>([]);
-  const [uploadingRoomImage, setUploadingRoomImage] = useState(false);
-  
-  const [roomImageUploadMethod, setRoomImageUploadMethod] = useState<"file" | "camera" | "url">("file");
-  const [roomImageUrlInput, setRoomImageUrlInput] = useState("");
+  function setTab(key: string) {
+    router.replace(`/hotels/${hotelId}?tab=${key}`, { scroll: false });
+  }
 
-  const [offerForm, setOfferForm] = useState({ title: "", description: "", validFrom: "", validTo: "" });
-  const [faqForm, setFaqForm] = useState({ question: "", answer: "" });
-  const [galleryForm, setGalleryForm] = useState({ imageUrl: "", category: "exterior" });
-  const [isCustomCategory, setIsCustomCategory] = useState(false);
-  const [enlargedImage, setEnlargedImage] = useState<string | null>(null);
-  const [galleryFile, setGalleryFile] = useState<File | null>(null);
-  const [uploadingGallery, setUploadingGallery] = useState(false);
-  const [galleryUploadMethod, setGalleryUploadMethod] = useState<"file" | "camera" | "url">("file");
-
-  async function loadAll() {
+  // ---- data ---------------------------------------------------------------
+  const loadAll = useCallback(async () => {
     setLoading(true);
-    const listRes = await fetch(`${API_BASE_URL}/hotels`, { cache: "no-store" });
-    const listJson = await listRes.json();
-    const found = (listJson.data || []).find((h: any) => h._id === hotelId);
-    if (!found) {
+    setError(null);
+
+    const listRes = await publicGet<{ _id: string; slug: string }[]>("/hotels");
+    if (!listRes.success) {
+      setError(listRes.message || "Could not reach the API.");
       setLoading(false);
       return;
     }
 
-    const detailsRes = await fetch(`${API_BASE_URL}/hotels/${found.slug}`, { cache: "no-store" });
-    const detailsJson = await detailsRes.json();
-    if (detailsJson.success) {
-      setHotel(detailsJson.data.hotel);
-      setRooms(detailsJson.data.rooms);
-      setOffers(detailsJson.data.offers);
-      setFaqs(detailsJson.data.faqs);
-      setGallery(detailsJson.data.gallery);
+    const found = (listRes.data || []).find((h) => h._id === hotelId);
+    if (!found) {
+      setError("This hotel could not be found, or it has been deactivated.");
+      setLoading(false);
+      return;
     }
 
-    const reviewsRes = await adminApi.get<ReviewData[]>(`/admin/hotels/${hotelId}/reviews`);
+    const [detailsRes, reviewsRes] = await Promise.all([
+      publicGet<HotelAggregate>(`/hotels/${found.slug}`),
+      adminApi.get<ReviewItem[]>(`/admin/hotels/${hotelId}/reviews`),
+    ]);
+
+    if (detailsRes.success && detailsRes.data) setData(detailsRes.data);
+    else setError(detailsRes.message || "Could not load this hotel.");
+
     if (reviewsRes.success) setReviews(reviewsRes.data || []);
 
     setLoading(false);
-  }
-
-  useEffect(() => {
-    loadAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hotelId]);
 
-  function handleOpenEditHotel() {
-  if (!hotel) return;
-  setHotelForm({
-    name: hotel.name, description: hotel.description, address: hotel.address,
-    contactPhone: hotel.contactPhone, contactEmail: hotel.contactEmail,
-    starRating: hotel.starRating ? String(hotel.starRating) : "",
-    metaTitle: "", metaDescription: "",
-  });
-  setShowEditHotel(true);
-}
+  useEffect(() => {
+    void loadAll();
+  }, [loadAll]);
 
-async function handleUpdateHotel(e: React.FormEvent) {
-  e.preventDefault();
-  setSavingHotel(true);
-  const res = await adminApi.put(`/admin/hotels/${hotelId}`, {
-    name: hotelForm.name, description: hotelForm.description, address: hotelForm.address,
-    contactPhone: hotelForm.contactPhone, contactEmail: hotelForm.contactEmail,
-    starRating: hotelForm.starRating ? Number(hotelForm.starRating) : undefined,
-    metaTitle: hotelForm.metaTitle || undefined, metaDescription: hotelForm.metaDescription || undefined,
+  const hotel = data?.hotel ?? null;
+  const rooms = useMemo(() => data?.rooms ?? [], [data]);
+  const pendingReviews = reviews.filter((r) => !r.isApproved).length;
+
+  // ---- property form ------------------------------------------------------
+  const [editOpen, setEditOpen] = useState(false);
+  const [hotelForm, setHotelForm] = useState({
+    name: "",
+    description: "",
+    address: "",
+    contactPhone: "",
+    contactEmail: "",
+    starRating: "",
+    metaTitle: "",
+    metaDescription: "",
   });
-  setSavingHotel(false);
-  if (!res.success) { alert(formatApiError(res)); return; }
-  setShowEditHotel(false);
-  loadAll();
-}
-async function handleRoomImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
-  const file = e.target.files?.[0];
-  e.target.value = "";
-  if (!file) return;
-  setUploadingRoomImage(true);
-  const res = await adminApi.upload(file, "rooms");
-  setUploadingRoomImage(false);
-  if (!res.success || !res.data) {
-    alert(formatApiError(res));
-    return;
+  const [savingHotel, setSavingHotel] = useState(false);
+  const [hotelFormError, setHotelFormError] = useState<string | null>(null);
+
+  function openEditHotel() {
+    if (!hotel) return;
+    setHotelForm({
+      name: hotel.name,
+      description: hotel.description,
+      address: hotel.address,
+      contactPhone: hotel.contactPhone,
+      contactEmail: hotel.contactEmail,
+      starRating: hotel.starRating ? String(hotel.starRating) : "",
+      // The public aggregate does not return SEO fields, so these start blank
+      // and are only sent when filled — same as the original form.
+      metaTitle: hotel.metaTitle || "",
+      metaDescription: hotel.metaDescription || "",
+    });
+    setHotelFormError(null);
+    setEditOpen(true);
   }
-  setRoomImages((prev) => [...prev, res.data!.url]);
-}
 
-function handleAddRoomImageUrl() {
-  const url = roomImageUrlInput.trim();
-  if (!url) return;
-  setRoomImages((prev) => [...prev, url]);
-  setRoomImageUrlInput("");
-}
+  async function handleUpdateHotel(e: React.FormEvent) {
+    e.preventDefault();
+    setHotelFormError(null);
+    setSavingHotel(true);
 
-function removeRoomImage(url: string) {
-  setRoomImages((prev) => prev.filter((u) => u !== url));
-}
+    const res = await adminApi.put(`/admin/hotels/${hotelId}`, {
+      name: hotelForm.name,
+      description: hotelForm.description,
+      address: hotelForm.address,
+      contactPhone: hotelForm.contactPhone,
+      contactEmail: hotelForm.contactEmail,
+      starRating: hotelForm.starRating ? Number(hotelForm.starRating) : undefined,
+      metaTitle: hotelForm.metaTitle || undefined,
+      metaDescription: hotelForm.metaDescription || undefined,
+    });
+    setSavingHotel(false);
+
+    if (!res.success) {
+      setHotelFormError(formatApiError(res));
+      return;
+    }
+
+    toastSuccess("Property details saved.");
+    setEditOpen(false);
+    void loadAll();
+    reloadBusinesses();
+  }
+
+  // ---- room create --------------------------------------------------------
+  const [roomOpen, setRoomOpen] = useState(false);
+  const [roomForm, setRoomForm] = useState(EMPTY_ROOM_FORM);
+  const [roomImages, setRoomImages] = useState<string[]>([]);
+  const [savingRoom, setSavingRoom] = useState(false);
+  const [roomFormError, setRoomFormError] = useState<string | null>(null);
+  const [roomSlugTouched, setRoomSlugTouched] = useState(false);
+
+  function openRoomForm() {
+    setRoomForm(EMPTY_ROOM_FORM);
+    setRoomImages([]);
+    setRoomFormError(null);
+    setRoomSlugTouched(false);
+    setRoomOpen(true);
+  }
 
   async function handleCreateRoom(e: React.FormEvent) {
     e.preventDefault();
+    setRoomFormError(null);
+    setSavingRoom(true);
+
     const res = await adminApi.post(`/admin/hotels/${hotelId}/rooms`, {
       ...roomForm,
       basePrice: Number(roomForm.basePrice),
@@ -203,801 +253,605 @@ function removeRoomImage(url: string) {
         .filter(Boolean),
       images: roomImages,
     });
+    setSavingRoom(false);
+
     if (!res.success) {
-      alert(formatApiError(res));
+      setRoomFormError(formatApiError(res));
       return;
     }
-    setShowRoomForm(false);
-    
-    setRoomImages([]);
 
-    setRoomForm({
-      categoryName: "Deluxe",
-      name: "",
-      slug: "",
-      description: "",
-      basePrice: "",
-      maxOccupancy: "2",
-      totalRooms: "1",
-      amenities: "",
+    toastSuccess(`${roomForm.name} created.`);
+    setRoomOpen(false);
+    void loadAll();
+  }
+
+  async function handleDeleteRoom(room: RoomData) {
+    const ok = await confirm({
+      title: `Deactivate ${room.name}?`,
+      description:
+        "The room stops being bookable and disappears from the public site. Nothing is deleted, and deactivation is blocked while active bookings exist.",
+      confirmLabel: "Deactivate",
+      danger: true,
     });
-    loadAll();
-  }
+    if (!ok) return;
 
-  async function handleDeleteRoom(roomId: string) {
-    if (!confirm("Deactivate this room?")) return;
-    const res = await adminApi.delete(`/admin/hotels/rooms/${roomId}`);
-    if (res.success) loadAll();
-    else alert(formatApiError(res));
-  }
-
-  async function handleCreateOffer(e: React.FormEvent) {
-    e.preventDefault();
-    const res = await adminApi.post(`/admin/hotels/${hotelId}/offers`, offerForm);
+    const res = await adminApi.delete(`/admin/hotels/rooms/${room._id}`);
     if (!res.success) {
-      alert(formatApiError(res));
+      toastError(formatApiError(res));
       return;
     }
-    setOfferForm({ title: "", description: "", validFrom: "", validTo: "" });
-    loadAll();
+    toastSuccess(`${room.name} deactivated.`);
+    void loadAll();
   }
 
-  async function handleDeleteOffer(offerId: string) {
-    const res = await adminApi.delete(`/admin/hotels/offers/${offerId}`);
-    if (res.success) loadAll();
-    else alert(formatApiError(res));
-  }
-
-  async function handleCreateFaq(e: React.FormEvent) {
-    e.preventDefault();
-    const res = await adminApi.post(`/admin/hotels/${hotelId}/faqs`, faqForm);
-    if (!res.success) {
-      alert(formatApiError(res));
-      return;
-    }
-    setFaqForm({ question: "", answer: "" });
-    loadAll();
-  }
-
-  async function handleDeleteFaq(faqId: string) {
-    const res = await adminApi.delete(`/admin/hotels/faqs/${faqId}`);
-    if (res.success) loadAll();
-    else alert(formatApiError(res));
-  }
-async function handleAddGalleryItem(e: React.FormEvent) {
-  e.preventDefault();
-
-  let finalImageUrl = "";
-
-  if (galleryUploadMethod === "url") {
-    if (!galleryForm.imageUrl.trim()) {
-      alert("Please paste an image URL.");
-      return;
-    }
-    finalImageUrl = galleryForm.imageUrl.trim();
-  } else {
-    if (!galleryFile) {
-      alert(galleryUploadMethod === "camera" ? "Please take a photo." : "Please choose an image file.");
-      return;
-    }
-    setUploadingGallery(true);
-    const uploadRes = await adminApi.upload(galleryFile, "gallery");
-    setUploadingGallery(false);
-    if (!uploadRes.success || !uploadRes.data) {
-      alert(formatApiError(uploadRes));
-      return;
-    }
-    finalImageUrl = uploadRes.data.url;
-  }
-
-  const res = await adminApi.post(`/admin/hotels/${hotelId}/gallery`, {
-    imageUrl: finalImageUrl,
-    category: galleryForm.category,
-  });
-  if (!res.success) {
-    alert(formatApiError(res));
-    return;
-  }
-  setGalleryForm({ imageUrl: "", category: "exterior" });
-  setGalleryFile(null);
-  loadAll();
-}
-  async function handleDeleteGalleryItem(itemId: string) {
-    const res = await adminApi.delete(`/admin/hotels/gallery/${itemId}`);
-    if (res.success) loadAll();
-    else alert(formatApiError(res));
-  }
-
-  async function handleApproveReview(reviewId: string) {
-    const res = await adminApi.put(`/admin/hotels/reviews/${reviewId}/approve`, {});
-    if (res.success) loadAll();
-    else alert(formatApiError(res));
-  }
-
-  async function handleReplyToReview(reviewId: string) {
-    const reply = (replyDrafts[reviewId] || "").trim();
-    if (!reply) {
-      alert("Please write a reply first.");
-      return;
-    }
-    const res = await adminApi.put(`/admin/hotels/reviews/${reviewId}/reply`, { reply });
-    if (!res.success) {
-      alert(formatApiError(res));
-      return;
-    }
-    setReplyDrafts((prev) => ({ ...prev, [reviewId]: "" }));
-    loadAll();
-  }
-
-  async function handleDeleteReview(reviewId: string) {
-    if (!confirm("Delete this review permanently?")) return;
-    const res = await adminApi.delete(`/admin/hotels/reviews/${reviewId}`);
-    if (res.success) loadAll();
-    else alert(formatApiError(res));
-  }
-
-  async function handleDeleteReviewImage(reviewId: string, imageUrl: string) {
-    if (!confirm("Remove this image from the review?")) return;
-    const res = await adminApi.delete(`/admin/hotels/reviews/${reviewId}/images`, { imageUrl });
-    if (res.success) loadAll();
-    else alert(formatApiError(res));
-  }
-
-  if (loading) {
+  // ---- render -------------------------------------------------------------
+  if (loading && !data) {
     return (
       <RequireAdmin>
-        <p>Loading...</p>
+        <PageHeader title="Loading property…" loading breadcrumbs={[{ label: "Hotel", href: "/hotels" }]} />
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <CardSkeleton key={i} />
+          ))}
+        </div>
       </RequireAdmin>
     );
   }
 
-  if (!hotel) {
+  if (error || !hotel) {
     return (
       <RequireAdmin>
-        <p>Hotel not found.</p>
+        <PageHeader title="Hotel" breadcrumbs={[{ label: "Hotel", href: "/hotels" }]} />
+        <div className="card">
+          <ErrorState message={error || "Hotel not found."} onRetry={loadAll} />
+          <div className="card-footer">
+            <Link href="/hotels" className="btn-secondary">
+              Back to hotels
+            </Link>
+          </div>
+        </div>
       </RequireAdmin>
     );
   }
+
+  const roomColumns: Column<RoomData>[] = [
+    {
+      key: "name",
+      header: "Room",
+      sortable: true,
+      accessor: (r) => r.name,
+      render: (r) => (
+        <div className="flex min-w-0 items-center gap-2.5">
+          {r.images?.[0] ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={r.images[0]}
+              alt=""
+              className="h-9 w-12 shrink-0 rounded border border-line object-cover"
+            />
+          ) : (
+            <span className="flex h-9 w-12 shrink-0 items-center justify-center rounded border border-line bg-surface-muted text-ink-400">
+              <BedDouble size={14} />
+            </span>
+          )}
+          <div className="min-w-0">
+            <Link
+              href={`/hotels/${hotelId}/rooms/${r._id}`}
+              className="block truncate font-medium text-ink-800 hover:text-brand-700 hover:underline"
+            >
+              {r.name}
+            </Link>
+            <span className="block truncate font-mono text-xs text-ink-500">/{r.slug}</span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "category",
+      header: "Category",
+      sortable: true,
+      accessor: (r) => r.categoryName,
+      hideBelow: "sm",
+      render: (r) => <Badge tone="neutral">{r.categoryName}</Badge>,
+    },
+    {
+      key: "price",
+      header: "Base price",
+      sortable: true,
+      accessor: (r) => r.basePrice,
+      align: "right",
+      render: (r) => (
+        <span className="whitespace-nowrap tabular-nums">
+          {currency(r.basePrice)}
+          <span className="text-xs text-ink-500"> /night</span>
+        </span>
+      ),
+    },
+    {
+      key: "occupancy",
+      header: "Sleeps",
+      sortable: true,
+      accessor: (r) => r.maxOccupancy ?? 0,
+      align: "right",
+      hideBelow: "lg",
+      render: (r) => <span className="tabular-nums">{r.maxOccupancy ?? "—"}</span>,
+    },
+    {
+      key: "inventory",
+      header: "Units",
+      sortable: true,
+      accessor: (r) => r.totalRooms,
+      align: "right",
+      render: (r) => <span className="tabular-nums">{r.totalRooms}</span>,
+    },
+  ];
 
   return (
     <RequireAdmin>
-      <p>
-        <Link href="/hotels">← Back to Hotels</Link>
-      </p>
-<div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-  <div>
-    <h1>{hotel.name}</h1>
-    <p style={{ color: "#666" }}>{hotel.address}</p>
-  </div>
-  <button onClick={handleOpenEditHotel} style={btnPrimary}>
-    {showEditHotel ? "Cancel" : "Edit Hotel Details"}
-  </button>
-</div>
-
-{showEditHotel && (
-  <form onSubmit={handleUpdateHotel} style={formBox}>
-    <label style={labelStyle}>Hotel Name
-      <input required value={hotelForm.name} onChange={(e) => setHotelForm({ ...hotelForm, name: e.target.value })} style={inputStyle} />
-    </label>
-    <label style={labelStyle}>Description
-      <textarea required value={hotelForm.description} onChange={(e) => setHotelForm({ ...hotelForm, description: e.target.value })} style={inputStyle} />
-    </label>
-    <label style={labelStyle}>Address
-      <input required value={hotelForm.address} onChange={(e) => setHotelForm({ ...hotelForm, address: e.target.value })} style={inputStyle} />
-    </label>
-    <label style={labelStyle}>Contact Phone
-      <input required value={hotelForm.contactPhone} onChange={(e) => setHotelForm({ ...hotelForm, contactPhone: e.target.value })} style={inputStyle} />
-    </label>
-    <label style={labelStyle}>Contact Email
-      <input required type="email" value={hotelForm.contactEmail} onChange={(e) => setHotelForm({ ...hotelForm, contactEmail: e.target.value })} style={inputStyle} />
-    </label>
-    <label style={labelStyle}>Star Rating (1-5)
-      <input type="number" min={1} max={5} value={hotelForm.starRating} onChange={(e) => setHotelForm({ ...hotelForm, starRating: e.target.value })} style={inputStyle} />
-    </label>
-    <label style={labelStyle}>Meta Title (SEO, optional)
-      <input value={hotelForm.metaTitle} onChange={(e) => setHotelForm({ ...hotelForm, metaTitle: e.target.value })} style={inputStyle} />
-    </label>
-    <label style={labelStyle}>Meta Description (SEO, optional)
-      <textarea value={hotelForm.metaDescription} onChange={(e) => setHotelForm({ ...hotelForm, metaDescription: e.target.value })} style={inputStyle} />
-    </label>
-    <button type="submit" disabled={savingHotel} style={btnPrimary}>
-      {savingHotel ? "Saving..." : "Save Changes"}
-    </button>
-  </form>
-)}
-      {/* ROOMS */}
-      <section style={{ marginTop: 32 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h2>Rooms</h2>
-          <button onClick={() => setShowRoomForm(!showRoomForm)} style={btnPrimary}>
-            {showRoomForm ? "Cancel" : "+ New Room"}
-          </button>
-        </div>
-
-        {showRoomForm && (
-          <form onSubmit={handleCreateRoom} style={formBox}>
-            <label style={labelStyle}>
-              Category
-              <select
-                value={roomForm.categoryName}
-                onChange={(e) => setRoomForm({ ...roomForm, categoryName: e.target.value })}
-                style={inputStyle}
-              >
-                <option>Deluxe</option>
-                <option>Executive</option>
-                <option>Luxury</option>
-                <option>Suite</option>
-              </select>
-            </label>
-            <label style={labelStyle}>
-              Name
-              <input
-                required
-                value={roomForm.name}
-                onChange={(e) => {
-                  const name = e.target.value;
-                  setRoomForm((prev) => ({ ...prev, name, slug: slugify(name) }));
-                }}
-                style={inputStyle}
-              />
-            </label>
-            <label style={labelStyle}>
-              Description
-              <textarea
-                required
-                value={roomForm.description}
-                onChange={(e) => setRoomForm({ ...roomForm, description: e.target.value })}
-                style={inputStyle}
-              />
-            </label>
-            <label style={labelStyle}>
-              Base Price (₹/night)
-              <input
-                required
-                type="number"
-                value={roomForm.basePrice}
-                onChange={(e) => setRoomForm({ ...roomForm, basePrice: e.target.value })}
-                style={inputStyle}
-              />
-            </label>
-            <label style={labelStyle}>
-              Max Occupancy
-              <input
-                required
-                type="number"
-                value={roomForm.maxOccupancy}
-                onChange={(e) => setRoomForm({ ...roomForm, maxOccupancy: e.target.value })}
-                style={inputStyle}
-              />
-            </label>
-            <label style={labelStyle}>
-              Total Rooms
-              <input
-                required
-                type="number"
-                value={roomForm.totalRooms}
-                onChange={(e) => setRoomForm({ ...roomForm, totalRooms: e.target.value })}
-                style={inputStyle}
-              />
-            </label>
-            <label style={labelStyle}>
-              Amenities
-              <input
-                value={roomForm.amenities}
-                onChange={(e) => setRoomForm({ ...roomForm, amenities: e.target.value })}
-                placeholder="e.g. AC, Free WiFi, Mini Bar"
-                style={inputStyle}
-              />
-              <small style={{ color: "#888" }}>Comma-separated list.</small>
-            </label>
-            
-            
-            <label style={labelStyle}>
-              Add Room Image Via
-              <div style={{ display: "flex", gap: 16, marginTop: 4, marginBottom: 8 }}>
-                <label style={{ fontWeight: "normal" }}>
-                  <input
-                    type="radio"
-                    name="roomImageUploadMethod"
-                    checked={roomImageUploadMethod === "file"}
-                    onChange={() => setRoomImageUploadMethod("file")}
-                  />{" "}
-                  Upload File
-                </label>
-                <label style={{ fontWeight: "normal" }}>
-                  <input
-                    type="radio"
-                    name="roomImageUploadMethod"
-                    checked={roomImageUploadMethod === "camera"}
-                    onChange={() => setRoomImageUploadMethod("camera")}
-                  />{" "}
-                  Take Photo
-                </label>
-                <label style={{ fontWeight: "normal" }}>
-                  <input
-                    type="radio"
-                    name="roomImageUploadMethod"
-                    checked={roomImageUploadMethod === "url"}
-                    onChange={() => setRoomImageUploadMethod("url")}
-                  />{" "}
-                  Image URL
-                </label>
-              </div>
-            </label>
-
-            {roomImageUploadMethod === "url" ? (
-              <label style={labelStyle}>
-                Image URL
-                <div style={{ display: "flex", gap: 8 }}>
-                  <input
-                    value={roomImageUrlInput}
-                    onChange={(e) => setRoomImageUrlInput(e.target.value)}
-                    placeholder="https://example.com/photo.jpg"
-                    style={{ ...inputStyle, flex: 1 }}
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddRoomImageUrl}
-                    disabled={!roomImageUrlInput.trim()}
-                    style={{ ...btnPrimary, whiteSpace: "nowrap" }}
-                  >
-                    Add
-                  </button>
-                </div>
-              </label>
-            ) : (
-              <label style={labelStyle}>
-                {roomImageUploadMethod === "camera" ? "Take Photo" : "Image File"}
-                <input
-                  key={roomImageUploadMethod}
-                  type="file"
-                  accept="image/*"
-                  capture={roomImageUploadMethod === "camera" ? "environment" : undefined}
-                  onChange={handleRoomImageSelect}
-                  disabled={uploadingRoomImage}
-                  style={inputStyle}
-                />
-              </label>
-            )}
-
-
-            {(roomImages.length > 0 || uploadingRoomImage) && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-                {roomImages.map((url) => (
-                  <div key={url} style={{ position: "relative" }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={url}
-                      alt=""
-                      style={{ width: 70, height: 70, objectFit: "cover", borderRadius: 6 }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeRoomImage(url)}
-                      style={{
-                        position: "absolute", top: 2, right: 2, background: "#c00", color: "#fff",
-                        border: "none", borderRadius: 4, fontSize: 11, cursor: "pointer",
-                      }}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-                {uploadingRoomImage && (
-                  <div style={{ width: 70, height: 70, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#888", border: "1px dashed #ccc", borderRadius: 6 }}>
-                    Uploading...
-                  </div>
-                )}
-              </div>
-            )}
-
-            <button type="submit" style={btnPrimary}>
-              Create Room
-            </button>
-          </form>
-        )}
-
-        <table style={tableStyle}>
-          <thead>
-            <tr>
-              <th style={thStyle}>Name</th>
-              <th style={thStyle}>Category</th>
-              <th style={thStyle}>Price</th>
-              <th style={thStyle}>Total</th>
-              <th style={thStyle}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rooms.map((room) => (
-              <tr key={room._id} style={trStyle}>
-                <td style={tdStyle}>{room.name}</td>
-                <td style={tdStyle}>{room.categoryName}</td>
-                <td style={tdStyle}>₹{room.basePrice}</td>
-                <td style={tdStyle}>{room.totalRooms}</td>
-                <td style={tdStyle}>
-                  <Link href={`/hotels/${hotelId}/rooms/${room._id}`} style={{ marginRight: 12 }}>
-                    Manage
-                  </Link>
-                  <button onClick={() => handleDeleteRoom(room._id)} style={linkDanger}>
-                    Deactivate
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-
- 
-      {/* OFFERS */}
-      <section style={{ marginTop: 32 }}>
-        <h2>Offers</h2>
-        <form onSubmit={handleCreateOffer} style={formBox}>
-          <label style={labelStyle}>
-            Title
-            <input
-              required
-              value={offerForm.title}
-              onChange={(e) => setOfferForm({ ...offerForm, title: e.target.value })}
-              style={inputStyle}
-            />
-          </label>
-          <label style={labelStyle}>
-            Description
-            <input
-              value={offerForm.description}
-              onChange={(e) => setOfferForm({ ...offerForm, description: e.target.value })}
-              style={inputStyle}
-            />
-          </label>
-          <label style={labelStyle}>
-            Valid From
-            <input
-              required
-              type="date"
-              value={offerForm.validFrom}
-              onChange={(e) => setOfferForm({ ...offerForm, validFrom: e.target.value })}
-              style={inputStyle}
-            />
-          </label>
-          <label style={labelStyle}>
-            Valid To
-            <input
-              required
-              type="date"
-              value={offerForm.validTo}
-              onChange={(e) => setOfferForm({ ...offerForm, validTo: e.target.value })}
-              style={inputStyle}
-            />
-          </label>
-          <button type="submit" style={btnPrimary}>
-            Add Offer
-          </button>
-        </form>
-        {offers.map((o) => (
-          <div key={o._id} style={rowBox}>
-            <span>
-              <strong>{o.title}</strong> — {o.description}
-            </span>
-            <button onClick={() => handleDeleteOffer(o._id)} style={linkDanger}>
-              Delete
-            </button>
-          </div>
-        ))}
-      </section>
-
-
-      {/* GALLERY */}
-
-      <section style={{ marginTop: 32 }}>
-        <h2>Gallery</h2>
-        <form onSubmit={handleAddGalleryItem} style={formBox}>
-          <label style={labelStyle}>
-  Add Image Via
-  <div style={{ display: "flex", gap: 16, marginTop: 4, marginBottom: 8 }}>
-    <label style={{ fontWeight: "normal" }}>
-      <input
-        type="radio"
-        name="galleryUploadMethod"
-        checked={galleryUploadMethod === "file"}
-        onChange={() => setGalleryUploadMethod("file")}
-      />{" "}
-      Upload File
-    </label>
-    <label style={{ fontWeight: "normal" }}>
-      <input
-        type="radio"
-        name="galleryUploadMethod"
-        checked={galleryUploadMethod === "camera"}
-        onChange={() => setGalleryUploadMethod("camera")}
-      />{" "}
-      Take Photo
-    </label>
-    <label style={{ fontWeight: "normal" }}>
-      <input
-        type="radio"
-        name="galleryUploadMethod"
-        checked={galleryUploadMethod === "url"}
-        onChange={() => setGalleryUploadMethod("url")}
-      />{" "}
-      Image URL
-    </label>
-  </div>
-</label>
-
-{galleryUploadMethod === "url" ? (
-  <label style={labelStyle}>
-    Image URL
-    <input
-      value={galleryForm.imageUrl}
-      onChange={(e) => setGalleryForm({ ...galleryForm, imageUrl: e.target.value })}
-      placeholder="https://example.com/photo.jpg"
-      style={inputStyle}
-    />
-  </label>
-) : (
-  <label style={labelStyle}>
-    {galleryUploadMethod === "camera" ? "Take Photo" : "Image File"}
-    <input
-      key={galleryUploadMethod}
-      type="file"
-      accept="image/*"
-      capture={galleryUploadMethod === "camera" ? "environment" : undefined}
-      onChange={(e) => setGalleryFile(e.target.files?.[0] || null)}
-      style={inputStyle}
-    />
-  </label>
-)}
-          <label style={labelStyle}>
-            Category
-            <select
-              value={isCustomCategory ? "other" : galleryForm.category}
-              onChange={(e) => {
-                if (e.target.value === "other") {
-                  setIsCustomCategory(true);
-                  setGalleryForm({ ...galleryForm, category: "" });
-                } else {
-                  setIsCustomCategory(false);
-                  setGalleryForm({ ...galleryForm, category: e.target.value });
-                }
-              }}
-              style={inputStyle}
+      <PageHeader
+        title={hotel.name}
+        description={hotel.address}
+        breadcrumbs={[{ label: "Hotel", href: "/hotels" }, { label: hotel.name }]}
+        meta={
+          <>
+            <Badge status={hotel.isActive === false ? "inactive" : "active"} />
+            {hotel.starRating ? (
+              <span className="text-sm text-warning-600">{"★".repeat(hotel.starRating)}</span>
+            ) : null}
+            <span className="font-mono text-xs text-ink-500">/{hotel.slug}</span>
+          </>
+        }
+        actions={
+          <>
+            <a
+              href={`${PUBLIC_SITE_URL}/hotel`}
+              target="_blank"
+              rel="noreferrer"
+              className="btn-secondary"
             >
-              <option value="Exterior">Exterior</option>
-              <option value="Interior">Interior</option>
-              <option value="Food">Food</option>
-              <option value="Building">Building</option>
-              <option value="Rooms">Rooms</option>
-              <option value="other">Other (custom)</option>
-            </select>
-          </label>
-          {isCustomCategory && (
-            <label style={labelStyle}>
-              Custom Category
-              <input
-                required
-                value={galleryForm.category}
-                onChange={(e) => setGalleryForm({ ...galleryForm, category: e.target.value })}
-                placeholder="Enter custom category name"
-                style={inputStyle}
+              <ExternalLink size={14} />
+              View public page
+            </a>
+            <Button variant="primary" icon={<Settings2 size={15} />} onClick={openEditHotel}>
+              Edit property
+            </Button>
+          </>
+        }
+      />
+
+      {/* Property counters */}
+      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard label="Room types" value={rooms.length} icon={<BedDouble size={15} />} tone="brand" />
+        <StatCard
+          label="Total units"
+          value={rooms.reduce((sum, r) => sum + (r.totalRooms || 0), 0)}
+          icon={<Building2 size={15} />}
+        />
+        <StatCard label="Gallery images" value={data?.gallery.length ?? 0} icon={<ImageIcon size={15} />} />
+        <StatCard
+          label="Reviews pending"
+          value={pendingReviews}
+          icon={<Star size={15} />}
+          tone={pendingReviews > 0 ? "warning" : "neutral"}
+        />
+      </div>
+
+      <Tabs
+        className="mb-5"
+        active={activeTab}
+        onChange={setTab}
+        tabs={[
+          { key: "overview", label: "Overview", icon: <Building2 size={14} /> },
+          { key: "rooms", label: "Rooms", icon: <BedDouble size={14} />, count: rooms.length },
+          {
+            key: "gallery",
+            label: "Gallery",
+            icon: <ImageIcon size={14} />,
+            count: data?.gallery.length,
+          },
+          { key: "offers", label: "Offers", icon: <Tag size={14} />, count: data?.offers.length },
+          {
+            key: "faqs",
+            label: "FAQs",
+            icon: <MessageSquareQuote size={14} />,
+            count: data?.faqs.length,
+          },
+          { key: "reviews", label: "Reviews", icon: <Star size={14} />, count: pendingReviews },
+        ]}
+      />
+
+      {activeTab === "overview" && (
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="card lg:col-span-2">
+            <div className="card-header">
+              <div>
+                <h2 className="card-title">Property details</h2>
+                <p className="card-subtitle">Shown across the public hotel pages</p>
+              </div>
+              <Button size="sm" icon={<Settings2 size={14} />} onClick={openEditHotel}>
+                Edit
+              </Button>
+            </div>
+            <dl className="divide-y divide-line-subtle">
+              <DetailRow label="Name" value={hotel.name} />
+              <DetailRow label="URL slug" value={`/${hotel.slug}`} mono />
+              <DetailRow label="Address" value={hotel.address} />
+              <DetailRow label="Phone" value={hotel.contactPhone} />
+              <DetailRow label="Email" value={hotel.contactEmail} />
+              <DetailRow
+                label="Star rating"
+                value={hotel.starRating ? `${hotel.starRating} star` : "Not set"}
               />
-            </label>
-          )}
-       <button type="submit" style={btnPrimary} disabled={uploadingGallery}>
-              {uploadingGallery ? "Uploading..." : "Add Image"}
-            </button>
-        </form>
-
-       {Object.entries(
-  gallery.reduce((acc: Record<string, typeof gallery>, g) => {
-    const key = g.category || "Other";
-    acc[key] = acc[key] || [];
-    acc[key].push(g);
-    return acc;
-  }, {})
-).map(([category, items]) => (
-  <div key={category} style={{ marginTop: 16 }}>
-    <h4 style={{ textTransform: "capitalize", margin: "0 0 8px" }}>{category}</h4>
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-      {items.map((g) => (
-        <div key={g._id} style={{ position: "relative" }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={g.imageUrl}
-            alt=""
-            onClick={() => setEnlargedImage(g.imageUrl)}
-            style={{ width: 120, height: 90, objectFit: "cover", borderRadius: 6, cursor: "pointer" }}
-          />
-          <button
-            onClick={() => handleDeleteGalleryItem(g._id)}
-            style={{ position: "absolute", top: 2, right: 2, background: "#c00", color: "#fff", border: "none", borderRadius: 4, fontSize: 11, cursor: "pointer" }}
-          >
-            ✕
-          </button>
-        </div>
-      ))}
-    </div>
-  </div>
-))}
-      </section>
-
-      {/* FAQS */}
-      <section style={{ marginTop: 32 }}>
-        <h2>FAQs</h2>
-        <form onSubmit={handleCreateFaq} style={formBox}>
-          <label style={labelStyle}>
-            Question
-            <input
-              required
-              value={faqForm.question}
-              onChange={(e) => setFaqForm({ ...faqForm, question: e.target.value })}
-              style={inputStyle}
-            />
-          </label>
-          <label style={labelStyle}>
-            Answer
-            <textarea
-              required
-              value={faqForm.answer}
-              onChange={(e) => setFaqForm({ ...faqForm, answer: e.target.value })}
-              style={inputStyle}
-            />
-          </label>
-          <button type="submit" style={btnPrimary}>
-            Add FAQ
-          </button>
-        </form>
-        {faqs.map((f) => (
-          <div key={f._id} style={rowBox}>
-            <span>
-              <strong>{f.question}</strong>
-            </span>
-            <button onClick={() => handleDeleteFaq(f._id)} style={linkDanger}>
-              Delete
-            </button>
+              <DetailRow label="Description" value={hotel.description} wrap />
+            </dl>
           </div>
-        ))}
-      </section>
 
-      {/* REVIEWS */}
-      <section style={{ marginTop: 32 }}>
-        <h2>Reviews</h2>
-        {reviews.length === 0 ? (
-          <p style={{ color: "#888" }}>No reviews yet.</p>
-        ) : (
-          reviews.map((r) => (
-            <div key={r._id} style={{ border: "1px solid #e5e5e5", borderRadius: 8, padding: 12, marginBottom: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <strong>{r.guestName || "Guest"}</strong>
-                <span
-                  style={{
-                    fontSize: 12,
-                    padding: "2px 8px",
-                    borderRadius: 12,
-                    background: r.isApproved ? "#e6f7e6" : "#fff3cd",
-                    color: r.isApproved ? "#237804" : "#8a6d00",
-                  }}
-                >
-                  {r.isApproved ? "Approved (public)" : "Pending approval"}
-                </span>
+          <div className="space-y-4">
+            <div className="card">
+              <div className="card-header">
+                <h2 className="card-title">Quick actions</h2>
               </div>
-              <p style={{ margin: "6px 0" }}>{"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}</p>
-              <p style={{ margin: "6px 0" }}>{r.comment}</p>
-
-              {r.images && r.images.length > 0 && (
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))",
-                    gap: 8,
-                    maxWidth: 360,
-                    margin: "8px 0",
-                  }}
-                >
-                  {r.images.map((url) => (
-                    <div key={url} style={{ position: "relative" }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={url}
-                        alt="Review photo"
-                        style={{ width: "100%", height: 80, objectFit: "cover", borderRadius: 6 }}
-                      />
-                      <button
-                        onClick={() => handleDeleteReviewImage(r._id, url)}
-                        style={{
-                          position: "absolute",
-                          top: 2,
-                          right: 2,
-                          background: "#c00",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: 4,
-                          fontSize: 11,
-                          cursor: "pointer",
-                        }}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {r.adminReply && (
-                <p style={{ margin: "6px 0", padding: 8, background: "#f5f5f5", borderRadius: 6 }}>
-                  <strong>Your reply:</strong> {r.adminReply}
-                </p>
-              )}
-
-              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                {!r.isApproved && (
-                  <button onClick={() => handleApproveReview(r._id)} style={btnPrimary}>
-                    Approve
-                  </button>
-                )}
-                <button onClick={() => handleDeleteReview(r._id)} style={linkDanger}>
-                  Delete
-                </button>
-              </div>
-
-              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <input
-                  value={replyDrafts[r._id] || ""}
-                  onChange={(e) => setReplyDrafts((prev) => ({ ...prev, [r._id]: e.target.value }))}
-                  placeholder={r.adminReply ? "Update your reply..." : "Write a reply..."}
-                  style={{ ...inputStyle, flex: 1 }}
-                />
-                <button onClick={() => handleReplyToReview(r._id)} style={btnPrimary}>
-                  {r.adminReply ? "Update Reply" : "Reply"}
-                </button>
+              <div className="card-body space-y-2">
+                <Button fullWidth icon={<Plus size={14} />} onClick={openRoomForm}>
+                  Add a room type
+                </Button>
+                <Button fullWidth icon={<ImageIcon size={14} />} onClick={() => setTab("gallery")}>
+                  Manage gallery
+                </Button>
+                <Button fullWidth icon={<Tag size={14} />} onClick={() => setTab("offers")}>
+                  Manage offers
+                </Button>
+                <Link href="/bookings" className="btn-secondary w-full">
+                  <Sliders size={14} />
+                  View bookings
+                </Link>
               </div>
             </div>
-          ))
-        )}
-      </section>
 
-      {enlargedImage && (
-  <div
-    onClick={() => setEnlargedImage(null)}
-    style={{
-      position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      zIndex: 1000, cursor: "pointer",
-    }}
-  >
-    {/* eslint-disable-next-line @next/next/no-img-element */}
-    <img src={enlargedImage} alt="Enlarged" style={{ maxWidth: "90%", maxHeight: "90%", borderRadius: 8 }} />
-  </div>
-)}
+            <div className="card">
+              <div className="card-header">
+                <h2 className="card-title">How availability works</h2>
+              </div>
+              <div className="card-body">
+                <p className="text-sm text-ink-600">
+                  Bookable rooms are computed on every read as{" "}
+                  <span className="font-medium text-ink-800">
+                    total units − blocked − overlapping bookings
+                  </span>
+                  . There is nothing to pre-generate: to hold rooms back for maintenance, add a
+                  date override on the room.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "rooms" && (
+        <DataTable
+          columns={roomColumns}
+          rows={rooms}
+          rowKey={(r) => r._id}
+          loading={loading}
+          searchable={(r) => `${r.name} ${r.slug} ${r.categoryName}`}
+          searchPlaceholder="Search rooms…"
+          initialSort={{ key: "name", direction: "asc" }}
+          onRowClick={(r) => router.push(`/hotels/${hotelId}/rooms/${r._id}`)}
+          toolbarActions={
+            <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={openRoomForm}>
+              New room
+            </Button>
+          }
+          emptyIcon={<BedDouble size={19} />}
+          emptyTitle="No room types yet"
+          emptyDescription="A room type is a category (Deluxe, Suite…) with a price and a number of physical units."
+          emptyAction={
+            <Button variant="primary" icon={<Plus size={15} />} onClick={openRoomForm}>
+              New room
+            </Button>
+          }
+          actions={(r) => [
+            {
+              label: "Manage room",
+              icon: <Settings2 size={14} />,
+              onClick: () => router.push(`/hotels/${hotelId}/rooms/${r._id}`),
+            },
+            {
+              label: "Availability",
+              icon: <Sliders size={14} />,
+              onClick: () => router.push(`/hotels/${hotelId}/rooms/${r._id}?tab=availability`),
+            },
+            {
+              label: "Deactivate",
+              icon: <PowerOff size={14} />,
+              danger: true,
+              separated: true,
+              onClick: () => void handleDeleteRoom(r),
+            },
+          ]}
+        />
+      )}
+
+      {activeTab === "gallery" && (
+        <GalleryManager
+          basePath="/admin/hotels"
+          ownerId={hotelId}
+          items={data?.gallery ?? []}
+          loading={loading}
+          onChanged={loadAll}
+          upload={uploadImage}
+          categoryOptions={GALLERY_CATEGORIES}
+        />
+      )}
+
+      {activeTab === "offers" && (
+        <OffersManager
+          basePath="/admin/hotels"
+          ownerId={hotelId}
+          items={data?.offers ?? []}
+          loading={loading}
+          onChanged={loadAll}
+        />
+      )}
+
+      {activeTab === "faqs" && (
+        <FaqManager
+          basePath="/admin/hotels"
+          ownerId={hotelId}
+          items={data?.faqs ?? []}
+          loading={loading}
+          onChanged={loadAll}
+        />
+      )}
+
+      {activeTab === "reviews" && (
+        <ReviewsManager
+          basePath="/admin/hotels"
+          items={reviews}
+          loading={loading}
+          onChanged={loadAll}
+          canRemoveImages
+        />
+      )}
+
+      {/* ---- Edit property ---- */}
+      <Modal
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="Edit property"
+        size="lg"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setEditOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" type="submit" form="hotel-form" loading={savingHotel}>
+              Save changes
+            </Button>
+          </>
+        }
+      >
+        <form id="hotel-form" onSubmit={handleUpdateHotel} className="space-y-4">
+          {hotelFormError && (
+            <p className="rounded-md border border-danger-100 bg-danger-50 px-3 py-2 text-sm text-danger-700">
+              {hotelFormError}
+            </p>
+          )}
+
+          <TextInput
+            label="Hotel name"
+            required
+            value={hotelForm.name}
+            onChange={(e) => setHotelForm({ ...hotelForm, name: e.target.value })}
+          />
+          <TextArea
+            label="Description"
+            required
+            rows={4}
+            value={hotelForm.description}
+            onChange={(e) => setHotelForm({ ...hotelForm, description: e.target.value })}
+          />
+          <TextInput
+            label="Address"
+            required
+            value={hotelForm.address}
+            onChange={(e) => setHotelForm({ ...hotelForm, address: e.target.value })}
+          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <TextInput
+              label="Contact phone"
+              required
+              value={hotelForm.contactPhone}
+              onChange={(e) => setHotelForm({ ...hotelForm, contactPhone: e.target.value })}
+            />
+            <TextInput
+              label="Contact email"
+              type="email"
+              required
+              value={hotelForm.contactEmail}
+              onChange={(e) => setHotelForm({ ...hotelForm, contactEmail: e.target.value })}
+            />
+          </div>
+          <TextInput
+            label="Star rating"
+            type="number"
+            min={1}
+            max={5}
+            value={hotelForm.starRating}
+            onChange={(e) => setHotelForm({ ...hotelForm, starRating: e.target.value })}
+            hint="1–5. Leave blank if the property is unrated."
+            wrapperClassName="sm:max-w-[12rem]"
+          />
+
+          <Accordion
+            title="Search engine metadata"
+            description="Optional — overrides the defaults on the public page"
+          >
+            <div className="space-y-4">
+              <TextInput
+                label="Meta title"
+                value={hotelForm.metaTitle}
+                onChange={(e) => setHotelForm({ ...hotelForm, metaTitle: e.target.value })}
+                hint="Around 60 characters reads best in search results."
+              />
+              <TextArea
+                label="Meta description"
+                value={hotelForm.metaDescription}
+                onChange={(e) => setHotelForm({ ...hotelForm, metaDescription: e.target.value })}
+                hint="Around 155 characters. Left blank, the page falls back to its own copy."
+              />
+            </div>
+          </Accordion>
+        </form>
+      </Modal>
+
+      {/* ---- New room ---- */}
+      <Modal
+        open={roomOpen}
+        onClose={() => setRoomOpen(false)}
+        title="New room type"
+        description="A room type is a category with a price and a number of physical units."
+        size="lg"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setRoomOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" type="submit" form="room-form" loading={savingRoom}>
+              Create room
+            </Button>
+          </>
+        }
+      >
+        <form id="room-form" onSubmit={handleCreateRoom} className="space-y-4">
+          {roomFormError && (
+            <p className="rounded-md border border-danger-100 bg-danger-50 px-3 py-2 text-sm text-danger-700">
+              {roomFormError}
+            </p>
+          )}
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Select
+              label="Category"
+              value={roomForm.categoryName}
+              onChange={(e) => setRoomForm({ ...roomForm, categoryName: e.target.value })}
+            >
+              {ROOM_CATEGORIES.map((c) => (
+                <option key={c}>{c}</option>
+              ))}
+            </Select>
+            <TextInput
+              label="Room name"
+              required
+              value={roomForm.name}
+              onChange={(e) => {
+                const name = e.target.value;
+                setRoomForm((prev) => ({
+                  ...prev,
+                  name,
+                  slug: roomSlugTouched ? prev.slug : slugify(name),
+                }));
+              }}
+              placeholder="Deluxe Garden View"
+            />
+          </div>
+
+          <TextInput
+            label="URL slug"
+            required
+            value={roomForm.slug}
+            onChange={(e) => {
+              setRoomSlugTouched(true);
+              setRoomForm({ ...roomForm, slug: e.target.value });
+            }}
+            hint="Auto-filled from the name. Becomes part of the room's public URL."
+          />
+
+          <TextArea
+            label="Description"
+            required
+            rows={3}
+            value={roomForm.description}
+            onChange={(e) => setRoomForm({ ...roomForm, description: e.target.value })}
+          />
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <TextInput
+              label="Base price"
+              type="number"
+              min={0}
+              required
+              value={roomForm.basePrice}
+              onChange={(e) => setRoomForm({ ...roomForm, basePrice: e.target.value })}
+              hint="₹ per night"
+            />
+            <TextInput
+              label="Max occupancy"
+              type="number"
+              min={1}
+              required
+              value={roomForm.maxOccupancy}
+              onChange={(e) => setRoomForm({ ...roomForm, maxOccupancy: e.target.value })}
+              hint="Guests per room"
+            />
+            <TextInput
+              label="Total units"
+              type="number"
+              min={1}
+              required
+              value={roomForm.totalRooms}
+              onChange={(e) => setRoomForm({ ...roomForm, totalRooms: e.target.value })}
+              hint="Physical rooms"
+            />
+          </div>
+
+          <TextInput
+            label="Amenities"
+            value={roomForm.amenities}
+            onChange={(e) => setRoomForm({ ...roomForm, amenities: e.target.value })}
+            placeholder="AC, Free WiFi, Mini Bar"
+            hint="Comma-separated."
+          />
+
+          <ImageUploader
+            label="Room photos"
+            value={roomImages}
+            onChange={setRoomImages}
+            folder="rooms"
+            upload={uploadImage}
+            hint="The first image is used as the room's cover on the public site."
+          />
+        </form>
+      </Modal>
     </RequireAdmin>
   );
 }
 
-const btnPrimary: React.CSSProperties = {
-  background: "#111",
-  color: "#fff",
-  border: "none",
-  padding: "8px 16px",
-  borderRadius: 6,
-  cursor: "pointer",
-};
-const formBox: React.CSSProperties = {
-  border: "1px solid #e5e5e5",
-  padding: 16,
-  borderRadius: 8,
-  margin: "12px 0",
-  maxWidth: 480,
-};
-const labelStyle: React.CSSProperties = { display: "block", marginBottom: 10 };
-const inputStyle: React.CSSProperties = { display: "block", width: "100%", padding: 8, marginTop: 4 };
-const tableStyle: React.CSSProperties = { width: "100%", borderCollapse: "collapse", marginTop: 12 };
-const thStyle: React.CSSProperties = { textAlign: "left", padding: 8, borderBottom: "2px solid #e5e5e5" };
-const trStyle: React.CSSProperties = { borderBottom: "1px solid #eee" };
-const tdStyle: React.CSSProperties = { padding: 8 };
-const rowBox: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  borderBottom: "1px solid #eee",
-  padding: "8px 0",
-};
-const linkDanger: React.CSSProperties = { background: "none", border: "none", color: "#c00", cursor: "pointer" };
+function DetailRow({
+  label,
+  value,
+  mono,
+  wrap,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  wrap?: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-1 px-5 py-3 sm:flex-row sm:gap-4">
+      <dt className="w-40 shrink-0 text-sm font-medium text-ink-500">{label}</dt>
+      <dd
+        className={
+          mono
+            ? "min-w-0 font-mono text-base text-ink-700"
+            : wrap
+              ? "min-w-0 whitespace-pre-line text-base text-ink-700"
+              : "min-w-0 text-base text-ink-700"
+        }
+      >
+        {value || "—"}
+      </dd>
+    </div>
+  );
+}
