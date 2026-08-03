@@ -7,10 +7,10 @@ import VerticalsPreview, { VerticalCard } from "@/components/sections/VerticalsP
 import QuickBookingWidget from "@/modules/hotel/components/home/QuickBookingWidget";
 import Introduction from "@/components/sections/Introduction";
 import FeaturedRooms from "@/modules/hotel/components/home/FeaturedRooms";
-import ValueProps, { HOTEL_VALUE_POINTS } from "@/components/sections/ValueProps";
+import ValueProps, { ESTATE_VALUE_POINTS } from "@/components/sections/ValueProps";
 import AmenitiesPreview from "@/components/sections/AmenitiesPreview";
 import OffersPreview from "@/components/sections/OffersPreview";
-import GalleryPreview from "@/components/sections/GalleryPreview";
+import EstateGallery, { EstateImage } from "@/components/sections/EstateGallery";
 import Testimonials from "@/components/sections/Testimonials";
 import MapPlaceholder from "@/components/MapPlaceholder";
 import Reveal from "@/components/motion/Reveal";
@@ -59,11 +59,96 @@ export default async function HomePage() {
 
   const { hotel, rooms, gallery, offers, reviews, reviewSummary } = data;
 
-  // Hero backdrops: gallery photography first (it's the curated set), rooms as
-  // backfill. De-duplicated so a repeated URL can't produce a "stuck" crossfade.
+  // Hero backdrops: one strong frame from each vertical first, then the hotel's
+  // remaining gallery as backfill. The home page is the estate's front door, so
+  // opening on six bedroom shots undersells two thirds of the business — and it
+  // also made the home and /hotel heroes identical, which they no longer are.
+  //
+  // De-duplicated so a repeated URL can't produce a "stuck" crossfade.
   const heroImages = Array.from(
-    new Set([...gallery.map((g) => g.imageUrl), ...rooms.flatMap((r) => r.images || [])])
+    new Set(
+      [
+        hallData?.hall.heroImages?.[0],
+        gallery[0]?.imageUrl,
+        restaurantData?.gallery?.[0]?.imageUrl,
+        hallData?.gallery?.[2]?.imageUrl,
+        gallery[3]?.imageUrl,
+        restaurantData?.gallery?.[4]?.imageUrl,
+        ...gallery.map((g) => g.imageUrl),
+        ...rooms.flatMap((r) => r.images || []),
+      ].filter(Boolean) as string[]
+    )
   ).slice(0, 6);
+
+  // The estate gallery interleaves all three verticals so the default view is a
+  // genuine mix rather than nine bedrooms. Each vertical's own Gallery tab in
+  // the admin panel controls which photographs these are, and their order —
+  // there is no separate "homepage gallery" to keep in sync.
+  const estateImages: EstateImage[] = [
+    ...gallery.slice(0, 6).map((g) => ({ ...g, module: "hotel" as const })),
+    ...(restaurantData?.gallery || [])
+      .slice(0, 6)
+      .map((g) => ({ ...g, module: "restaurant" as const })),
+    ...(hallData?.gallery || []).slice(0, 6).map((g) => ({ ...g, module: "hall" as const })),
+  ];
+
+  // Interleave so the unfiltered grid alternates verticals instead of showing
+  // six of one then six of the next.
+  const interleaved: EstateImage[] = [];
+  for (let i = 0; i < 6; i += 1) {
+    for (const m of ["hotel", "restaurant", "hall"] as const) {
+      const forModule = estateImages.filter((e) => e.module === m);
+      if (forModule[i]) interleaved.push(forModule[i]);
+    }
+  }
+
+  // Offers from all three, each carrying its own CTA — a hotel offer has to
+  // reach the room booking flow and a hall offer the enquiry form, so a single
+  // shared href would send half of them to the wrong place.
+  const estateOffers = [
+    ...offers.map((o) => ({
+      ...o,
+      badge: "Hotel",
+      href: "/hotel/booking",
+    })),
+    ...(restaurantData?.offers || []).map((o) => ({
+      ...o,
+      badge: "Restaurant",
+      href: "/restaurant/reserve",
+    })),
+    ...(hallData?.offers || []).map((o) => ({
+      ...o,
+      badge: "Marriage Hall",
+      href: "/marriage-hall/availability",
+    })),
+  ];
+
+  // Reviews from all three. The headline average is recomputed as a weighted
+  // mean over the three counts rather than averaging the three averages, which
+  // would let a vertical with two reviews outweigh one with fifty.
+  const reviewSources = [
+    { reviews, summary: reviewSummary },
+    { reviews: restaurantData?.reviews || [], summary: restaurantData?.reviewSummary },
+    { reviews: hallData?.reviews || [], summary: hallData?.reviewSummary },
+  ];
+
+  const estateReviewCount = reviewSources.reduce((sum, r) => sum + (r.summary?.count || 0), 0);
+  const estateReviewAverage =
+    estateReviewCount > 0
+      ? reviewSources.reduce(
+          (sum, r) => sum + (r.summary?.average || 0) * (r.summary?.count || 0),
+          0
+        ) / estateReviewCount
+      : 0;
+
+  // Round-robin so the carousel opens with a spread rather than three hotel
+  // reviews in a row.
+  const estateReviews: typeof reviews = [];
+  for (let i = 0; i < 4; i += 1) {
+    for (const source of reviewSources) {
+      if (source.reviews[i]) estateReviews.push(source.reviews[i]);
+    }
+  }
 
   // Prefer an image the hero isn't already showing first, so the welcome band
   // doesn't duplicate the opening frame.
@@ -115,11 +200,15 @@ export default async function HomePage() {
 
   return (
     <main>
+      {/* The estate's front door. `/hotel` has its own hero with hotel-only
+          imagery and hotel CTAs; this one speaks for all three. */}
       <Hero
-        title={hotel.name}
+        title="7 Vachan"
         images={heroImages}
+        eyebrow="Hotel · Restaurant · Banquets"
+        tagline="One address for the night you stay, the meal you remember and the day you'll never forget."
         primaryCta={{ label: "Book Your Stay", href: "/hotel/booking" }}
-        secondaryCta={{ label: "Explore Rooms", href: "/hotel/rooms" }}
+        secondaryCta={{ label: "Explore the estate", href: "#estate" }}
       />
       <QuickBookingWidget />
 
@@ -135,19 +224,33 @@ export default async function HomePage() {
       <FeaturedRooms rooms={rooms} />
 
       {/* The estate: hotel, restaurant and banquet hall. Placed after the rooms
-          so the home page still leads with the stay, but before amenities so a
-          visitor who came for a wedding venue finds it above the fold-and-a-bit
-          rather than only in the top navigation. */}
-      <VerticalsPreview cards={verticalCards} />
+          so the home page still leads with the stay, but early enough that a
+          visitor who came for a wedding venue finds it without hunting the nav. */}
+      <div id="estate" className="anchor-offset">
+        <VerticalsPreview cards={verticalCards} />
+      </div>
 
-      <ValueProps points={HOTEL_VALUE_POINTS} />
+      {/* Estate-wide, not hotel-only — this band speaks for all three. */}
+      <ValueProps
+        points={ESTATE_VALUE_POINTS}
+        eyebrow="Why 7 Vachan"
+        title="Three businesses, one standard"
+      />
+
       <AmenitiesPreview amenities={hotel.amenities} href="/hotel/amenities" />
-      <OffersPreview offers={offers} viewAllHref="/hotel/offers" reserveHref="/hotel/booking" />
-      <GalleryPreview images={gallery} href="/hotel/gallery" />
+      <OffersPreview
+        offers={estateOffers}
+        viewAllHref="/hotel/offers"
+        reserveHref="/hotel/booking"
+        eyebrow="Across the estate"
+        title="What's on right now"
+      />
+
+      <EstateGallery images={interleaved} />
       <Testimonials
-        reviews={reviews}
-        average={reviewSummary.average}
-        count={reviewSummary.count}
+        reviews={estateReviews}
+        average={estateReviewAverage}
+        count={estateReviewCount}
       />
 
       {/* ── Location ── */}

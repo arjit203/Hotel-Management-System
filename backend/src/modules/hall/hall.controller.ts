@@ -17,6 +17,7 @@ import {
   updateHallShowcaseSchema,
   showcaseQuerySchema,
   setHallAvailabilitySchema,
+  setHallAvailabilityRangeSchema,
   calendarQuerySchema,
   createHallEnquirySchema,
   cancelHallEnquirySchema,
@@ -441,6 +442,31 @@ export async function adminSetAvailability(req: Request, res: Response, next: Ne
       reason: parsed.data.reason,
     });
     res.status(200).json({ success: true, message: "Calendar updated.", data: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function adminSetAvailabilityRange(req: Request, res: Response, next: NextFunction) {
+  try {
+    const parsed = setHallAvailabilityRangeSchema.safeParse(req.body);
+    if (!parsed.success) return handleZodError(res, parsed.error);
+
+    const result = await hallService.setAvailabilityRange(req.params.hallId, {
+      from: parsed.data.from,
+      to: parsed.data.to,
+      status: parsed.data.status as HallDateStatus,
+      reason: parsed.data.reason,
+    });
+
+    res.status(200).json({
+      success: true,
+      message:
+        result.applied > 0
+          ? `${result.applied} date(s) updated.`
+          : `${result.cleared} override(s) cleared.`,
+      data: result,
+    });
   } catch (err) {
     next(err);
   }

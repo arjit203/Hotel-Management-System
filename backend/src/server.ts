@@ -6,6 +6,7 @@ import helmet from "helmet";
 import dotenv from "dotenv";
 import connectDB from "./config/db";
 import authRoutes from "./modules/auth/auth.routes";        // ← NEW
+import adminUserRoutes from "./modules/auth/adminUser.routes";
 import { errorHandler } from "./middlewares/error.middleware"; // ← NEW
 import {
   publicHotelRouter,
@@ -37,6 +38,9 @@ app.get("/api/v1/health", (_req, res) => {
 });
 
 app.use("/api/v1/auth", authRoutes);   // ← NEW
+
+// Admin-account management. Super Admin only, enforced on the router itself.
+app.use("/api/v1/admin/users", adminUserRoutes);
 app.use("/api/v1/hotels", publicHotelRouter);
 app.use("/api/v1/hotel-bookings", publicBookingRouter);
 app.use("/api/v1/admin/hotels", adminHotelRouter);

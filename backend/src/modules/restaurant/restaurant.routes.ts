@@ -14,7 +14,7 @@ import { uploadImage } from "../../middlewares/upload.middleware";
 
 // Same roles as HOTEL_MANAGER_ROLES: Super Admin or the property's Branch Admin.
 // Staff may read reservations and availability but not mutate content.
-const RESTAURANT_MANAGER_ROLES = ["super_admin", "branch_admin"];
+const RESTAURANT_MANAGER_ROLES = ["super_admin", "restaurant_manager"];
 
 // ============================================================
 // PUBLIC ROUTES  →  mounted at /api/v1/restaurants
@@ -139,7 +139,7 @@ adminRestaurantRouter.post(
 );
 adminRestaurantRouter.get(
   "/menu/items/:itemId",
-  requireRole(...RESTAURANT_MANAGER_ROLES, "staff"),
+  requireRole(...RESTAURANT_MANAGER_ROLES),
   restaurantController.adminGetMenuItem
 );
 adminRestaurantRouter.put(
@@ -161,7 +161,7 @@ adminRestaurantRouter.post(
 );
 adminRestaurantRouter.get(
   "/dining-areas/:areaId",
-  requireRole(...RESTAURANT_MANAGER_ROLES, "staff"),
+  requireRole(...RESTAURANT_MANAGER_ROLES),
   restaurantController.adminGetDiningArea
 );
 adminRestaurantRouter.put(
@@ -183,14 +183,14 @@ adminRestaurantRouter.put(
 );
 adminRestaurantRouter.get(
   "/dining-areas/:areaId/availability",
-  requireRole(...RESTAURANT_MANAGER_ROLES, "staff"),
+  requireRole(...RESTAURANT_MANAGER_ROLES),
   restaurantController.adminListTableAvailability
 );
 
 // -- Reservations (staff may view the book, not edit it) --
 adminRestaurantRouter.get(
   "/reservations",
-  requireRole(...RESTAURANT_MANAGER_ROLES, "staff"),
+  requireRole(...RESTAURANT_MANAGER_ROLES),
   restaurantController.adminListReservations
 );
 adminRestaurantRouter.put(
@@ -243,7 +243,7 @@ adminRestaurantRouter.delete(
 // -- Reviews --
 adminRestaurantRouter.get(
   "/:restaurantId/reviews",
-  requireRole(...RESTAURANT_MANAGER_ROLES, "staff"),
+  requireRole(...RESTAURANT_MANAGER_ROLES),
   restaurantController.adminListReviews
 );
 adminRestaurantRouter.put(

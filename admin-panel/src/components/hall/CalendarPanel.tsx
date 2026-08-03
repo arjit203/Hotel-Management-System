@@ -1,7 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarOff, ChevronLeft, ChevronRight, Info, Loader2 } from "lucide-react";
+import {
+  CalendarOff,
+  CalendarRange,
+  ChevronLeft,
+  ChevronRight,
+  Info,
+  Loader2,
+} from "lucide-react";
 import { cn } from "@/lib/cn";
 import { adminApi, formatApiError } from "@/lib/api";
 import Button from "@/components/ui/Button";
@@ -70,6 +77,19 @@ export default function CalendarPanel({
   });
   const [saving, setSaving] = useState(false);
 
+  // Range blocking. A three-day wedding or a maintenance week was previously
+  // twenty clicks through the single-date dialog, which is both tedious and
+  // easy to get wrong by a day.
+  const [rangeOpen, setRangeOpen] = useState(false);
+  const [rangeForm, setRangeForm] = useState<{
+    from: string;
+    to: string;
+    status: DateStatus;
+    reason: string;
+  }>({ from: "", to: "", status: "blocked", reason: "" });
+  const [savingRange, setSavingRange] = useState(false);
+  const [rangeError, setRangeError] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -132,6 +152,47 @@ export default function CalendarPanel({
     });
   }
 
+  function openRange() {
+    // Default to the month being viewed, so the dialog opens somewhere useful.
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const first = `${year}-${pad(month)}-01`;
+    setRangeForm({ from: first, to: first, status: "blocked", reason: "" });
+    setRangeError(null);
+    setRangeOpen(true);
+  }
+
+  async function handleSaveRange(e: React.FormEvent) {
+    e.preventDefault();
+    setRangeError(null);
+
+    if (!rangeForm.from || !rangeForm.to) {
+      setRangeError("Pick both a start and an end date.");
+      return;
+    }
+    if (rangeForm.to < rangeForm.from) {
+      setRangeError("The end date cannot be before the start date.");
+      return;
+    }
+
+    setSavingRange(true);
+    const res = await adminApi.put(`/admin/halls/${hallId}/availability/range`, {
+      from: rangeForm.from,
+      to: rangeForm.to,
+      status: rangeForm.status,
+      reason: rangeForm.reason || undefined,
+    });
+    setSavingRange(false);
+
+    if (!res.success) {
+      setRangeError(formatApiError(res));
+      return;
+    }
+
+    toastSuccess(res.message || "Calendar updated.");
+    setRangeOpen(false);
+    void load();
+  }
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (!editing) return;
@@ -168,12 +229,17 @@ export default function CalendarPanel({
             automatically.
           </p>
         </div>
-        <div className="flex items-center gap-1">
-          <Button size="sm" icon={<ChevronLeft size={14} />} onClick={() => step(-1)} aria-label="Previous month" />
-          <span className="min-w-[10rem] text-center text-base font-medium text-ink-800">
-            {monthName}
-          </span>
-          <Button size="sm" icon={<ChevronRight size={14} />} onClick={() => step(1)} aria-label="Next month" />
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" variant="primary" icon={<CalendarRange size={14} />} onClick={openRange}>
+            Block a range
+          </Button>
+          <div className="flex items-center gap-1">
+            <Button size="sm" icon={<ChevronLeft size={14} />} onClick={() => step(-1)} aria-label="Previous month" />
+            <span className="min-w-[10rem] text-center text-base font-medium text-ink-800">
+              {monthName}
+            </span>
+            <Button size="sm" icon={<ChevronRight size={14} />} onClick={() => step(1)} aria-label="Next month" />
+          </div>
         </div>
       </div>
 
@@ -313,6 +379,81 @@ export default function CalendarPanel({
               from confirmed releases it automatically — prefer that over editing the date here.
             </p>
           )}
+        </form>
+      </Modal>
+
+      {/* ── Bulk range ── */}
+      <Modal
+        open={rangeOpen}
+        onClose={() => setRangeOpen(false)}
+        title="Block a date range"
+        description="Apply one status across several days at once — a multi-day wedding, a maintenance week, a seasonal closure."
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setRangeOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              type="submit"
+              form="hall-availability-range-form"
+              loading={savingRange}
+            >
+              Apply to range
+            </Button>
+          </>
+        }
+      >
+        <form id="hall-availability-range-form" onSubmit={handleSaveRange} className="space-y-4">
+          {rangeError && (
+            <p className="rounded-md border border-danger-100 bg-danger-50 px-3 py-2 text-sm text-danger-700">
+              {rangeError}
+            </p>
+          )}
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <TextInput
+              label="From"
+              type="date"
+              required
+              value={rangeForm.from}
+              onChange={(e) => setRangeForm({ ...rangeForm, from: e.target.value })}
+            />
+            <TextInput
+              label="To"
+              type="date"
+              required
+              value={rangeForm.to}
+              onChange={(e) => setRangeForm({ ...rangeForm, to: e.target.value })}
+              hint="Inclusive — both days are included."
+            />
+          </div>
+
+          <Select
+            label="Status for every day in the range"
+            value={rangeForm.status}
+            onChange={(e) => setRangeForm({ ...rangeForm, status: e.target.value as DateStatus })}
+            hint="Choosing Available clears any manual override across the whole range. Dates held by a confirmed enquiry will still read as booked afterwards."
+          >
+            <option value="blocked">Blocked — not offered at all</option>
+            <option value="booked">Booked — the dates are taken</option>
+            <option value="tentative">Tentative — provisionally held</option>
+            <option value="available">Available — clear overrides</option>
+          </Select>
+
+          <TextInput
+            label="Internal note"
+            value={rangeForm.reason}
+            onChange={(e) => setRangeForm({ ...rangeForm, reason: e.target.value })}
+            placeholder="Verma wedding — three functions"
+            hint="Staff only. Applied to every day in the range."
+            disabled={rangeForm.status === "available"}
+          />
+
+          <p className="rounded-md border border-line bg-surface-hover px-3 py-2.5 text-sm text-ink-600">
+            Blocked and booked dates are greyed out on the public calendar and cannot be selected,
+            so a family sees straight away that the date is gone.
+          </p>
         </form>
       </Modal>
     </div>

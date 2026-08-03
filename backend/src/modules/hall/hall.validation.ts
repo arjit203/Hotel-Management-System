@@ -120,6 +120,24 @@ export const setHallAvailabilitySchema = z.object({
 });
 
 /**
+ * Bulk override across a date range — a three-day wedding, a maintenance week,
+ * a seasonal closure. Setting these one day at a time through
+ * `setHallAvailabilitySchema` is what admins were doing, and it is both tedious
+ * and easy to get wrong by one day.
+ */
+export const setHallAvailabilityRangeSchema = z
+  .object({
+    from: isoDate,
+    to: isoDate,
+    status: z.enum(HALL_DATE_STATUSES as [string, ...string[]]),
+    reason: z.string().max(200).optional(),
+  })
+  .refine((v) => new Date(v.from) <= new Date(v.to), {
+    message: "The end date cannot be before the start date.",
+    path: ["to"],
+  });
+
+/**
  * Public calendar query. Month is 1-12 to match what a human types; the service
  * converts to JS's 0-indexed month.
  */
@@ -182,6 +200,7 @@ export type CreateHallPackageInput = z.infer<typeof createHallPackageSchema>;
 export type CreateHallShowcaseInput = z.infer<typeof createHallShowcaseSchema>;
 export type ShowcaseQueryInput = z.infer<typeof showcaseQuerySchema>;
 export type SetHallAvailabilityInput = z.infer<typeof setHallAvailabilitySchema>;
+export type SetHallAvailabilityRangeInput = z.infer<typeof setHallAvailabilityRangeSchema>;
 export type CalendarQueryInput = z.infer<typeof calendarQuerySchema>;
 export type CreateHallEnquiryInput = z.infer<typeof createHallEnquirySchema>;
 export type CancelHallEnquiryInput = z.infer<typeof cancelHallEnquirySchema>;

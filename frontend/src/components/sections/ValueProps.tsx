@@ -1,4 +1,12 @@
-import { ShieldCheck, Sparkles, Clock, HeartHandshake, type LucideIcon } from "lucide-react";
+import {
+  ShieldCheck,
+  Sparkles,
+  Clock,
+  HeartHandshake,
+  ChefHat,
+  MapPin,
+  type LucideIcon,
+} from "lucide-react";
 import Reveal from "@/components/motion/Reveal";
 import TextReveal from "@/components/motion/TextReveal";
 import { Stagger, StaggerItem } from "@/components/motion/Stagger";
@@ -27,6 +35,38 @@ export const HOTEL_VALUE_POINTS = [
     icon: HeartHandshake,
     title: "Warm Hospitality",
     desc: "Personalised attention and genuine care — the hallmark of the 7 Vachan experience.",
+  },
+];
+
+/**
+ * The home page's copy. Deliberately different from `HOTEL_VALUE_POINTS`:
+ * the home page is the estate's front door, and a band of four hotel-only
+ * promises there ("every room is curated…") speaks for one third of the
+ * business while ignoring the restaurant and the banquet hall entirely.
+ *
+ * These four say something true of all three, and each nods at a different
+ * vertical so the reader understands the estate's shape from this band alone.
+ */
+export const ESTATE_VALUE_POINTS = [
+  {
+    icon: MapPin,
+    title: "Everything On One Estate",
+    desc: "Stay, dine and celebrate without anyone leaving the grounds — the wedding party sleeps upstairs from the hall.",
+  },
+  {
+    icon: ChefHat,
+    title: "One Kitchen, Every Table",
+    desc: "The same chefs cook your room-service breakfast, your table at the restaurant and your wedding banquet. Never outsourced.",
+  },
+  {
+    icon: HeartHandshake,
+    title: "One Team, Start To Finish",
+    desc: "A single manager owns your booking — the room, the dinner, the function — so nothing is explained twice.",
+  },
+  {
+    icon: Clock,
+    title: "Round-the-Clock Service",
+    desc: "Reception never closes, and someone senior is always on the property. At 2am as much as at 2pm.",
   },
 ];
 

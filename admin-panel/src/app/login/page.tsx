@@ -32,7 +32,7 @@ export default function AdminLoginPage() {
 
     const res = await adminApi.post<{
       token: string;
-      admin: { name: string; email: string; role: string };
+      admin: { id?: string; name: string; email: string; role: string };
     }>("/auth/admin/login", { email, password });
 
     setIsSubmitting(false);

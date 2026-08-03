@@ -6,7 +6,7 @@ import { uploadImage } from "../../middlewares/upload.middleware";
 // Admins allowed to manage hotel content — Super Admin (branchId=null) or the
 // Branch Admin for that property. Staff can view but not mutate (per typical
 // least-privilege pattern); adjust here centrally if that policy changes.
-const HOTEL_MANAGER_ROLES = ["super_admin", "branch_admin"];
+const HOTEL_MANAGER_ROLES = ["super_admin", "hotel_manager"];
 
 // ============================================================
 // PUBLIC ROUTES  →  mounted at /api/v1/hotels
@@ -79,7 +79,7 @@ adminHotelRouter.post(
 );
 adminHotelRouter.get(
   "/rooms/:roomId",
-  requireRole(...HOTEL_MANAGER_ROLES, "staff"),
+  requireRole(...HOTEL_MANAGER_ROLES),
   hotelController.adminGetRoom
 );
 adminHotelRouter.put("/rooms/:roomId", requireRole(...HOTEL_MANAGER_ROLES), hotelController.adminUpdateRoom);
@@ -97,7 +97,7 @@ adminHotelRouter.put(
 );
 adminHotelRouter.get(
   "/rooms/:roomId/availability",
-  requireRole(...HOTEL_MANAGER_ROLES, "staff"),
+  requireRole(...HOTEL_MANAGER_ROLES),
   hotelController.adminListAvailability
 );
 
@@ -158,7 +158,7 @@ adminHotelRouter.delete(
 // -- Booking management --
 adminHotelRouter.get(
   "/bookings",
-  requireRole(...HOTEL_MANAGER_ROLES, "staff"),
+  requireRole(...HOTEL_MANAGER_ROLES),
   hotelController.adminListBookings
 );
 adminHotelRouter.put(
@@ -170,7 +170,7 @@ adminHotelRouter.put(
 // -- Review management --
 adminHotelRouter.get(
   "/:hotelId/reviews",
-  requireRole(...HOTEL_MANAGER_ROLES, "staff"),
+  requireRole(...HOTEL_MANAGER_ROLES),
   hotelController.adminListReviews
 );
 adminHotelRouter.put(

@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { verifyJwt, ActorType } from "../utils/token.util";
+import { Admin } from "../modules/auth/models/admin.model";
 
 // Extend Express Request to carry the authenticated actor.
 declare global {
@@ -24,23 +25,64 @@ function extractToken(req: Request): string | null {
  * req.actor = { id, role, actorType }. Responds 401 if missing/invalid.
  */
 export function authenticate(actorType: ActorType) {
-  return (req: Request, res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     const token = extractToken(req);
 
     if (!token) {
       return res.status(401).json({ success: false, message: "Authentication token missing." });
     }
 
+    let payload;
     try {
-      const payload = verifyJwt(token, actorType);
-      if (payload.actorType !== actorType) {
-        return res.status(401).json({ success: false, message: "Invalid token for this route." });
-      }
-      req.actor = payload;
-      next();
-    } catch (err) {
+      payload = verifyJwt(token, actorType);
+    } catch {
       return res.status(401).json({ success: false, message: "Invalid or expired token." });
     }
+
+    if (payload.actorType !== actorType) {
+      return res.status(401).json({ success: false, message: "Invalid token for this route." });
+    }
+
+    /**
+     * ── Admin tokens are re-checked against the database on every request ──
+     *
+     * A JWT carries the role it was signed with, so without this an admin
+     * demoted from super_admin to staff would keep full access until their
+     * token expired — up to seven days — and a deactivated account would keep
+     * working entirely. The brief requires permission changes to take effect
+     * immediately, and that cannot be done from the token alone.
+     *
+     * Cost is one indexed findById per admin request. Admin traffic is a few
+     * staff, not the public, so that is a fair price for instant revocation.
+     *
+     * User tokens are deliberately NOT re-checked: that path is public-facing,
+     * far higher volume, and carries no privileged role to revoke.
+     */
+    if (actorType === "admin") {
+      try {
+        const admin = await Admin.findById(payload.id).select("role isActive");
+
+        if (!admin) {
+          return res.status(401).json({ success: false, message: "This account no longer exists." });
+        }
+        if (!admin.isActive) {
+          return res
+            .status(403)
+            .json({ success: false, message: "This account has been deactivated." });
+        }
+
+        // The live role wins over whatever the token was signed with.
+        req.actor = { id: payload.id, role: admin.role, actorType: "admin" };
+        return next();
+      } catch {
+        return res
+          .status(503)
+          .json({ success: false, message: "Could not verify your account. Please retry." });
+      }
+    }
+
+    req.actor = payload;
+    next();
   };
 }
 

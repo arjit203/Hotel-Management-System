@@ -22,6 +22,17 @@ export default function Header() {
   const [hidden, setHidden] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  /**
+   * Which desktop dropdown is open, by href. `null` = none.
+   *
+   * This used to be pure CSS (`group-hover` + `group-focus-within`), which had a
+   * visible bug: clicking a group's parent link left focus on it, so
+   * focus-within held that panel open while hovering the next group opened a
+   * second one — two menus on screen at once. A single piece of state can only
+   * ever name one, which is the actual requirement.
+   */
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
+
   // Only the home page opens with a full-bleed cinematic hero, so only there
   // does the header float transparently over the artwork. Everywhere else it is
   // an opaque bar with a spacer beneath it.
@@ -57,10 +68,22 @@ export default function Header() {
     else if (latest < previous) setHidden(false);
   });
 
-  // Close the mobile drawer on route change.
+  // Close the mobile drawer and any open dropdown on route change.
   useEffect(() => {
     setMobileOpen(false);
+    setOpenMenu(null);
   }, [pathname]);
+
+  // Escape closes the open dropdown — expected of any menu, and the only way
+  // out for a keyboard user who opened one and changed their mind.
+  useEffect(() => {
+    if (!openMenu) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpenMenu(null);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [openMenu]);
 
   // Lock background scrolling while the full-screen drawer is open.
   useEffect(() => {
@@ -132,35 +155,58 @@ export default function Header() {
                 );
               }
 
-              // Grouped entry. The panel opens on hover AND on keyboard focus
-              // (focus-within), so it is reachable without a mouse; the parent
-              // remains a real link to the vertical's overview page.
+              // Grouped entry. Opening is state-driven so exactly one panel can
+              // be open: pointing at a different group replaces the open one
+              // rather than adding to it. The parent stays a real link to the
+              // vertical's overview page.
+              const isOpen = openMenu === link.href;
+
               return (
-                <div key={link.href} className="group/nav relative">
+                <div
+                  key={link.href}
+                  className="relative"
+                  onPointerEnter={() => setOpenMenu(link.href)}
+                  onPointerLeave={() => setOpenMenu((current) => (current === link.href ? null : current))}
+                  // Keyboard: focus anywhere inside opens it, leaving closes it.
+                  // Checking relatedTarget means tabbing between the parent link
+                  // and its own children doesn't flicker the panel shut.
+                  onFocus={() => setOpenMenu(link.href)}
+                  onBlur={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                      setOpenMenu((current) => (current === link.href ? null : current));
+                    }
+                  }}
+                >
                   <Link
                     href={link.href}
                     data-active={active}
+                    aria-expanded={isOpen}
                     className={`nav-link inline-flex items-center gap-1.5 ${tone}`}
                   >
                     {link.label}
                     <ChevronDown
                       size={13}
                       strokeWidth={1.75}
-                      className="transition-transform duration-400 ease-luxe group-hover/nav:rotate-180"
+                      className={`transition-transform duration-400 ease-luxe ${isOpen ? "rotate-180" : ""}`}
                     />
                   </Link>
 
                   <div
-                    className="invisible absolute left-1/2 top-full z-50 w-60 -translate-x-1/2 translate-y-1 pt-5 opacity-0
-                               transition-all duration-300 ease-luxe
-                               group-hover/nav:visible group-hover/nav:translate-y-0 group-hover/nav:opacity-100
-                               group-focus-within/nav:visible group-focus-within/nav:translate-y-0 group-focus-within/nav:opacity-100"
+                    className={`absolute left-1/2 top-full z-50 w-60 -translate-x-1/2 pt-5 transition-all duration-300 ease-luxe ${
+                      isOpen
+                        ? "visible translate-y-0 opacity-100"
+                        : "invisible translate-y-1 opacity-0"
+                    }`}
                   >
                     <ul className="overflow-hidden rounded-luxe border border-ink/[0.07] bg-cream/95 py-2 shadow-lift backdrop-blur-xl">
                       {link.children.map((child) => (
                         <li key={child.href}>
                           <Link
                             href={child.href}
+                            // Not focusable while closed, so Tab doesn't walk
+                            // through invisible links.
+                            tabIndex={isOpen ? 0 : -1}
+                            onClick={() => setOpenMenu(null)}
                             className={`block px-5 py-2.5 text-sm font-light transition-colors duration-300 hover:bg-gold/[0.08] hover:text-gold ${
                               pathname === child.href ? "text-gold" : "text-ink/75"
                             }`}

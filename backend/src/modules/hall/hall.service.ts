@@ -292,6 +292,67 @@ export async function setAvailability(
   );
 }
 
+/**
+ * Applies one status across an inclusive date range.
+ *
+ * Capped at 366 days so a mistyped year can't try to write a decade of rows.
+ * Uses the same single-date logic per day, so "available" still deletes rather
+ * than storing a marker — clearing a range and setting one behave identically.
+ */
+export async function setAvailabilityRange(
+  hallId: string,
+  input: { from: string; to: string; status: HallDateStatus; reason?: string }
+) {
+  await getHallById(hallId);
+
+  const from = startOfDayUTC(new Date(input.from));
+  const to = startOfDayUTC(new Date(input.to));
+
+  if (from > to) throw new ApiError(400, "The end date cannot be before the start date.");
+
+  const days = Math.round((to.getTime() - from.getTime()) / 86_400_000) + 1;
+  if (days > 366) {
+    throw new ApiError(400, "That range is longer than a year. Please split it up.");
+  }
+
+  const dates: Date[] = [];
+  for (let i = 0; i < days; i += 1) {
+    dates.push(new Date(from.getTime() + i * 86_400_000));
+  }
+
+  if (input.status === "available") {
+    const result = await HallAvailability.deleteMany({ hallId, date: { $in: dates } });
+    return { hallId, from, to, status: input.status, cleared: result.deletedCount ?? 0, applied: 0 };
+  }
+
+  // One upsert per day. bulkWrite rather than a loop of awaits, so a 90-day
+  // block is a single round-trip instead of ninety.
+  //
+  // `reason` is spread in only when set: an explicit `undefined` inside `$set`
+  // is both a Mongoose typing error and semantically wrong — it would clear an
+  // existing note rather than leave it alone.
+  const operations = dates.map((date) => ({
+    updateOne: {
+      filter: { hallId, date },
+      update: {
+        $set: {
+          hallId,
+          date,
+          status: input.status,
+          ...(input.reason ? { reason: input.reason } : {}),
+        },
+      },
+      upsert: true,
+    },
+  }));
+
+  await HallAvailability.bulkWrite(
+    operations as Parameters<typeof HallAvailability.bulkWrite>[0]
+  );
+
+  return { hallId, from, to, status: input.status, applied: dates.length, cleared: 0 };
+}
+
 export async function listAvailabilityOverrides(hallId: string) {
   return HallAvailability.find({ hallId }).sort({ date: 1 });
 }

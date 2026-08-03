@@ -13,6 +13,15 @@ export interface BusinessProperty {
   slug: string;
   address?: string;
   isActive?: boolean;
+  /**
+   * The branch this property belongs to. Read straight off the public listing.
+   *
+   * Used by the Users screen to prefill the Branch ID when creating a manager:
+   * only one branch exists, so making someone copy a 24-character ObjectId out
+   * of the database would be pure friction. The field itself stays required on
+   * the model — `RULES.md` §26 freezes the multi-tenant data model.
+   */
+  branchId?: string;
 }
 
 interface BusinessContextValue {
@@ -32,6 +41,13 @@ interface BusinessContextValue {
   loading: boolean;
   error: string | null;
   reload: () => void;
+
+  /**
+   * The branch every property currently sits under, or null if nothing is
+   * loaded yet. There is one branch today; when a second appears this becomes
+   * a picker rather than a prefill.
+   */
+  defaultBranchId: string | null;
 }
 
 const BusinessContext = createContext<BusinessContextValue | null>(null);
@@ -158,10 +174,15 @@ export function BusinessProvider({ children }: { children: React.ReactNode }) {
     [business]
   );
 
+  // First branchId seen across the three lists. All properties share one today.
+  const defaultBranchId =
+    [...hotels, ...restaurants, ...halls].find((p) => p.branchId)?.branchId ?? null;
+
   const value = useMemo<BusinessContextValue>(
     () => ({
       business,
       setBusiness,
+      defaultBranchId,
       hotels,
       restaurants,
       halls,
@@ -175,6 +196,7 @@ export function BusinessProvider({ children }: { children: React.ReactNode }) {
     [
       business,
       setBusiness,
+      defaultBranchId,
       hotels,
       restaurants,
       halls,

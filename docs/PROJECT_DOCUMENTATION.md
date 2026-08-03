@@ -37,12 +37,42 @@ Unified booking + management platform for Hotel, Marriage Hall, and Restaurant u
 ## 4. Module: Authentication
 
 ### Purpose
-Provides identity, session (JWT), and role-based access control for two distinct actor types: **Users** (customers) and **Admins** (Super Admin / Branch Admin / Staff), matching the separate-collection design in `DATABASE_SCHEMA.md`.
+Provides identity, session (JWT), and role-based access control for two distinct actor types: **Users** (customers) and **Admins** (Super Admin plus one manager per vertical), each in its own collection with its own JWT secret.
 
 ### Design Decisions
 - **Two separate Mongoose models** (`User`, `Admin`) rather than one polymorphic model — matches the frozen `DATABASE_SCHEMA.md` structure and keeps customer auth cleanly isolated from back-office auth (different JWT secrets, different token lifetimes, different rate-limit policy possible later).
-- **Role-based access** implemented via JWT payload (`role`, `actorType`) checked in `requireRole()` middleware — not hardcoded per-route logic.
-- **No public admin signup route.** Per `RULES.md`, admin accounts are provisioned internally (a future Super Admin "manage admins" feature will create Branch Admin/Staff accounts). Only Admin login + password reset are exposed publicly.
+- **Role-based access** implemented via `requireRole()` middleware after `authenticate()` — not hardcoded per-route logic. For admins the role is read **live from the database** on every request rather than trusted from the JWT payload, so a demotion or deactivation takes effect on the target's very next call instead of when their token expires. User tokens are deliberately not re-read: that path is public-facing, far higher volume, and carries no privileged role to revoke.
+
+#### Admin roles — four, one owner per vertical (revised 2026-08-03)
+`super_admin`, `hotel_manager`, `restaurant_manager`, `hall_manager`.
+
+`branch_admin` and `staff` were **removed** at the owner's decision. 7 Vachan will
+run a single branch, which made a branch-scoped admin a second Super Admin under a
+different name, and the read-only `staff` tier had nobody to fill it — a manager
+already reads everything inside their own vertical. Seventeen
+`requireRole(...X, "staff")` read-guards collapsed to `requireRole(...X)`.
+
+This removed the **roles**, not the multi-tenant **data model**. `branchId` stays
+on every property and on every non-Super-Admin account because `RULES.md` §26
+freezes that requirement; adding a second branch later means reintroducing a role,
+not migrating data. The admin panel prefills the single branch so nobody has to
+copy an ObjectId out of the database.
+
+Scope is now **derived from the role** — `businessScope` is stored only so the
+admin list shows one consistent column, and is ignored if a client sends it. That
+was verified by creating a `hotel_manager` with `businessScope: ["hotel","restaurant","hall"]`
+in the body; the stored scope came back as `["hotel"]`.
+
+**Known limitation — legacy role rows.** An account created before this change
+keeps its old role string in the database. `ROLE_IMPLIED_SCOPE[role]` is
+`undefined` for those, and reading `.length` off it took the entire
+`GET /admin/users` endpoint down with a 500 — meaning one stale document cost you
+the very screen you would use to fix it. `effectiveScope()` and `resolveScope()`
+now guard for it, the API returns `isLegacyRole: true` on such rows, and the admin
+panel shows a red "retired" badge plus a banner telling you to reassign or delete
+them. A legacy account resolves to an empty scope and is refused by every module,
+so it is inert rather than dangerous.
+- **No public admin signup route.** Per `RULES.md`, admin accounts are provisioned internally — the first Super Admin is seeded, and every account after that is created by a Super Admin through `/api/v1/admin/users`. Only Admin login + password reset are exposed publicly.
 - **Email verification** required for User accounts (`isEmailVerified` flag) — enforcement of *what* requires verification is deferred to whichever module needs it (e.g., booking), since no other modules exist yet.
 - **Forgot password** uses a time-limited, single-use, hashed token stored directly on the `User`/`Admin` document (not a separate collection) — keeps this module self-contained; can be normalized into its own collection later without breaking the public API contract.
 - **Guest checkout is unaffected** — this module only concerns accounts that choose to register/login; no route in this module blocks guest flows.
@@ -85,7 +115,7 @@ Complete customer-facing and admin-facing hotel functionality: listing, details,
 - **Payment integration deliberately deferred** — bookings currently confirm with `advancePaid: 0` and full `balanceDue`; the booking record structure (`advancePaid`, `balanceDue`) is already payment-ready so the future Payments module only needs to update these fields, not restructure the schema.
 - **Booking reference** (`7V-XXXXXXXX`) generated for guest-friendly lookup without requiring login — powers the public confirmation page.
 - **Soft deletes** for Hotel/Room (`isActive: false`) rather than hard delete, and both are blocked from deletion if they have dependent active data (rooms/bookings respectively) — preserves booking history integrity per `AI_INSTRUCTIONS.md` backward-compatibility rules.
-- **RBAC**: Hotel/Room/Offer/Gallery/FAQ mutation restricted to `super_admin` and `branch_admin`; `staff` can view availability/bookings but not mutate — centralized as `HOTEL_MANAGER_ROLES` constant in `hotel.routes.ts` for easy policy change later.
+- **RBAC**: every Hotel admin route requires `HOTEL_MANAGER_ROLES = ["super_admin", "hotel_manager"]`, centralized as a constant in `hotel.routes.ts` so policy changes in one place. There is no read-only tier — the `staff` role was removed, and a hotel manager reads and writes everything in Hotel and nothing outside it.
 
 ### Addendum to Auth Module (additive only, not a regeneration)
 - `middlewares/auth.middleware.ts` gained one new export, `optionalAuthenticate(actorType)` — behaves like `authenticate()` but never rejects the request; needed for guest-checkout support. Existing `authenticate`/`requireRole` exports are untouched.
@@ -226,7 +256,7 @@ See `API_DOCUMENTATION.md`.
 ## 7. Module: Admin Console (`admin-panel/`)
 
 ### Purpose
-The back-office UI for staff. It is a **productivity tool**, not a brand surface:
+The back-office UI for the owner and the three vertical managers. It is a **productivity tool**, not a brand surface:
 speed, density and readability come before decoration. It never touches MongoDB
 — every screen calls `/api/v1` like any other client.
 
@@ -377,19 +407,19 @@ error, not just a technical one.
   willing and the conversation has started; only `confirmed` writes a calendar
   block. Several families can be discussing the same auspicious date, and
   showing it as gone would lose the others. Releasing a date only removes the
-  override *this enquiry* created, so a hand-placed staff block on the same day
+  override *this enquiry* created, so a hand-placed manager block on the same day
   survives.
 - **The enquiry snapshots the chosen package and theme names** at submit time,
   so renaming a package in the admin panel later does not rewrite what the
   family actually asked for.
 - **`hall_manager` is a new admin role, added additively.** Hotel and Restaurant
-  name their managers explicitly as `["super_admin","branch_admin"]`, so a
+  name their own managers explicitly, so a
   `hall_manager` token is refused there by the same `requireRole` check every
   other route already uses — the isolation the brief asked for falls out of the
   existing pattern rather than needing new middleware. No existing role's
   permissions changed.
 - **Reference prefix `7VH-`** sits alongside the hotel booking's `7V-` and the
-  restaurant reservation's `7VR-`, so staff can tell the three apart at a glance.
+  restaurant reservation's `7VR-`, so anyone can tell the three apart at a glance.
 - **The public calendar is `no-store`, everything else is cached 120s.** A
   date's status is the one thing that changes as enquiries arrive, and a cached
   "available" on a date that has just been taken is the most damaging error this
@@ -492,8 +522,9 @@ cd backend && npx ts-node ../database/seeders/seed-demo-content.ts \
 
 **The backend must be running**, and the credentials are the same ones you use
 for the admin panel. `ADMIN_EMAIL` / `ADMIN_PASSWORD` environment variables work
-instead of the flags. A `staff` login is rejected (read-only); a `hall_manager`
-can seed only the hall.
+instead of the flags. Sign in as a Super Admin to seed all three verticals in
+one run — a vertical manager can only write their own, and the seeder says so
+before the other two start returning 403.
 
 Idempotent — safe to run repeatedly. It replaced the earlier
 `seed-marriage-hall.ts`, which covered one vertical and used a different image

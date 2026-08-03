@@ -16,14 +16,12 @@ import { uploadImage } from "../../middlewares/upload.middleware";
 /**
  * Who may manage hall content.
  *
- * `hall_manager` is a new admin role added for this vertical. Because Hotel and
- * Restaurant list their managers explicitly (`HOTEL_MANAGER_ROLES` /
- * `RESTAURANT_MANAGER_ROLES` are both `["super_admin","branch_admin"]`), a
- * `hall_manager` token is rejected by those modules automatically — the
- * isolation the brief asks for falls out of the existing pattern rather than
- * needing new middleware. Super Admin remains in every list.
+ * Each module names its own managers, so a `hall_manager` token is rejected by
+ * Hotel and Restaurant automatically — the isolation falls out of the existing
+ * `requireRole` pattern rather than needing new middleware. Super Admin remains
+ * in every list.
  */
-const HALL_MANAGER_ROLES = ["super_admin", "branch_admin", "hall_manager"];
+const HALL_MANAGER_ROLES = ["super_admin", "hall_manager"];
 
 // ============================================================
 // PUBLIC ROUTES  →  mounted at /api/v1/halls
@@ -82,7 +80,7 @@ adminHallRouter.use(authenticate("admin"));
 adminHallRouter.post("/", requireRole(...HALL_MANAGER_ROLES), hallController.adminCreateHall);
 adminHallRouter.get(
   "/:hallId",
-  requireRole(...HALL_MANAGER_ROLES, "staff"),
+  requireRole(...HALL_MANAGER_ROLES),
   hallController.adminGetHall
 );
 adminHallRouter.put(
@@ -113,7 +111,7 @@ adminHallRouter.delete(
 // Declared before /:hallId/... groups so "enquiries" is never read as a hallId.
 adminHallRouter.get(
   "/enquiries/list",
-  requireRole(...HALL_MANAGER_ROLES, "staff"),
+  requireRole(...HALL_MANAGER_ROLES),
   hallController.adminListEnquiries
 );
 adminHallRouter.put(
@@ -130,7 +128,7 @@ adminHallRouter.post(
 );
 adminHallRouter.get(
   "/packages/:packageId",
-  requireRole(...HALL_MANAGER_ROLES, "staff"),
+  requireRole(...HALL_MANAGER_ROLES),
   hallController.adminGetPackage
 );
 adminHallRouter.put(
@@ -147,7 +145,7 @@ adminHallRouter.delete(
 // -- Showcases: decoration themes, catering, dining, floral --
 adminHallRouter.get(
   "/:hallId/showcase",
-  requireRole(...HALL_MANAGER_ROLES, "staff"),
+  requireRole(...HALL_MANAGER_ROLES),
   hallController.adminListShowcases
 );
 adminHallRouter.post(
@@ -157,7 +155,7 @@ adminHallRouter.post(
 );
 adminHallRouter.get(
   "/showcase/:showcaseId",
-  requireRole(...HALL_MANAGER_ROLES, "staff"),
+  requireRole(...HALL_MANAGER_ROLES),
   hallController.adminGetShowcase
 );
 adminHallRouter.put(
@@ -174,7 +172,7 @@ adminHallRouter.delete(
 // -- Availability calendar --
 adminHallRouter.get(
   "/:hallId/calendar",
-  requireRole(...HALL_MANAGER_ROLES, "staff"),
+  requireRole(...HALL_MANAGER_ROLES),
   hallController.adminGetCalendar
 );
 adminHallRouter.put(
@@ -182,9 +180,14 @@ adminHallRouter.put(
   requireRole(...HALL_MANAGER_ROLES),
   hallController.adminSetAvailability
 );
+adminHallRouter.put(
+  "/:hallId/availability/range",
+  requireRole(...HALL_MANAGER_ROLES),
+  hallController.adminSetAvailabilityRange
+);
 adminHallRouter.get(
   "/:hallId/availability",
-  requireRole(...HALL_MANAGER_ROLES, "staff"),
+  requireRole(...HALL_MANAGER_ROLES),
   hallController.adminListAvailability
 );
 
@@ -232,7 +235,7 @@ adminHallRouter.delete(
 // -- Reviews --
 adminHallRouter.get(
   "/:hallId/reviews",
-  requireRole(...HALL_MANAGER_ROLES, "staff"),
+  requireRole(...HALL_MANAGER_ROLES),
   hallController.adminListReviews
 );
 adminHallRouter.put(

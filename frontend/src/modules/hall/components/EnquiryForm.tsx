@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -219,8 +220,15 @@ export default function EnquiryForm({
           </p>
         </div>
 
+        {/* The reference alone is not much use unless people know what to do
+            with it. This is where they check status without phoning. */}
+        <Link href={`/marriage-hall/enquiry/${reference}`} className="btn-primary group mt-9">
+          Track your enquiry
+          <ArrowRight size={14} className="btn-arrow" />
+        </Link>
+
         <p className="mt-7 text-sm font-light text-warm-500">
-          Would rather talk now? Call us on{" "}
+          We&apos;ve emailed this reference to you. Would rather talk now? Call us on{" "}
           <a href={`tel:${contactPhone.replace(/\s/g, "")}`} className="text-gold-dark hover:text-gold">
             {contactPhone}
           </a>

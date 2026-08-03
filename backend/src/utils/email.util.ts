@@ -250,6 +250,8 @@ export function buildHallEnquiryReceivedEmailHtml(details: {
   guestCount: number;
   packageName?: string;
   contactPhone: string;
+  /** Public URL where the guest can check this enquiry's status. */
+  trackUrl?: string;
   /** Renders the internal-facing variant for the admin notification. */
   forAdmin?: boolean;
   guestEmail?: string;
@@ -287,6 +289,12 @@ export function buildHallEnquiryReceivedEmailHtml(details: {
     </ul>
     <p><strong>Please note:</strong> this is an enquiry, not a confirmed booking. Your date is
     reserved only once we have spoken and confirmed it with you. No payment has been taken.</p>
+    ${
+      details.trackUrl
+        ? `<p>You can check the status of this enquiry at any time here:<br>
+           <a href="${details.trackUrl}">${details.trackUrl}</a></p>`
+        : ""
+    }
     <p>If you'd like to speak to us sooner, call ${details.contactPhone}.</p>
     <p>We would be honoured to host your celebration.</p>
   `;
@@ -299,6 +307,8 @@ export function buildHallEnquiryStatusEmailHtml(details: {
   eventDate: string;
   status: string;
   contactPhone: string;
+  /** Public URL where the guest can check this enquiry's status. */
+  trackUrl?: string;
 }): string {
   const body: Record<string, string> = {
     approved: `<p>Good news — <strong>${details.hallName}</strong> is available for your date and we
@@ -320,6 +330,11 @@ export function buildHallEnquiryStatusEmailHtml(details: {
       <li><strong>Reference:</strong> ${details.enquiryReference}</li>
       <li><strong>Date:</strong> ${details.eventDate}</li>
     </ul>
+    ${
+      details.trackUrl
+        ? `<p>Full details are here:<br><a href="${details.trackUrl}">${details.trackUrl}</a></p>`
+        : ""
+    }
     <p>Questions? Call us on ${details.contactPhone}.</p>
   `;
 }

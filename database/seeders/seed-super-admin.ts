@@ -20,7 +20,7 @@ const adminSchema = new Schema(
     name: String,
     email: { type: String, unique: true, lowercase: true },
     passwordHash: String,
-    role: { type: String, enum: ["super_admin", "branch_admin", "staff"] },
+    role: { type: String, enum: ["super_admin", "hotel_manager", "restaurant_manager", "hall_manager"] },
     branchId: { type: Schema.Types.ObjectId, default: null },
     isActive: { type: Boolean, default: true },
   },

@@ -20,13 +20,28 @@ export function clearToken() {
   localStorage.removeItem("admin_token");
 }
 
-export function getStoredAdmin(): { name: string; email: string; role: string } | null {
+/**
+ * The admin identity cached at login.
+ *
+ * `id` matters for more than display: the Users screen needs it to mark "You"
+ * and to avoid offering self-destructive actions. It was already being written
+ * to localStorage (the login response carries it and the whole object is
+ * stringified) — it simply wasn't in the type, so nothing could read it.
+ */
+export interface StoredAdminInfo {
+  id?: string;
+  name: string;
+  email: string;
+  role: string;
+}
+
+export function getStoredAdmin(): StoredAdminInfo | null {
   if (typeof window === "undefined") return null;
   const raw = localStorage.getItem("admin_info");
   return raw ? JSON.parse(raw) : null;
 }
 
-export function setStoredAdmin(admin: { name: string; email: string; role: string }) {
+export function setStoredAdmin(admin: StoredAdminInfo) {
   localStorage.setItem("admin_info", JSON.stringify(admin));
 }
 

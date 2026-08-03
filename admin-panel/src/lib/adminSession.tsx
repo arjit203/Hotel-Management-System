@@ -4,6 +4,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { clearToken, getStoredAdmin } from "./api";
 
 export interface StoredAdmin {
+  /** Present for anyone who signed in after the Users module shipped. */
+  id?: string;
   name: string;
   email: string;
   role: string;

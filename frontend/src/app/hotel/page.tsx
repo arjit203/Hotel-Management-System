@@ -14,6 +14,7 @@ import StarRating from "@/components/StarRating";
 import { getTheHotel } from "@/lib/hotel";
 import Hero from "@/components/sections/Hero";
 import FeaturedRooms from "@/modules/hotel/components/home/FeaturedRooms";
+import ValueProps, { HOTEL_VALUE_POINTS } from "@/components/sections/ValueProps";
 import AmenitiesPreview from "@/components/sections/AmenitiesPreview";
 import OffersPreview from "@/components/sections/OffersPreview";
 import GalleryPreview from "@/components/sections/GalleryPreview";
@@ -256,6 +257,10 @@ export default async function HotelPage() {
           </div>
         </section>
       )}
+
+      {/* Hotel-specific promises. The home page runs ESTATE_VALUE_POINTS
+          instead, which speak for all three businesses. */}
+      <ValueProps points={HOTEL_VALUE_POINTS} />
 
       <AmenitiesPreview amenities={hotel.amenities} href="/hotel/amenities" />
       <OffersPreview offers={offers} viewAllHref="/hotel/offers" reserveHref="/hotel/booking" />

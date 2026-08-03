@@ -4,6 +4,130 @@ Format: newest entries on top. Categories: Added / Changed / Fixed / Security / 
 
 ---
 
+## [2026-08-03 (f)] — Removed the `branch_admin` and `staff` roles
+
+### Changed — four admin roles instead of six
+At the owner's decision: 7 Vachan will only ever run one branch, so a
+branch-scoped admin was a second Super Admin under another name; and the
+read-only `staff` tier had nobody to fill it, because a manager already reads
+everything inside their own vertical.
+
+`AdminRole` is now `super_admin | hotel_manager | restaurant_manager | hall_manager`.
+
+- `HOTEL_MANAGER_ROLES` → `["super_admin", "hotel_manager"]`
+- `RESTAURANT_MANAGER_ROLES` → `["super_admin", "restaurant_manager"]`
+- `HALL_MANAGER_ROLES` → `["super_admin", "hall_manager"]`
+- 17 `requireRole(...X, "staff")` read-guards collapsed to `requireRole(...X)`
+  (4 hotel, 5 restaurant, 8 hall). No route changed who *can* write, only who
+  could read without writing — and nobody holds that role.
+- `ROLE_IMPLIED_SCOPE` lost its two `"all"`/`[]` entries, so **every** role's
+  business scope is now derived from the role. `businessScope` in a request body
+  is accepted and ignored rather than rejected, so an older admin-panel build
+  that still sends it gets a clean response instead of a validation error.
+- Admin panel `/users`: four roles, the assignable-scope checkbox block removed
+  (nothing left to assign), and the Branch ID field prefilled from
+  `businessContext`.
+- Both seeders updated; `seed-demo-content.ts` now says which verticals your
+  login can actually write instead of special-casing two removed roles.
+
+**This removed the roles, not the multi-tenant data model.** `branchId` stays
+required on every non-Super-Admin account and on every property because
+`RULES.md` §26 freezes that requirement. Adding a second branch later means
+reintroducing a role, not migrating data.
+
+Checked the live database first: only one account existed (`super_admin`), so no
+migration was needed.
+
+### Fixed — a single legacy-role row 500'd the whole admin list
+`ROLE_IMPLIED_SCOPE[role]` is `undefined` for a role no longer in the enum, and
+`effectiveScope()` read `.length` off it. Any account still on `branch_admin` or
+`staff` therefore made `GET /admin/users` return 500 — one stale document costing
+you the exact screen you would use to fix it. Found it for real: a test run
+against a stale process created a `branch_admin` row, and the list endpoint died.
+
+`effectiveScope()` and `resolveScope()` now guard for `undefined`, a new
+`isLegacyRole()` is exported, and the API returns `isLegacyRole: true` on both the
+list and single-account responses. The admin panel renders a red "retired" badge
+on those rows plus a banner explaining they are refused everywhere and should be
+reassigned or deleted. A legacy account resolves to an empty scope, which is also
+the safe answer — every `requireRole` list names current roles explicitly.
+
+### Security — verified live, not assumed
+Against a scratch backend on 5055:
+
+| Role | hotel/bookings | restaurant/reservations | hall/enquiries | admin/users |
+|---|---|---|---|---|
+| `hotel_manager` | 200 | 403 | 403 | 403 |
+| `restaurant_manager` | 403 | 200 | 403 | 403 |
+| `hall_manager` | 403 | 403 | 200 | 403 |
+| `super_admin` | 200 | 200 | 200 | 200 |
+
+Also confirmed: `branch_admin` and `staff` refused with a 400 enum error on both
+create and update; a manager calling `POST /admin/users` or raising their own role
+via `PUT` gets 403; a role change flipped the *same unexpired token* from
+200-on-hotel to 200-on-hall with no re-login; deactivating flipped it to 403
+immediately; password reset invalidated the old password; and the self-edit,
+duplicate-email, missing-branch and password-length rules all refused with their
+own status codes.
+
+Two testing traps that manufacture false passes, recorded because they cost real
+time here: the admin routers have **no bare `GET /`**, so probing `/admin/hotels`
+hits the global 404 *before* `requireRole` runs and the whole matrix reads 404
+while proving nothing; and `adminUser.routes.ts` uses `PUT` (not `PATCH`) with
+`/:adminId/password` (not `/reset-password`), so a wrong verb 404s — and a 404
+body has `success: false`, which reads as "correctly blocked" to any assertion
+that only tests that flag. Assert on status codes.
+
+A third: `pkill -f "PORT=5055"` did not actually kill the scratch backend on
+Windows, so an early run tested stale code and reported `branch_admin` as still
+creatable. Kill by port via `Get-NetTCPConnection` instead.
+
+---
+
+## [2026-08-03 (e)] — User & Role Management, estate home page, hall availability ranges
+
+### Added — User & Role Management (Super Admin only)
+New `backend/src/modules/auth/adminUser.{validation,service,controller,routes}.ts`, mounted at `/api/v1/admin/users`, plus a rebuilt `/users` page in the admin panel: list, create, edit, change role, assign business scope and branch, activate/deactivate, reset password, delete, last-login and account status.
+
+Placed inside the existing `auth` module rather than a new top-level one — the `Admin` model already lives there.
+
+- **Two new roles**: `hotel_manager` and `restaurant_manager`, alongside the existing `hall_manager`. Isolation is structural, not special-cased: each module already named its allowed roles explicitly, so adding one name to each list is the entire change. **One line per file in `hotel.routes.ts` and `restaurant.routes.ts`; no handler, route or business rule touched.**
+- **`businessScope`** added to the Admin model, assignable only for `staff` (read-only, per assigned module). For managers it is derived from the role and kept in sync on write, so the stored value can never contradict what the guards allow.
+- **`createdBy`** recorded on every account.
+- Guard is applied to the whole router (`requireRole("super_admin")`), so a route added to this file can never accidentally ship unprotected.
+
+**Business rules enforced server-side**, not in the UI: nobody can change their own role or deactivate/delete themselves, and **the last active Super Admin is protected** from demotion, deactivation and deletion — without that, an installation can reach a state where no account can create another, unrecoverable without database access. Branch is mandatory for every role except Super Admin; a staff account must have at least one business in scope.
+
+### Changed — permission changes now take effect immediately
+`authenticate("admin")` re-reads the account from the database on every admin request and uses the **live** role, rejecting deactivated accounts.
+
+The brief required immediate effect, and a JWT cannot deliver it: an admin demoted from `super_admin` to `staff` would otherwise keep full access until their token expired — up to seven days — and a deactivated account would keep working entirely. Cost is one indexed `findById` per admin request; admin traffic is a handful of staff, so that is a fair trade. **User tokens are deliberately not re-checked** — public-facing, far higher volume, no privileged role to revoke.
+
+### Added — Marriage Hall availability ranges
+`PUT /admin/halls/:hallId/availability/range` plus a "Block a range" dialog in the admin calendar. A three-day wedding or a maintenance week was previously twenty passes through the single-date dialog. Capped at 366 days, written as one `bulkWrite`, and `available` clears overrides across the range exactly as the single-date route does.
+
+### Added — customer-facing enquiry status page
+`/marriage-hall/enquiry/[reference]`. The backend already emailed on approve/confirm/decline, but email is not a status board — it gets buried, filtered, or lands in an inbox someone else checks, and there was no way to answer "is our date booked?" without phoning. Shows the current stage on a four-step track, what was asked for, and a withdraw action while that is still possible. Both enquiry emails and the submit confirmation now carry the link.
+
+### Changed — the home page is now the estate's front door
+It sold only the Hotel: a hotel hero, hotel-only promises, and a gallery of nine bedrooms. Someone arriving from a wedding-venue search saw nothing that spoke to them.
+
+- **Hero** draws one strong frame from each vertical, and no longer duplicates `/hotel`'s hero.
+- **`ESTATE_VALUE_POINTS`** replaces the hotel-only promises with four that are true of all three. `HOTEL_VALUE_POINTS` moved to `/hotel`, where it belongs.
+- **New `EstateGallery`** interleaves all three collections with a module filter and per-module "Explore all". Which photographs appear is controlled from each vertical's existing Gallery tab — there is no separate homepage gallery to maintain.
+- **Offers and testimonials span all three.** `OffersPreview` gained an optional per-offer `href` and `badge`, because a hotel offer must reach the booking flow and a hall offer the enquiry form. The headline rating is a weighted mean over the three counts, not an average of averages, which would let a vertical with two reviews outweigh one with fifty.
+
+### Fixed
+- **Two nav dropdowns could be open at once.** The menu was pure CSS (`group-hover` + `group-focus-within`): clicking a group's parent left focus on it, so focus-within held that panel open while hovering the next opened a second. Now a single `openMenu` state, which can only ever name one. Keyboard access and Escape-to-close preserved; closed items are `tabIndex={-1}` so Tab doesn't walk through invisible links.
+- **Hall package cards read as cramped.** Four cards in a four-column grid, each with a photo, title, tagline, description, guest range, tick list and a boxed "Investment / On request" block. Now two columns, tier name on the photograph, guest range as a pill, and the price label as quiet supporting text beside the CTA rather than a headline announcing a non-answer.
+
+### Verification
+- All three workspaces `tsc --noEmit` → 0 errors; both Next apps build.
+- **RBAC tested live against a scratch backend on port 5055** (leaving the running dev server untouched): a `hall_manager` token returned **200** on `/admin/halls/enquiries/list` and **403** on `/admin/hotels/bookings`, `/admin/restaurants/reservations` and `/admin/users`. All four business rules returned their intended messages. After deactivating that account, the *same unexpired token* returned **403** — instant revocation confirmed. Test account deleted afterwards.
+- Home page verified rendering all three verticals with the module filter.
+
+---
+
 ## [2026-08-03 (d)] — Cinematic Hotel landing page + graceful degradation when the API is down
 
 ### Fixed — an unreachable backend no longer breaks the public site

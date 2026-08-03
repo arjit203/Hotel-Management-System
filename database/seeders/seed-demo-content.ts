@@ -917,13 +917,11 @@ async function run() {
   TOKEN = auth.token;
   console.log(`✅ Signed in as ${auth.admin.name} (${auth.admin.role})\n`);
 
-  if (auth.admin.role === "staff") {
-    console.error("❌ The staff role is read-only. Use a Super Admin or Branch Admin login.");
-    process.exitCode = 1;
-    return;
-  }
-  if (auth.admin.role === "hall_manager") {
-    console.log("ℹ  hall_manager can only write the Marriage Hall — the other two will 403.\n");
+  if (auth.admin.role !== "super_admin") {
+    console.log(
+      `ℹ  ${auth.admin.role} can only write its own vertical — the others will 403.\n` +
+        "   Sign in as a Super Admin to seed everything in one run.\n"
+    );
   }
 
   // ---------------------------------------------------------------- HOTEL

@@ -8,6 +8,17 @@ interface Offer {
   _id: string;
   title: string;
   description?: string;
+  /**
+   * Per-offer CTA target, overriding `reserveHref`.
+   *
+   * Needed by the home page, which shows offers from all three verticals in one
+   * band — a hotel offer must lead to the room booking flow and a hall offer to
+   * the enquiry form, so a single shared href cannot serve both. Optional, so
+   * the hotel and restaurant pages keep passing one href for their own offers.
+   */
+  href?: string;
+  /** Small label identifying which vertical an offer belongs to. */
+  badge?: string;
 }
 
 export default function OffersPreview({
@@ -55,13 +66,19 @@ export default function OffersPreview({
 
                 <span className="mb-6 h-px w-12 bg-gold transition-all duration-600 ease-luxe group-hover:w-20" />
 
+                {offer.badge && (
+                  <span className="relative mb-3 inline-block w-fit rounded-full border border-gold/25 px-3 py-1 text-[10px] uppercase tracking-eyebrow text-gold-dark">
+                    {offer.badge}
+                  </span>
+                )}
+
                 <h3 className="card-title relative">{offer.title}</h3>
 
                 {offer.description && <p className="body-muted mt-4 flex-1">{offer.description}</p>}
 
                 {/* `group-hover` too, so the arrow also steps forward when the
                     whole offer card is hovered — not only the link itself. */}
-                <Link href={reserveHref} className="link-arrow mt-8">
+                <Link href={offer.href || reserveHref} className="link-arrow mt-8">
                   {reserveLabel}
                   <ArrowRight size={14} className="group-hover:translate-x-1" />
                 </Link>

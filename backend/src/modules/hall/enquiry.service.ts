@@ -30,6 +30,18 @@ import { CreateHallEnquiryInput } from "./hall.validation";
  * business error, not just a technical one.
  */
 
+/**
+ * Public page where a family can check an enquiry's status.
+ *
+ * Email is not a status board — it gets buried, filtered, or lands in an inbox
+ * someone else checks. Every enquiry email carries this link so "is our date
+ * booked?" never requires a phone call.
+ */
+function trackUrlFor(reference: string): string {
+  const base = (process.env.FRONTEND_URL || "http://localhost:3000").replace(/\/$/, "");
+  return `${base}/marriage-hall/enquiry/${reference}`;
+}
+
 function generateEnquiryReference(): string {
   // 7VH- prefix sits alongside the hotel booking's 7V- and the restaurant
   // reservation's 7VR-, so staff can tell the three apart at a glance.
@@ -133,6 +145,7 @@ export async function createEnquiry(input: CreateHallEnquiryInput, userId?: stri
     guestCount: enquiry.guestCount,
     packageName,
     contactPhone: hall.contactPhone,
+    trackUrl: trackUrlFor(enquiry.enquiryReference),
   };
 
   void sendEmail({
@@ -235,6 +248,7 @@ export async function updateEnquiryStatus(
         eventDate: enquiry.eventDate.toDateString(),
         status,
         contactPhone: hall.contactPhone,
+        trackUrl: trackUrlFor(enquiry.enquiryReference),
       }),
     }).catch(() => undefined);
   }

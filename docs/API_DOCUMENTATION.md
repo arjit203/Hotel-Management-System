@@ -107,7 +107,7 @@ Validation errors additionally include:
 ## Middleware Reference (for future modules building on this)
 - `authenticate('user' | 'admin')` — verifies JWT with the correct secret for that actor type, attaches `req.actor = { id, role, actorType }`.
 - `optionalAuthenticate('user' | 'admin')` — same as above but never rejects; used for guest-checkout flows (e.g. hotel booking) where login is optional.
-- `requireRole(...roles)` — use after `authenticate()`; 403s if `req.actor.role` isn't in the allowed list. Example: `requireRole('super_admin', 'branch_admin')`.
+- `requireRole(...roles)` — use after `authenticate()`; 403s if `req.actor.role` isn't in the allowed list. Example: `requireRole('super_admin', 'hotel_manager')`.
 
 ---
 
@@ -149,33 +149,35 @@ Public. Looks up a booking by its human-friendly reference (e.g. `7V-8F3A9C21`) 
 Protected (User JWT required). Lists the logged-in user's own bookings.
 
 ## Hotel — Admin
-All routes below require `authenticate('admin')`; most also require `requireRole('super_admin', 'branch_admin')` (noted per-route). Mounted at `/api/v1/admin/hotels`.
+All routes below require `authenticate('admin')` **and** `requireRole(...HOTEL_MANAGER_ROLES)`, where `HOTEL_MANAGER_ROLES = ["super_admin", "hotel_manager"]`. Mounted at `/api/v1/admin/hotels`.
+
+There is no read-only tier any more — a hotel manager reads and writes everything in Hotel, and nothing outside it.
 
 | Method & Path | Roles | Purpose |
 |---|---|---|
-| `POST /` | super_admin, branch_admin | Create hotel |
-| `PUT /:hotelId` | super_admin, branch_admin | Update hotel |
-| `DELETE /:hotelId` | super_admin, branch_admin | Soft-delete (deactivate) hotel — blocked if active rooms exist |
-| `POST /:hotelId/rooms` | super_admin, branch_admin | Create room |
-| `GET /rooms/:roomId` | super_admin, branch_admin, staff | Get a single room's full details (used by Edit Room form) |
-| `PUT /rooms/:roomId` | super_admin, branch_admin | Update room |
-| `DELETE /rooms/:roomId` | super_admin, branch_admin | Soft-delete room — blocked if active/upcoming bookings exist |
-| `PUT /rooms/:roomId/availability` | super_admin, branch_admin | Set/override blocked-room-count for a specific date |
-| `GET /rooms/:roomId/availability` | super_admin, branch_admin, staff | List availability overrides |
-| `POST /upload-image?folder=` | super_admin, branch_admin | Upload an image to Cloudinary, returns `{ url, publicId, ... }` |
-| `DELETE /upload-image` | super_admin, branch_admin | Delete an image from Cloudinary by `publicId` |
-| `POST /:hotelId/gallery` | super_admin, branch_admin | Add gallery image |
-| `DELETE /gallery/:itemId` | super_admin, branch_admin | Remove gallery image |
-| `POST /:hotelId/offers` | super_admin, branch_admin | Create offer |
-| `PUT /offers/:offerId` | super_admin, branch_admin | Update offer |
-| `DELETE /offers/:offerId` | super_admin, branch_admin | Delete offer |
-| `POST /:hotelId/faqs` | super_admin, branch_admin | Create FAQ |
-| `DELETE /faqs/:faqId` | super_admin, branch_admin | Delete FAQ |
-| `GET /bookings?hotelId=&status=` | super_admin, branch_admin, staff | List bookings (filterable) |
-| `PUT /bookings/:bookingId/status` | super_admin, branch_admin | Update booking status (pending/confirmed/checked_in/checked_out/cancelled) |
+| `POST /` | hotel manager | Create hotel |
+| `PUT /:hotelId` | hotel manager | Update hotel |
+| `DELETE /:hotelId` | hotel manager | Soft-delete (deactivate) hotel — blocked if active rooms exist |
+| `POST /:hotelId/rooms` | hotel manager | Create room |
+| `GET /rooms/:roomId` | hotel manager | Get a single room's full details (used by Edit Room form) |
+| `PUT /rooms/:roomId` | hotel manager | Update room |
+| `DELETE /rooms/:roomId` | hotel manager | Soft-delete room — blocked if active/upcoming bookings exist |
+| `PUT /rooms/:roomId/availability` | hotel manager | Set/override blocked-room-count for a specific date |
+| `GET /rooms/:roomId/availability` | hotel manager | List availability overrides |
+| `POST /upload-image?folder=` | hotel manager | Upload an image to Cloudinary, returns `{ url, publicId, ... }` |
+| `DELETE /upload-image` | hotel manager | Delete an image from Cloudinary by `publicId` |
+| `POST /:hotelId/gallery` | hotel manager | Add gallery image |
+| `DELETE /gallery/:itemId` | hotel manager | Remove gallery image |
+| `POST /:hotelId/offers` | hotel manager | Create offer |
+| `PUT /offers/:offerId` | hotel manager | Update offer |
+| `DELETE /offers/:offerId` | hotel manager | Delete offer |
+| `POST /:hotelId/faqs` | hotel manager | Create FAQ |
+| `DELETE /faqs/:faqId` | hotel manager | Delete FAQ |
+| `GET /bookings?hotelId=&status=` | hotel manager | List bookings (filterable) |
+| `PUT /bookings/:bookingId/status` | hotel manager | Update booking status (pending/confirmed/checked_in/checked_out/cancelled) |
 
 ### `POST /api/v1/admin/hotels/upload-image?folder=rooms`
-Protected, `super_admin`/`branch_admin`. Multipart form-data, field name **`image`** (single file). `folder` query param is optional and namespaces the asset in Cloudinary (e.g. `rooms`, `gallery`, `offers`, `hotel-cover`) — defaults to `misc`.
+Protected, `HOTEL_MANAGER_ROLES`. Multipart form-data, field name **`image`** (single file). `folder` query param is optional and namespaces the asset in Cloudinary (e.g. `rooms`, `gallery`, `offers`, `hotel-cover`) — defaults to `misc`.
 Accepted types: JPEG, PNG, WEBP, AVIF. Max size: `MAX_IMAGE_UPLOAD_MB` env var (default 5MB).
 **Response 201:**
 ```json
@@ -185,7 +187,7 @@ Use the returned `url` as the value for `imageUrl` (Gallery/Offer) or an entry i
 **Errors:** `400` no file / disallowed type / oversized · `500` Cloudinary not configured on server · `502` upload failed
 
 ### `DELETE /api/v1/admin/hotels/upload-image`
-Protected, `super_admin`/`branch_admin`. **Body:** `{ "publicId": "7vachan/hotel/rooms/abc123" }`.
+Protected, `HOTEL_MANAGER_ROLES`. **Body:** `{ "publicId": "7vachan/hotel/rooms/abc123" }`.
 **Response 200:** `{ "success": true, "message": "Image deleted." }`
 **Errors:** `400` missing publicId · `500` Cloudinary not configured · `502` delete failed
 
@@ -314,7 +316,7 @@ Ownership must be proved — the reference alone is shareable. A guest supplies 
 ## Restaurant — Admin
 
 **Base:** `/api/v1/admin/restaurants` · **All routes require admin auth.**
-**Roles:** `super_admin` and `branch_admin` mutate. `staff` is read-only on menu items, dining areas, availability, reservations and reviews.
+**Roles:** `RESTAURANT_MANAGER_ROLES = ["super_admin", "restaurant_manager"]` for every route below — read and write alike.
 
 | Method | Path | Roles |
 |---|---|---|
@@ -324,14 +326,14 @@ Ownership must be proved — the reference alone is shareable. A guest supplies 
 | POST | `/:restaurantId/menu/categories` | manager |
 | PUT, DELETE | `/menu/categories/:categoryId` | manager |
 | POST | `/:restaurantId/menu/items` | manager |
-| GET | `/menu/items/:itemId` | manager + staff |
+| GET | `/menu/items/:itemId` | manager |
 | PUT, DELETE | `/menu/items/:itemId` | manager |
 | POST | `/:restaurantId/dining-areas` | manager |
-| GET | `/dining-areas/:areaId` | manager + staff |
+| GET | `/dining-areas/:areaId` | manager |
 | PUT, DELETE | `/dining-areas/:areaId` | manager |
 | PUT | `/dining-areas/:areaId/availability` | manager |
-| GET | `/dining-areas/:areaId/availability` | manager + staff |
-| GET | `/reservations` | manager + staff |
+| GET | `/dining-areas/:areaId/availability` | manager |
+| GET | `/reservations` | manager |
 | PUT | `/reservations/:reservationId/status` | manager |
 | POST | `/:restaurantId/gallery` | manager |
 | DELETE | `/gallery/:itemId` | manager |
@@ -339,7 +341,7 @@ Ownership must be proved — the reference alone is shareable. A guest supplies 
 | PUT, DELETE | `/offers/:offerId` | manager |
 | POST | `/:restaurantId/faqs` | manager |
 | DELETE | `/faqs/:faqId` | manager |
-| GET | `/:restaurantId/reviews` | manager + staff |
+| GET | `/:restaurantId/reviews` | manager |
 | PUT | `/reviews/:reviewId/approve` | manager |
 | PUT | `/reviews/:reviewId/reply` | manager |
 | DELETE | `/reviews/:reviewId` | manager |
@@ -413,28 +415,28 @@ Mounted at `/api/v1/hall-enquiries`.
 ## Marriage Hall — Admin
 Mounted at `/api/v1/admin/halls`. All routes require `authenticate("admin")`.
 
-**RBAC.** `HALL_MANAGER_ROLES = ["super_admin", "branch_admin", "hall_manager"]`. `hall_manager` is a **new role**, added additively to the Admin model's enum. Because Hotel and Restaurant list their managers explicitly as `["super_admin","branch_admin"]`, a `hall_manager` token is refused by those modules automatically — no new middleware was needed. `staff` gets the read-only additions marked below.
+**RBAC.** `HALL_MANAGER_ROLES = ["super_admin", "hall_manager"]`. Each module names its own managers, so a `hall_manager` token is refused by Hotel and Restaurant automatically — the isolation falls out of the existing `requireRole` pattern rather than needing new middleware.
 
 | Method | Path | Roles |
 |---|---|---|
 | POST | `/admin/halls` | manager |
-| GET | `/admin/halls/:hallId` | manager + staff |
+| GET | `/admin/halls/:hallId` | manager |
 | PUT | `/admin/halls/:hallId` | manager |
 | DELETE | `/admin/halls/:hallId` | manager — soft delete, **refused (409)** while open enquiries exist |
 | POST/DELETE | `/admin/halls/upload-image` | manager (multipart `image`, `?folder=`) |
-| GET | `/admin/halls/enquiries/list` | manager + staff — optional `?hallId=&status=&date=` |
+| GET | `/admin/halls/enquiries/list` | manager — optional `?hallId=&status=&date=` |
 | PUT | `/admin/halls/enquiries/:enquiryId/status` | manager — body `{ status, adminNotes? }` |
 | POST | `/admin/halls/:hallId/packages` | manager |
-| GET/PUT/DELETE | `/admin/halls/packages/:packageId` | GET manager + staff; PUT/DELETE manager |
-| GET/POST | `/admin/halls/:hallId/showcase` | GET manager + staff; POST manager |
-| GET/PUT/DELETE | `/admin/halls/showcase/:showcaseId` | GET manager + staff; PUT/DELETE manager |
-| GET | `/admin/halls/:hallId/calendar` | manager + staff — same query as the public route, but **includes** block reasons |
+| GET/PUT/DELETE | `/admin/halls/packages/:packageId` | manager |
+| GET/POST | `/admin/halls/:hallId/showcase` | manager |
+| GET/PUT/DELETE | `/admin/halls/showcase/:showcaseId` | manager |
+| GET | `/admin/halls/:hallId/calendar` | manager — same query as the public route, but **includes** block reasons |
 | PUT | `/admin/halls/:hallId/availability` | manager — body `{ date, status, reason? }` |
-| GET | `/admin/halls/:hallId/availability` | manager + staff — raw override rows |
+| GET | `/admin/halls/:hallId/availability` | manager — raw override rows |
 | POST | `/admin/halls/:hallId/gallery` · DELETE `/admin/halls/gallery/:itemId` | manager |
 | POST | `/admin/halls/:hallId/offers` · PUT/DELETE `/admin/halls/offers/:offerId` | manager |
 | POST | `/admin/halls/:hallId/faqs` · DELETE `/admin/halls/faqs/:faqId` | manager |
-| GET | `/admin/halls/:hallId/reviews` | manager + staff |
+| GET | `/admin/halls/:hallId/reviews` | manager |
 | PUT | `/admin/halls/reviews/:reviewId/approve` · `/reply` | manager |
 | DELETE | `/admin/halls/reviews/:reviewId` · `/reviews/:reviewId/images` | manager |
 
@@ -445,7 +447,7 @@ pending → reviewing → approved → confirmed
 (any)  → cancelled                (guest-initiated withdrawal)
 ```
 
-**`approved` ≠ `confirmed`, and the difference matters.** `approved` means the venue is willing and the offline conversation has started; the date stays *tentative* on the public calendar because several families can be discussing the same auspicious date. `confirmed` is the only status that writes a `booked` override onto the calendar — and moving away from `confirmed` releases it again, but only if that override was created by this enquiry (a hand-placed staff block on the same day is never silently removed).
+**`approved` ≠ `confirmed`, and the difference matters.** `approved` means the venue is willing and the offline conversation has started; the date stays *tentative* on the public calendar because several families can be discussing the same auspicious date. `confirmed` is the only status that writes a `booked` override onto the calendar — and moving away from `confirmed` releases it again, but only if that override was created by this enquiry (a hand-placed manager block on the same day is never silently removed).
 
 Guests are emailed on `approved`, `confirmed` and `declined` only. There is no email for `reviewing` — it means nothing to them.
 
@@ -469,3 +471,103 @@ There is **no numeric price field anywhere in this module**. `HallPackage.priceL
 
 ### Environment variables
 No new variables. The module reuses `MONGODB_URI`, `JWT_SECRET`/`ADMIN_JWT_SECRET`, `SMTP_*`, `EMAIL_FROM`, `CLOUDINARY_*` and `ADMIN_NOTIFICATION_EMAIL`.
+
+---
+
+## Admin Users & Roles
+Mounted at `/api/v1/admin/users`. **Super Admin only** — `authenticate("admin")` and `requireRole("super_admin")` are applied to the whole router, so every route in this group is guarded and adding one can never accidentally ship unprotected.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/admin/users` | List accounts. Optional `?role=&isActive=true|false&search=`. Returns `effectiveScope` alongside the stored `businessScope`. |
+| POST | `/admin/users` | Create. `{ name, email, password, role, branchId?, businessScope?, phone? }` |
+| GET | `/admin/users/:adminId` | One account. |
+| PUT | `/admin/users/:adminId` | Edit name / email / phone / role / branch / scope. **Never** takes a password. |
+| PUT | `/admin/users/:adminId/status` | `{ isActive }` — activate or deactivate. |
+| PUT | `/admin/users/:adminId/password` | `{ password }` — direct reset by a Super Admin. Not emailed. |
+| DELETE | `/admin/users/:adminId` | Hard delete. Deactivation is preferred and keeps history. |
+
+### Roles
+There are exactly four:
+
+| Role | Scope | Can |
+|---|---|---|
+| `super_admin` | Everything | All three verticals, plus these endpoints |
+| `hotel_manager` | Hotel only | Rooms, availability, content, bookings |
+| `restaurant_manager` | Restaurant only | Menu, dining areas, reservations, content |
+| `hall_manager` | Marriage Hall only | Packages, showcases, calendar, enquiries |
+
+Isolation is structural, not special-cased: each module names its allowed roles
+explicitly (`HOTEL_MANAGER_ROLES`, `RESTAURANT_MANAGER_ROLES`,
+`HALL_MANAGER_ROLES`), so a manager token is refused elsewhere by the same
+`requireRole` check every route already used.
+
+**`branch_admin` and `staff` were removed** at the owner's request. 7 Vachan will
+run a single branch, which made a branch-scoped admin a second Super Admin under
+another name; and a read-only tier had nobody to fill it, since a manager already
+reads everything in their own vertical. Seventeen `requireRole(...X, "staff")`
+read-guards collapsed to `requireRole(...X)`.
+
+This removed the **roles**, not the multi-tenant **data model**. `branchId` stays
+required on every non-Super-Admin account and on every property, because
+`RULES.md` §26 freezes that requirement. Adding a second branch later means
+reintroducing a role, not migrating data.
+
+`businessScope` is now **derived entirely from the role** (`ROLE_IMPLIED_SCOPE`)
+and stored only so the admin list can show one consistent column. It is accepted
+in the request body but ignored, so an older admin-panel build that still sends
+it gets a clean response instead of a validation error — and a client can never
+grant itself a scope the route guards would refuse.
+
+**Legacy rows.** An account created before the removal still carries the old role
+string. `ROLE_IMPLIED_SCOPE[role]` is `undefined` for those, which would throw and
+take the whole list endpoint down with a 500 — one stale document costing you the
+screen you'd use to fix it. `effectiveScope()` guards for it, and both the list and
+single-account responses carry `isLegacyRole: true` so the admin panel can flag the
+row. A legacy account resolves to an empty scope, which is also the safe answer:
+every `requireRole` list names the current roles explicitly, so it is already
+refused everywhere.
+
+### Business rules enforced server-side
+- **Nobody can change their own role** — the classic way to lock yourself out of the screen you'd need to undo it.
+- **Nobody can deactivate or delete themselves.**
+- **The last active Super Admin is protected** from demotion, deactivation and deletion. Without this, an installation can reach a state where no account can create another — unrecoverable without database access.
+- Every role except `super_admin` **must have a branch**; a branch-scoped role without one passes every branch check by having nothing to compare against. The admin panel prefills the only branch, so nobody types an ObjectId.
+- Email uniqueness, and a minimum password length of 8.
+
+### Permission changes take effect immediately
+`authenticate("admin")` re-reads the account from the database on every admin request and uses the **live** role, rejecting deactivated accounts with 403.
+
+Without this, a JWT carries the role it was signed with, so an admin demoted from `super_admin` to `hotel_manager` would keep full access until their token expired — up to seven days — and a deactivated account would keep working entirely.
+
+Cost is one indexed `findById` per admin request. Admin traffic is a handful of people rather than the public, so that is a fair price for instant revocation. **User tokens are deliberately not re-checked**: that path is public-facing, far higher volume, and carries no privileged role to revoke.
+
+**Verified live** against a scratch backend, after the role removal:
+
+| Role | `/admin/hotels/bookings` | `/admin/restaurants/reservations` | `/admin/halls/enquiries/list` | `/admin/users` |
+|---|---|---|---|---|
+| `hotel_manager` | 200 | 403 | 403 | 403 |
+| `restaurant_manager` | 403 | 200 | 403 | 403 |
+| `hall_manager` | 403 | 403 | 200 | 403 |
+| `super_admin` | 200 | 200 | 200 | 200 |
+
+Also confirmed: creating `branch_admin` or `staff` is refused with a 400 enum
+error on both create and update; a manager calling `POST /admin/users`, or trying
+to raise their own role via `PUT`, gets 403; changing a role flipped the *same
+unexpired token* from 200-on-hotel to 200-on-hall with no re-login; and
+deactivating an account flipped that token to 403 immediately.
+
+One trap worth recording, because it manufactures false passes: the admin routers
+have **no bare `GET /`**, so probing `/admin/hotels` falls through to the global
+404 *before* `requireRole` runs. A matrix built on those paths reads 404
+everywhere and proves nothing. Likewise `adminUser.routes.ts` uses `PUT` (not
+`PATCH`) and `/:adminId/password` (not `/reset-password`) — a wrong verb 404s, and
+a 404 body has `success: false`, which reads as "correctly blocked" to any check
+that only tests `success`. Assert on the status code, not the flag.
+
+## Marriage Hall — availability range (added)
+| Method | Path | Purpose |
+|---|---|---|
+| PUT | `/admin/halls/:hallId/availability/range` | `{ from, to, status, reason? }` — applies one status across an inclusive date range. Capped at 366 days. `available` deletes the overrides rather than storing markers, matching the single-date route. |
+
+Written as one `bulkWrite`, so a 90-day block is a single round-trip rather than ninety.
