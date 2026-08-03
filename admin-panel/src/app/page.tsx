@@ -19,6 +19,7 @@ import PageHeader from "@/components/ui/PageHeader";
 import StatCard from "@/components/ui/StatCard";
 import Badge from "@/components/ui/Badge";
 import { EmptyState, Skeleton } from "@/components/ui/States";
+import ActivityTimeline from "@/components/dashboard/ActivityTimeline";
 import { useAdminSession } from "@/lib/adminSession";
 import { useBusiness } from "@/lib/businessContext";
 import { useSummary } from "@/lib/summary";
@@ -226,6 +227,14 @@ export default function AdminDashboardPage() {
           }
           description="Packages, decoration, catering, gallery and the enquiry calendar. Approval-first — never instant."
         />
+      </div>
+
+      {/* Cross-vertical activity, newest first. Fetches its own data from
+          /admin/console/activity — the feed is derived server-side from the
+          source collections and scoped to this admin's verticals, so it shows
+          things SummaryProvider's fixed windows do not. */}
+      <div className="mt-7">
+        <ActivityTimeline limit={12} />
       </div>
 
       {/* Today's operations */}

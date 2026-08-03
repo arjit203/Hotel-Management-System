@@ -30,4 +30,8 @@ router.post("/admin/forgot-password", authLimiter, authController.adminForgotPas
 router.post("/admin/reset-password/:token", authLimiter, authController.adminResetPassword);
 router.get("/admin/me", authenticate("admin"), authController.me);
 
+// Sign-out exists to close the audit trail, not to invalidate the token —
+// there is no blocklist here, and the panel clears its own storage.
+router.post("/admin/logout", authenticate("admin"), authController.adminLogout);
+
 export default router;

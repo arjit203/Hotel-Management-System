@@ -7,7 +7,19 @@ declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
-      actor?: { id: string; role: string; actorType: ActorType };
+      /**
+       * `name` and `email` are present for admins only, and only so the audit
+       * middleware can name the actor without a second database round trip —
+       * `authenticate` already loads the account, so widening its `select` is
+       * free. Nothing authorises on them; authorisation reads `role`.
+       */
+      actor?: {
+        id: string;
+        role: string;
+        actorType: ActorType;
+        name?: string;
+        email?: string;
+      };
     }
   }
 }
@@ -60,7 +72,7 @@ export function authenticate(actorType: ActorType) {
      */
     if (actorType === "admin") {
       try {
-        const admin = await Admin.findById(payload.id).select("role isActive");
+        const admin = await Admin.findById(payload.id).select("role isActive name email");
 
         if (!admin) {
           return res.status(401).json({ success: false, message: "This account no longer exists." });
@@ -72,7 +84,13 @@ export function authenticate(actorType: ActorType) {
         }
 
         // The live role wins over whatever the token was signed with.
-        req.actor = { id: payload.id, role: admin.role, actorType: "admin" };
+        req.actor = {
+          id: payload.id,
+          role: admin.role,
+          actorType: "admin",
+          name: admin.name,
+          email: admin.email,
+        };
         return next();
       } catch {
         return res

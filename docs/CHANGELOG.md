@@ -4,6 +4,209 @@ Format: newest entries on top. Categories: Added / Changed / Fixed / Security / 
 
 ---
 
+## [2026-08-03 (g)] — Platform Settings CMS, Audit Logs, Activity Timeline, Notifications, Exports, Global Search
+
+Six admin-console modules, all additive. No booking, reservation or enquiry flow
+changed; no existing endpoint changed shape.
+
+### Added — Platform Settings (`backend/src/modules/settings/`)
+Fifteen categories — general, business, branding, contact, social, homepage,
+theme, booking, payment, email, seo, legal, features, integrations, maintenance
+— behind `GET /api/v1/settings` (public, curated) and `/api/v1/admin/settings`
+(Super Admin only, guarded on the router itself).
+
+- **One document per category**, values schemaless. Reads merge the stored
+  document over `SETTING_DEFAULTS`, so a new field appears in the admin panel
+  without a migration and a missing category still returns working copy.
+- **Unknown keys are dropped** against the defaults rather than rejected, so an
+  admin-panel build ahead of the backend saves what the backend knows.
+- **Secrets are write-only.** AES-256-GCM at rest, returned only as a
+  `••••••••1234` mask. Blank means "keep", `__clear__` means "delete" — that is
+  what lets someone change the SMTP port without retyping the password.
+- **Public exposure is decided per category**, not per key
+  (`PUBLIC_SETTING_CATEGORIES`), so one reviewable decision governs a whole
+  group. `payment`, `email` and `integrations` are absent from it.
+
+**The homepage CMS answers the owner's question directly.** Every fixed string
+on the home page — including the "Considered comforts" facilities band — is now
+editable. The band previously rendered the *hotel's* amenity list, which spoke
+for one third of the estate; a curated list in Settings now takes over when one
+exists, so it can mix facilities from all three businesses. Leaving it empty
+keeps the old behaviour exactly.
+
+Each default in `settings.defaults.ts` is a **word-for-word transcription** of
+what the page rendered before. An install that never opens Settings looks
+identical — a default is a transcription, not an improvement.
+
+### Added — Integrations reach Razorpay, Cloudinary and SMTP without touching them
+`razorpay.util.ts`, `config/cloudinary.ts` and `email.util.ts` already read
+`process.env` **lazily at call time** rather than at import (each documents why:
+`dotenv.config()` runs after imports resolve). `applyIntegrationEnv()` writes
+saved credentials into `process.env` on boot and after every save, so those
+three files are unchanged. Blank values are skipped and a decryption failure is
+skipped, leaving `.env` as the fallback — a half-filled Settings page cannot
+take payments offline.
+
+The one edit needed was `resetEmailTransport()` in `email.util.ts`: nodemailer
+caches its transporter, so an SMTP change would otherwise wait for a restart.
+
+### Added — Audit Logs (`backend/src/modules/audit/`, `/audit-logs`)
+Records create, update, delete, login, logout, failed login, role change, status
+change, password reset, upload, export and settings change — with actor, role,
+module, entity, IP, user agent, status code and a redacted body snapshot.
+
+**Not one controller or service was modified.** `middlewares/audit.middleware.ts`
+is mounted on each admin router and hooks `res.on("finish")`, so it sees every
+mutation those routers will ever have, runs after the response is sent, and
+cannot slow or fail a request. Login and failed login are recorded explicitly in
+the auth controller, because login is not on an admin router (there is no token
+yet) and a *failed* attempt is worth recording precisely because nothing changed.
+
+Read-only, Super Admin only, no write endpoint — an audit log with a write route
+is a suggestion box. Anything matching `pass|secret|token|key|otp|signature|cvv`
+is replaced with `[redacted]` before storage; secrets are dropped rather than
+truncated, because a truncated secret is still a leaked prefix.
+
+Added `POST /auth/admin/logout`, which closes the audit trail and nothing else —
+there is no token blocklist here and pretending otherwise would be worse than
+not offering it.
+
+### Added — Activity Timeline and Notification Centre (one service, two features)
+`console/activity.service.ts` derives a unified feed from the source
+collections. The obvious design — an `Activity` table written to on every event
+— would have meant edits inside `createHotelBooking`, `verifyPayment`,
+`createReservation`, `createEnquiry` and the review path: five changes to
+money-handling code for a dashboard widget. Deriving costs five indexed, capped,
+projected queries, cannot drift from reality, cannot double-count a retry, and
+needed no backfill.
+
+Notifications are the notification-worthy subset of that same feed plus
+per-admin read state. Only the *read* half is stored, and "mark all read" writes
+one watermark document rather than one row per item. Read markers expire after
+90 days via a TTL index.
+
+Both are scoped by `effectiveScope` — the same function the route guards use —
+so a hall manager's dashboard and bell contain hall activity and nothing else.
+
+### Added — Export & Reports (`/reports`)
+Bookings, customers, reviews, reservations, hall enquiries and a revenue report,
+as CSV, Excel and PDF, with a date filter. Datasets are *described* (columns,
+allowed formats, owning vertical) and one set of writers renders any of them, so
+a seventh export is one object rather than three new writers.
+
+- Read-only throughout; the booking flow is untouched.
+- Datasets outside the caller's scope render **locked rather than hidden** — a
+  manager wondering where the revenue report went is a worse experience than one
+  being told. `assertAllowed()` throws 403 regardless of what the page draws.
+- **CSV formula injection is neutralised**: a value starting with `=`, `+`, `-`
+  or `@` is tab-prefixed, so a review saying `=HYPERLINK(...)` cannot become a
+  live link in the owner's spreadsheet. A UTF-8 BOM is emitted so `₹` and
+  accented names survive Excel on Windows.
+- Revenue counts money **actually received** (`paymentStatus: "paid"`, summing
+  `advancePaid`), not `advanceRequired` — counting what was asked for would
+  report income from bookings nobody paid for.
+- Every download is audited with who took it and for which window, because
+  exports leave the building with guest names, emails and phone numbers.
+
+Added dependencies: `exceljs`, `pdfkit`, `@types/pdfkit`.
+
+### Added — Global Search
+`GET /admin/console/search` across customers, bookings, rooms, reservations,
+hall enquiries, reviews, offers, FAQs and admin accounts, grouped by module and
+filtered by the caller's scope. Customers and admin accounts are Super Admin
+only — a guest list is the most sensitive thing in the database.
+
+Regex rather than a `$text` index, deliberately: every useful query here is a
+*fragment* of an identifier, and `$text` tokenises on words, so it would not
+match "7V-4A2" against "7V-4A2B91C" at all — the single most common thing anyone
+will type. The upgrade path past a few hundred thousand rows is Atlas Search.
+
+The ⌘K palette now merges instant local nav/property matches with server results
+underneath. Previously it filtered only what `SummaryProvider` happened to hold,
+so a booking outside the loaded window was unfindable and rooms, enquiries,
+reviews, offers and FAQs were not searchable at all.
+
+### Changed — public site reads Settings
+Home page copy and section toggles, footer contact details and social links,
+root and home-page SEO metadata, favicon and OG image. New `/legal/[slug]` pages
+for privacy, terms, cancellation and refund.
+
+Legal pages **404 when unpublished**, and the footer only links to ones that
+exist. This is the one place `notFound()` is right where `PropertyUnavailable`
+is used elsewhere: an empty policy is a deliberate state, not an unreachable
+API, and a refund policy rendering as a friendly placeholder is a legal claim
+nobody made.
+
+Markdown is rendered by a deliberately small in-file subset (headings,
+paragraphs, bullets, bold). Pulling in a parser and a sanitiser for four
+admin-authored documents that never contain a table is not worth the bundle —
+and "trusted author" is not a reason to inject raw HTML.
+
+### Fixed — settings never reached the site (caught in verification)
+`getSettings()` first passed `cache: "force-cache"` **and** `next.revalidate`.
+Next refuses that combination — it warns "only one should be specified", and
+force-cache wins, pinning the very first response forever. Admin edits saved
+correctly and never appeared. Now `no-store`, with React's `cache()` collapsing
+every call in one render into a single request and the backend caching its own
+read for a minute.
+
+### Security
+- Settings and Audit Logs are Super Admin only, guarded at the **router** level
+  so a new route cannot ship unguarded.
+- Branding uploads use the Settings module's own Cloudinary route rather than
+  the hotel's, which is guarded by `HOTEL_MANAGER_ROLES` — reusing it would have
+  given a hotel manager a path to replace the site logo.
+- `/admin/console/*` deliberately has **no** `requireRole`: those four features
+  are scoped, not restricted. A hall manager should have a dashboard, a bell and
+  a search box — they should just contain hall data. Scoping is enforced per
+  request in the services; a role check at the router would either lock managers
+  out or show them the whole estate.
+- `SETTINGS_SECRET_KEY` (new, optional) keys the settings encryption. Without
+  it, the key is derived from `ADMIN_JWT_SECRET` — which means rotating that
+  secret makes stored secrets undecryptable. Decryption failures fall back to
+  `.env` rather than throwing, so a rotation degrades the platform to its
+  environment configuration instead of breaking it.
+
+### Verified live
+Scratch backend on 5055 and a scratch frontend on 3099, never the user's own
+servers:
+
+- Public settings expose 12 categories; `payment`, `email` and `integrations`
+  are absent, and a saved SMTP password appears nowhere in the payload.
+- A secret saved as `super-secret-value-9931` echoes back as `""` with hint
+  `••••••••9931`; re-saving other fields keeps it.
+- Unknown keys dropped, untouched defaults preserved.
+- `hotel_manager`: 403 on `/admin/settings` and `/admin/audit-logs`, 200 on all
+  four `/admin/console/*` routes with `scope: ["hotel"]`, 403 when exporting
+  customers.
+- Audit rows written automatically for every settings change and account
+  creation, with IP; no row contains a password or an API key; failed login
+  recorded.
+- Notifications: 34 items, mark-one-read → 33, mark-all-read → 0.
+- Exports: all eight dataset/format combinations returned correct magic bytes
+  (`%PDF`, `PK\x03\x04`, UTF-8 BOM) and `customers/pdf` was refused with a
+  clear message.
+- Editing Settings → Homepage changed the **rendered HTML** of the public home
+  page; section toggles removed the testimonials and map bands; resetting the
+  category restored the original copy exactly.
+- Publishing a privacy policy flipped `/legal/privacy` from 404 to 200 with
+  markdown rendered and bold applied; the footer link appeared only for the
+  published page. Contact details, social links (only configured ones), SEO
+  title/description and the `noindex` switch all reached the served HTML.
+
+### Testing notes
+Two traps that manufacture false passes, both hit during this work:
+
+- `Select` in the admin UI renders `children`, not an `options` prop, and
+  `Button`'s variant is `secondary`, not `outline`. Both are typecheck failures,
+  not runtime ones — run `npx tsc --noEmit` per workspace.
+- `TextReveal` splits a heading into per-word spans and exposes the whole string
+  as `aria-label`. Grepping rendered HTML for a heading works, but grepping for
+  JSX text interpolated next to a variable (`Last reviewed {value}`) does not —
+  React emits a comment node between them.
+
+---
+
 ## [2026-08-03 (f)] — Removed the `branch_admin` and `staff` roles
 
 ### Changed — four admin roles instead of six

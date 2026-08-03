@@ -565,6 +565,223 @@ everywhere and proves nothing. Likewise `adminUser.routes.ts` uses `PUT` (not
 a 404 body has `success: false`, which reads as "correctly blocked" to any check
 that only tests `success`. Assert on the status code, not the flag.
 
+## Platform Settings
+
+Two routers, and the split *is* the security boundary.
+
+### Public — `GET /api/v1/settings`
+No token. Returns only the categories in `PUBLIC_SETTING_CATEGORIES`:
+`general`, `business`, `branding`, `contact`, `social`, `homepage`, `theme`,
+`booking`, `seo`, `legal`, `features`, `maintenance`.
+
+`payment`, `email` and `integrations` are absent deliberately — they hold gateway
+policy, recipient addresses and credentials. `maintenance` is public because the
+site cannot show a maintenance page without being told to, and `booking` is
+public because the advance percentage and cancellation window are quoted to the
+guest before they pay.
+
+Public exposure is decided **per category, not per key**. One reviewable
+decision governs a whole group, and secrets are stripped before this endpoint
+ever sees them — so a mistake here leaks copy, not credentials.
+
+```json
+{ "success": true, "data": { "homepage": { "amenitiesTitle": "Considered comforts", "…": "…" }, "…": {} } }
+```
+
+### Admin — `/api/v1/admin/settings`
+`authenticate("admin")` + `requireRole("super_admin")`, both on the **router**,
+so a route added to that file cannot ship unguarded.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/admin/settings` | All fifteen categories in one call |
+| GET | `/admin/settings/:category` | One category |
+| PUT | `/admin/settings/:category` | Partial patch — only the keys you send are touched |
+| DELETE | `/admin/settings/:category` | Reset to `SETTING_DEFAULTS` (deletes the document) |
+| POST | `/admin/settings/upload-image?folder=` | Branding media → Cloudinary, returns `{ url, publicId }` |
+
+Response shape: `{ values, secretHints }`.
+
+**Categories:** general, business, branding, contact, social, homepage, theme,
+booking, payment, email, seo, legal, features, integrations, maintenance.
+
+The three that sound overlapping are split by *policy vs credential*, not by
+vendor: `payment` is business policy (advance %, currency, refund note), `email`
+is who gets notified about what, and `integrations` holds the actual Razorpay /
+SMTP / Cloudinary / Maps credentials. That is what makes the public/admin split
+above simple to reason about — every secret lives in one category.
+
+### Secrets are write-only
+A secret key always reads back as `""`; the only representation that leaves the
+server is a mask in `secretHints`, e.g. `"smtpPassword": "••••••••9931"`.
+
+| You send | What happens |
+|---|---|
+| `""` (blank) | The stored value is **kept** |
+| any string | Replaces the stored value |
+| `"__clear__"` | Deletes it; the server falls back to `.env` |
+
+Blank-means-keep is what allows "change the SMTP port without retyping the
+password". It also means a form that naively submits an empty string for every
+untouched field is safe here — the opposite of the usual danger.
+
+Storage is AES-256-GCM, keyed by `SETTINGS_SECRET_KEY` or, if that is unset,
+derived from `ADMIN_JWT_SECRET`. **Rotating `ADMIN_JWT_SECRET` while
+`SETTINGS_SECRET_KEY` is unset makes stored secrets undecryptable.** Decryption
+failures return `null` and every caller falls back to the environment variable,
+so a rotation degrades the platform to its `.env` configuration rather than
+taking payments and email offline.
+
+### Unknown keys are dropped, not rejected
+A patch is filtered against `SETTING_DEFAULTS`. An admin panel a version ahead of
+the backend saves the fields the backend knows about instead of failing the whole
+form — and a typo'd key shows up as "it did not save" rather than a 400.
+
+### How integration settings reach Razorpay, Cloudinary and SMTP
+`razorpay.util.ts`, `config/cloudinary.ts` and `email.util.ts` all read
+`process.env` **at call time, not at import time** (each documents why:
+`dotenv.config()` runs after imports resolve). `applyIntegrationEnv()` copies
+saved credentials into `process.env` on boot and after every save to
+`integrations`, so none of those three files changed.
+
+Blank values are skipped, so `.env` remains the fallback and a half-filled
+Settings page cannot disable payments. `resetEmailTransport()` is called when an
+`SMTP_*` value changes, because nodemailer caches its transporter.
+
+---
+
+## Audit Logs — `/api/v1/admin/audit-logs`
+
+Super Admin only, guarded at the router. **Read-only: there is no write
+endpoint**, and adding one would defeat the module. Rows are created server-side
+by `middlewares/audit.middleware.ts` and by the auth controller.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/admin/audit-logs` | `?module=&action=&actorId=&search=&from=&to=&page=&limit=` |
+| GET | `/admin/audit-logs/filters` | Enum values plus distinct actors, for the filter dropdowns |
+
+Dates are `YYYY-MM-DD` and inclusive at both ends — filtering "3rd to 3rd" means
+that whole day.
+
+**Actions:** create, update, delete, login, logout, login_failed, role_change,
+status_change, password_reset, upload, export, settings_change.
+**Modules:** hotel, restaurant, hall, auth, users, settings, content, reports, other.
+
+### How rows are written without touching a controller
+`auditLogger()` is mounted on each admin router **after** `authenticate` (it
+reads `req.actor`) and hooks `res.on("finish")`. It therefore sees every mutation
+those routers will ever have — including routes added later — runs after the
+response is sent, and can neither slow a request down nor fail one.
+
+It deliberately does not log:
+- **reads** — `GET` is not an action, and logging it buries the week's twelve
+  edits under ten thousand page loads;
+- **failures** — a 4xx changed nothing, and a 403 is a *blocked* attempt;
+- **credentials** — any key matching `pass|secret|token|key|otp|signature|cvv`
+  becomes `[redacted]`. Secrets are dropped rather than truncated, because a
+  truncated secret is still a leaked prefix.
+
+Sign-in is audited in the auth controller instead, for two reasons the middleware
+cannot work around: login is not on an admin router (there is no token yet), and
+a *failed* login is worth recording precisely because nothing changed.
+
+`POST /api/v1/auth/admin/logout` (authenticated) exists only to close the audit
+trail. It does **not** invalidate the JWT — there is no token blocklist in this
+codebase, and pretending otherwise would be worse than not offering it.
+
+---
+
+## Admin Console — `/api/v1/admin/console`
+
+`authenticate("admin")` only. **No `requireRole`, deliberately**: these four
+features are *scoped* rather than *restricted*. A hall manager should have a
+dashboard, a bell and a search box — they should just contain hall data. Scoping
+happens per request in the services via `scopeForAdmin()`, which reads the same
+`effectiveScope` the route guards use. A role check at the router level would
+either lock managers out of their own dashboard or show them the whole estate.
+
+Exports are the exception: `assertAllowed()` throws 403 for a dataset outside the
+caller's scope, because an export is a file leaving the building and "narrow it
+silently" is the wrong default there.
+
+### Activity timeline
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/admin/console/activity` | `?limit=&days=&module=` → `{ items, scope }` |
+
+`?module=` can narrow the caller's scope but never widen it.
+
+Items are **derived** from hotel bookings, table reservations, hall enquiries,
+reviews and offers rather than read from a feed table. Writing an `Activity` row
+per event would have meant edits inside `createHotelBooking`, `verifyPayment`,
+`createReservation`, `createEnquiry` and the review path — five changes to
+money-handling code for a dashboard widget. Deriving cannot drift from reality,
+cannot double-count a retry, and needed no backfill.
+
+Each item carries a stable `key` of `type:sourceId`, which is what the
+notification centre stores read state against.
+
+### Notification centre
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/admin/console/notifications` | `?limit=&unreadOnly=` → `{ items, unreadCount }` |
+| GET | `/admin/console/notifications/count` | Just the badge number |
+| PUT | `/admin/console/notifications/read` | `{ notificationKey }` |
+| PUT | `/admin/console/notifications/unread` | `{ notificationKey }` |
+| PUT | `/admin/console/notifications/read-all` | Moves the watermark to now |
+
+Notifications are the notification-worthy subset of the activity feed plus
+per-admin read state. Only the *read* half is stored — the notifications
+themselves have no row to flip a flag on. "Mark all read" writes **one watermark
+document**, not one row per item; individual rows are only for one-at-a-time
+marking, and expire after 90 days via a TTL index.
+
+### Global search
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/admin/console/search?q=` | Minimum two characters → `{ query, groups, total }` |
+
+Groups: customers, bookings, rooms, reservations, enquiries, reviews, offers,
+faqs, admins. Empty groups are omitted. **Customers and admin accounts are Super
+Admin only** — a guest list is the most sensitive thing in the database and a
+manager has no operational need for the whole of it.
+
+Regex, not a `$text` index: every useful query here is a *fragment* of an
+identifier (half a booking reference, part of a phone number), and `$text`
+tokenises on words, so it would not match `7V-4A2` against `7V-4A2B91C` at all.
+Past a few hundred thousand rows the upgrade is Atlas Search, not `$text`.
+
+### Exports & reports
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/admin/console/exports` | Catalogue, with an `allowed` flag per dataset for this role |
+| GET | `/admin/console/exports/:dataset/:format` | `?from=&to=` → the file |
+
+Datasets: `bookings`, `customers`, `reviews`, `reservations`, `enquiries`,
+`revenue`. Formats: `csv`, `xlsx`, `pdf` — PDF only where a page of columns is
+readable, so `customers/pdf` is refused with a message naming what is available.
+
+Responses are binary with `Content-Disposition: attachment`. **Errors come back
+as the normal JSON envelope**, so a client must check the status before treating
+the body as a file. Capped at 10,000 rows.
+
+Notes that matter when reading the numbers:
+- **Revenue counts money actually received** — `paymentStatus: "paid"`, summing
+  `advancePaid`. `advanceRequired` is what was *asked for*; counting it would
+  report income from bookings nobody paid. The balance is settled at the property
+  and is invisible to this system, so "Booking value" sits beside it as a
+  separate column rather than being added in.
+- **Hall enquiries carry no amount.** Hall bookings are approval-first and
+  unpriced online, by design.
+- CSV emits a UTF-8 BOM (so `₹` survives Excel on Windows) and tab-prefixes any
+  value starting with `=`, `+`, `-` or `@`, so a review containing
+  `=HYPERLINK(...)` cannot become a live formula in the owner's spreadsheet.
+- Every download is written to the audit log with who took it and for which
+  window — exports leave the building with guest names, emails and phone numbers.
+
+---
+
 ## Marriage Hall — availability range (added)
 | Method | Path | Purpose |
 |---|---|---|

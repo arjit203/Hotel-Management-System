@@ -9,6 +9,15 @@ import Introduction from "@/components/sections/Introduction";
 import FeaturedRooms from "@/modules/hotel/components/home/FeaturedRooms";
 import ValueProps, { ESTATE_VALUE_POINTS } from "@/components/sections/ValueProps";
 import AmenitiesPreview from "@/components/sections/AmenitiesPreview";
+import {
+  getSettings,
+  str,
+  flag,
+  list,
+  type ValuePointSetting,
+  type AmenitySetting,
+} from "@/lib/settings";
+import { resolveIcon } from "@/lib/settingsIcons";
 import OffersPreview from "@/components/sections/OffersPreview";
 import EstateGallery, { EstateImage } from "@/components/sections/EstateGallery";
 import Testimonials from "@/components/sections/Testimonials";
@@ -16,19 +25,44 @@ import MapPlaceholder from "@/components/MapPlaceholder";
 import Reveal from "@/components/motion/Reveal";
 import TextReveal from "@/components/motion/TextReveal";
 
+/**
+ * Metadata precedence, most specific first:
+ *   1. the hotel document's own metaTitle/metaDescription
+ *   2. Settings → SEO
+ *   3. the strings this file shipped with
+ *
+ * The hotel's fields stay on top because they are the narrower statement — an
+ * owner who typed a title on the property page meant it for this page. Settings
+ * fill in below that, which is what makes the SEO tab worth having: the root
+ * layout's defaults never reach the home page, because a page-level
+ * `generateMetadata` wins over the layout's entirely.
+ */
 export async function generateMetadata(): Promise<Metadata> {
-  const data = await getTheHotel();
+  const [data, settings] = await Promise.all([getTheHotel(), getSettings()]);
   const hotel = data?.hotel;
+
+  const title =
+    hotel?.metaTitle ||
+    str(settings, "seo", "defaultTitle", "7 Vachan — Luxury Hotel & Stays");
+  const description =
+    hotel?.metaDescription ||
+    str(
+      settings,
+      "seo",
+      "defaultDescription",
+      "7 Vachan — a premium hotel experience with luxury rooms, fine dining, and warm hospitality in Satna."
+    );
+  const ogImage =
+    data?.gallery?.[0]?.imageUrl || str(settings, "branding", "ogImageUrl") || undefined;
+
   return {
-    title: hotel?.metaTitle || "Home",
-    description:
-      hotel?.metaDescription ||
-      "7 Vachan — a premium hotel experience with luxury rooms, fine dining, and warm hospitality in Satna.",
+    title,
+    description,
     alternates: { canonical: "/" },
     openGraph: {
-      title: hotel?.metaTitle || "7 Vachan — Luxury Hotel & Stays",
-      description: hotel?.metaDescription || undefined,
-      images: data?.gallery?.[0]?.imageUrl ? [data.gallery[0].imageUrl] : undefined,
+      title,
+      description,
+      images: ogImage ? [ogImage] : undefined,
     },
   };
 }
@@ -37,11 +71,42 @@ export default async function HomePage() {
   // All three fetches are memoised by `cache()` and independent, so running
   // them together costs one round-trip set rather than three sequential ones.
   // A vertical that fails or isn't seeded simply drops out of the estate band.
-  const [data, restaurantData, hallData] = await Promise.all([
+  const [data, restaurantData, hallData, settings] = await Promise.all([
     getTheHotel(),
     getTheRestaurant(),
     getTheHall(),
+    getSettings(),
   ]);
+
+  /**
+   * Homepage copy from Settings, each falling back to what the page hardcoded
+   * before. A blank field or an unreachable settings API therefore renders the
+   * original wording rather than an empty heading.
+   */
+  const configuredPoints = list<ValuePointSetting>(settings, "homepage", "valuePoints");
+  const valuePoints =
+    configuredPoints.length > 0
+      ? configuredPoints.map((p) => ({
+          icon: resolveIcon(p.icon),
+          title: p.title ?? "",
+          desc: p.desc ?? "",
+        }))
+      : ESTATE_VALUE_POINTS;
+
+  /**
+   * The facilities strip. An empty curated list means "keep doing what you did
+   * before" — render the hotel's own amenities — so this is additive rather
+   * than a behaviour change for an install that never opens Settings.
+   */
+  const curatedAmenities = list<AmenitySetting>(settings, "homepage", "amenities")
+    .filter((a) => (a.name ?? "").trim().length > 0)
+    .map((a) => ({ name: a.name as string, icon: a.icon }));
+
+  const showVerticals = flag(settings, "homepage", "showVerticals");
+  const showGallery = flag(settings, "homepage", "showGallery");
+  const showOffers = flag(settings, "homepage", "showOffers");
+  const showTestimonials = flag(settings, "homepage", "showTestimonials");
+  const showMap = flag(settings, "homepage", "showMap");
 
   if (!data) {
     return (
@@ -203,12 +268,23 @@ export default async function HomePage() {
       {/* The estate's front door. `/hotel` has its own hero with hotel-only
           imagery and hotel CTAs; this one speaks for all three. */}
       <Hero
-        title="7 Vachan"
+        title={str(settings, "homepage", "heroTitle", "7 Vachan")}
         images={heroImages}
-        eyebrow="Hotel · Restaurant · Banquets"
-        tagline="One address for the night you stay, the meal you remember and the day you'll never forget."
-        primaryCta={{ label: "Book Your Stay", href: "/hotel/booking" }}
-        secondaryCta={{ label: "Explore the estate", href: "#estate" }}
+        eyebrow={str(settings, "homepage", "heroEyebrow", "Hotel · Restaurant · Banquets")}
+        tagline={str(
+          settings,
+          "homepage",
+          "heroSubtitle",
+          "One address for the night you stay, the meal you remember and the day you'll never forget."
+        )}
+        primaryCta={{
+          label: str(settings, "homepage", "heroCtaLabel", "Book Your Stay"),
+          href: str(settings, "homepage", "heroCtaHref", "/hotel/booking"),
+        }}
+        secondaryCta={{
+          label: str(settings, "homepage", "heroSecondaryCtaLabel", "Explore the estate"),
+          href: str(settings, "homepage", "heroSecondaryCtaHref", "#estate"),
+        }}
       />
       <QuickBookingWidget />
 
@@ -226,34 +302,55 @@ export default async function HomePage() {
       {/* The estate: hotel, restaurant and banquet hall. Placed after the rooms
           so the home page still leads with the stay, but early enough that a
           visitor who came for a wedding venue finds it without hunting the nav. */}
-      <div id="estate" className="anchor-offset">
-        <VerticalsPreview cards={verticalCards} />
-      </div>
+      {showVerticals && (
+        <div id="estate" className="anchor-offset">
+          <VerticalsPreview cards={verticalCards} />
+        </div>
+      )}
 
-      {/* Estate-wide, not hotel-only — this band speaks for all three. */}
+      {/* Estate-wide, not hotel-only — this band speaks for all three. The
+          copy is editable from Settings → Homepage; ESTATE_VALUE_POINTS is
+          still the fallback, so an unconfigured install reads as before. */}
       <ValueProps
-        points={ESTATE_VALUE_POINTS}
-        eyebrow="Why 7 Vachan"
-        title="Three businesses, one standard"
+        points={valuePoints}
+        eyebrow={str(settings, "homepage", "valuePropsEyebrow", "Why 7 Vachan")}
+        title={str(settings, "homepage", "valuePropsTitle", "Three businesses, one standard")}
       />
 
-      <AmenitiesPreview amenities={hotel.amenities} href="/hotel/amenities" />
-      <OffersPreview
-        offers={estateOffers}
-        viewAllHref="/hotel/offers"
-        reserveHref="/hotel/booking"
-        eyebrow="Across the estate"
-        title="What's on right now"
+      {/* The "Considered comforts" band. It used to render the hotel's amenity
+          list, which spoke for one third of the estate; a curated list in
+          Settings → Homepage now takes over when one exists, so the strip can
+          mix facilities from the hotel, the restaurant and the hall. */}
+      <AmenitiesPreview
+        amenities={curatedAmenities.length > 0 ? curatedAmenities : hotel.amenities}
+        href={str(settings, "homepage", "amenitiesCtaHref", "/hotel/amenities")}
+        eyebrow={str(settings, "homepage", "amenitiesEyebrow", "Facilities")}
+        title={str(settings, "homepage", "amenitiesTitle", "Considered comforts")}
+        ctaLabel={str(settings, "homepage", "amenitiesCtaLabel", "Explore All Amenities")}
       />
 
-      <EstateGallery images={interleaved} />
-      <Testimonials
-        reviews={estateReviews}
-        average={estateReviewAverage}
-        count={estateReviewCount}
-      />
+      {showOffers && (
+        <OffersPreview
+          offers={estateOffers}
+          viewAllHref="/hotel/offers"
+          reserveHref="/hotel/booking"
+          eyebrow={str(settings, "homepage", "offersEyebrow", "Across the estate")}
+          title={str(settings, "homepage", "offersTitle", "What's on right now")}
+        />
+      )}
+
+      {showGallery && <EstateGallery images={interleaved} />}
+
+      {showTestimonials && (
+        <Testimonials
+          reviews={estateReviews}
+          average={estateReviewAverage}
+          count={estateReviewCount}
+        />
+      )}
 
       {/* ── Location ── */}
+      {showMap && (
       <section className="section-tight container-luxe pb-24 sm:pb-28">
         <div className="mx-auto mb-12 max-w-2xl text-center">
           <Reveal duration={0.6}>
@@ -265,6 +362,7 @@ export default async function HomePage() {
           <MapPlaceholder address={hotel.address} />
         </Reveal>
       </section>
+      )}
 
       {/* No closing CTA band here on purpose: the Footer already opens with a
           site-wide "Your suite is waiting" reservation band, and stacking two

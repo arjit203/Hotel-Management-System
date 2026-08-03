@@ -56,15 +56,21 @@ cd backend && npx ts-node ../database/seeders/seed-demo-content.ts \
 
 Health check: `GET http://localhost:5000/api/v1/health`.
 
+**Admin UI gotchas that only surface at typecheck:** `Select` renders `children` (`<option>`), not an `options` prop; `Button`'s variants are `primary|secondary|ghost|danger|dangerGhost` — there is no `outline`; `useConfirm()` returns the function directly and its options use `danger: true`, not `tone`. Run `npx tsc --noEmit` per workspace.
+
+**Grepping rendered HTML to verify a change:** `TextReveal` splits headings into per-word spans but sets `aria-label` to the full string, so heading greps work. JSX text next to an interpolation (`Last reviewed {value}`) does *not* grep as one string — React emits a comment node between them.
+
 **Tests:** `test: jest` exists in all three `package.json` files but there are no test files and no jest config anywhere. Don't claim tests pass — per `AI_INSTRUCTIONS.md` §16, deliver manual test steps (expected result + edge cases such as double-booking, payment failure mid-flow) instead.
 
 ## Environment
 
 Not tracked by git: `backend/.env`, `frontend/.env.local`, `admin-panel/.env.local`. Only `frontend/.env.example` and `admin-panel/.env.example` are committed — **there is no `backend/.env.example`**, so backend env vars are discoverable only from `docs/PROJECT_DOCUMENTATION.md` and the existing local `backend/.env`.
 
-Backend vars actually read by code include `MONGODB_URI`, `PORT`, `JWT_SECRET`/`ADMIN_JWT_SECRET` (+ `*_EXPIRES_IN`), `SMTP_*`/`EMAIL_FROM`, `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET`, `CLOUDINARY_CLOUD_NAME`/`_API_KEY`/`_API_SECRET`, `MAX_IMAGE_UPLOAD_MB`, `HOTEL_ADVANCE_PAYMENT_PERCENT` (default 20), `CANCELLATION_FREE_WINDOW_HOURS` (default 24), `ADMIN_NOTIFICATION_EMAIL`, `FRONTEND_URL`, `ADMIN_PANEL_URL`. Any new var must be documented with purpose + masked example; never print real values.
+Backend vars actually read by code include `MONGODB_URI`, `PORT`, `JWT_SECRET`/`ADMIN_JWT_SECRET` (+ `*_EXPIRES_IN`), `SMTP_*`/`EMAIL_FROM`, `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET`, `CLOUDINARY_CLOUD_NAME`/`_API_KEY`/`_API_SECRET`, `MAX_IMAGE_UPLOAD_MB`, `HOTEL_ADVANCE_PAYMENT_PERCENT` (default 20), `CANCELLATION_FREE_WINDOW_HOURS` (default 24), `ADMIN_NOTIFICATION_EMAIL`, `FRONTEND_URL`, `ADMIN_PANEL_URL`, and `SETTINGS_SECRET_KEY` (optional — keys settings-secret encryption; falls back to `ADMIN_JWT_SECRET`, so rotating that without setting this makes stored secrets undecryptable). Any new var must be documented with purpose + masked example; never print real values.
 
 Email and Cloudinary degrade gracefully when unset (email logs to console; upload routes return a clear "not configured" 500) — local dev works without them.
+
+Several of these can now also be set from the admin panel's Settings → Integrations, which writes them into `process.env` at runtime. A DB value wins; a blank one leaves `.env` in charge.
 
 ## Architecture
 
@@ -79,7 +85,10 @@ modules/auth/     auth.routes|controller|service|validation.ts, models/{user,adm
 modules/hotel/    hotel.routes|controller|service|validation.ts, booking.service.ts,
                   models/{hotel,room,roomAvailability,hotelBooking}.model.ts
 modules/content/  content.service.ts, models/{review,gallery,faq,offer}.model.ts  ← shared, polymorphic
-middlewares/      auth (authenticate/optionalAuthenticate/requireRole), error, upload (multer memory)
+modules/settings/ settings.{service,controller,routes,validation,defaults,crypto}.ts, models/setting.model.ts
+modules/audit/    audit.{service,controller,routes,validation}.ts, models/auditLog.model.ts
+modules/console/  activity/notification/search/export services + console.{controller,routes}.ts
+middlewares/      auth (authenticate/optionalAuthenticate/requireRole), audit, error, upload (multer memory)
 utils/            apiError, token, email, razorpay, cloudinary
 config/           db.ts (mongoose), cloudinary.ts
 ```
@@ -93,6 +102,15 @@ config/           db.ts (mongoose), cloudinary.ts
 - **Testing admin routes:** the admin routers have no bare `GET /`, so `/admin/hotels` returns 404 *before* `requireRole` runs — use a real endpoint (`/admin/hotels/bookings`) or your RBAC test proves nothing. `adminUser.routes.ts` uses `PUT`, and a 404 body has `success: false`, which reads as "blocked" to a check that only tests that flag. Assert on status codes.
 - **Guest checkout is a hard requirement** (`RULES.md`: never force login). Booking, cancellation, and review routes use `optionalAuthenticate("user")`, which attaches `req.actor` when a token is present and silently proceeds otherwise. Ownership on such routes is proved by matching `guestEmail` or `userId` — a booking reference alone is never treated as authorization.
 - **`content/` is polymorphic and vertical-agnostic** (`reviewableType`/`applicableTo` + owner id, e.g. `"hotel"`). Marriage Hall and Restaurant must reuse it rather than adding their own review/gallery/FAQ/offer models.
+### Platform Settings, Audit, Console (Phase 5)
+
+- **Settings** (`/api/v1/settings` public, `/api/v1/admin/settings` Super Admin) — 15 categories, one Mongo document each, `values` schemaless. Reads merge the stored doc over `SETTING_DEFAULTS`; unknown keys are dropped on write, not rejected. **Every default is a word-for-word transcription of what the page rendered before** — an unconfigured install must look identical, so don't "improve" a default.
+- **Secrets are write-only.** AES-256-GCM, returned only as a `••••••••1234` mask. Blank = keep, `"__clear__"` = delete. Never put a secret in `values`; that's what the separate `secrets` map is for. `SETTINGS_SECRET_KEY` (optional) keys it, falling back to `ADMIN_JWT_SECRET` — rotating that secret without the dedicated key makes stored secrets undecryptable (they fall back to `.env`, they don't throw).
+- **Integrations reach Razorpay/Cloudinary/SMTP via `process.env`.** All three utils read env lazily at call time, so `applyIntegrationEnv()` (boot + after every save) delivers DB values without touching them. Blank values are skipped so `.env` stays the fallback. Don't convert those utils to read the DB directly.
+- **Audit logging is a middleware, never a service call.** `auditLogger()` mounts on each admin router *after* `authenticate` and hooks `res.on("finish")` — it covers routes that don't exist yet, and logs only 2xx mutations. Don't add `audit.record()` calls to controllers; the two exceptions (login, failed login) are in `auth.controller.ts` because login has no token yet. Audit is read-only with no write endpoint — keep it that way.
+- **The activity feed is derived from the source collections, not stored.** Writing an `Activity` row per event would mean editing `createHotelBooking`/`verifyPayment`/`createReservation`/`createEnquiry`. Notifications are the notification-worthy subset of that same feed plus per-admin read state; only the *read* half persists, and "mark all read" is one watermark document.
+- **`/api/v1/admin/console/*` deliberately has no `requireRole`** — those features are *scoped*, not restricted, via `scopeForAdmin()` inside the services. Every role needs a dashboard and a bell; they just contain different data. Exports are the exception and 403 outside your scope.
+- **Public site reads settings through `frontend/src/lib/settings.ts`.** A blank string counts as "not set" (so clearing restores built-in copy), and `flag()` only hides on an explicit `false` (so a dead API can't blank the site). It fetches `no-store` — passing `cache: "force-cache"` alongside `next.revalidate` makes Next pin the first response forever and admin edits never appear.
 - **Media**: all uploads go through `upload.middleware.ts` (multer *memory* storage — never disk) into `utils/cloudinary.util.ts` (`uploadImageBuffer`/`deleteImageByPublicId`). Models store the returned `secure_url` as a plain string in `imageUrl`/`images`; don't restructure those fields to hold upload metadata. Server-side `quality: auto:good, fetch_format: auto` is intentional.
 
 ### Availability & booking model (the non-obvious core)

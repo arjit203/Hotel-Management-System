@@ -607,3 +607,142 @@ whose name matches no rule falls back to a generic plate. Re-check the pairings
 once, and either rename the dish or upload the real photograph.
 
 ---
+
+---
+
+## 10. Module: Platform Settings & Admin Console (`backend/src/modules/settings`, `backend/src/modules/audit`, `backend/src/modules/console`)
+
+### Purpose
+Turns the admin panel into a CMS and gives it the cross-cutting tooling a
+back-office needs: site-wide configuration, an audit trail, an activity
+timeline, a notification centre, exports and global search.
+
+All six are **additive**. No booking, reservation or enquiry flow changed, and
+no existing endpoint changed shape. Two of the six were built specifically so
+that would be true — see the audit middleware and the derived activity feed
+below.
+
+### Design decisions
+
+**Settings: one document per category, not one row per key.** A key/value
+collection means a query per field and a migration every time the CMS grows a
+text box. A category document is read once and handed to the page whole. The
+cost is that `values` is schemaless, so validation lives in
+`settings.validation.ts` — which is where every other module validates anyway.
+Reads merge the stored document over `SETTING_DEFAULTS`, so a field added to the
+defaults file appears immediately on installs whose document predates it, and
+"reset to defaults" is a delete rather than a data-entry job.
+
+**Every default is a transcription of what the page rendered before.** An
+install that never opens Settings must look identical. A default is not a place
+to improve the copy; getting this wrong makes the CMS a silent redesign.
+
+**Secrets are write-only and live outside `values`.** `values` is returned
+verbatim to the admin panel and its public subset to anyone. A secret stored in
+`values` would leak the first time someone added a category to the public list.
+Ciphertext in its own field makes that mistake impossible: the read path merges
+`secretHints`, never `secrets`. Blank means keep, `__clear__` means delete —
+which is what makes "change the SMTP port without retyping the password" work.
+
+**Public exposure is decided per category, not per key.** One reviewable
+decision governs a whole group (`PUBLIC_SETTING_CATEGORIES`), and because
+secrets are stripped before that code runs, a mistake there leaks copy rather
+than credentials.
+
+**Integrations reach their consumers through `process.env`.** `razorpay.util.ts`,
+`config/cloudinary.ts` and `email.util.ts` already read env vars lazily at call
+time (each documents why — `dotenv.config()` runs after imports resolve). That
+existing decision is what lets `applyIntegrationEnv()` deliver saved credentials
+without a line changing in any of them. Blank values and decryption failures are
+skipped, leaving `.env` as the fallback, so a half-filled Settings page cannot
+take payments offline. The single edit required was `resetEmailTransport()`,
+because nodemailer caches its transporter.
+
+**Audit rows are written by a middleware, not by thirty controllers.**
+Sprinkling `audit.record()` through the codebase would touch every module, be
+forgotten on the thirty-first route, and put logging inside functions whose job
+is something else. `auditLogger()` mounts once per admin router, hooks
+`res.on("finish")` so it runs after the response is sent, and therefore covers
+routes that do not exist yet. Login and failed login are recorded explicitly in
+the auth controller, because login is not on an admin router and a failed
+attempt is worth recording precisely because nothing changed.
+
+**The activity feed is derived, not stored.** An `Activity` collection written to
+on every event would mean edits inside `createHotelBooking`, `verifyPayment`,
+`createReservation`, `createEnquiry` and the review path — five changes to
+money-handling code for a dashboard widget, and a booking that could fail
+because a feed insert did. Deriving costs five indexed, capped, projected
+queries; it cannot drift from the records, cannot double-count a retry, and
+needed no backfill for data that predated the module.
+
+**Notifications store only the read half.** There is no notification row to flip
+a flag on, and per-admin read state is genuinely new information rather than a
+copy of something else. "Mark all read" writes one watermark document instead of
+hundreds of rows.
+
+**`/admin/console/*` has no `requireRole`.** These features are scoped, not
+restricted — every role needs a dashboard, a bell and a search box, just
+containing different data. Scoping happens per request via `scopeForAdmin()`,
+reading the same `effectiveScope` the route guards use, so the console can never
+disagree with what the API would allow. Exports are the exception and throw 403,
+because a file leaving the building should not be silently narrowed.
+
+**Exports are described, not hand-written.** Six datasets × three formats is
+eighteen code paths written by hand. A dataset declares its columns and its
+query; one set of writers renders any of them. A seventh export is one object.
+
+### Known limitations
+
+- **The settings cache is per process.** A save invalidates it locally; with more
+  than one backend instance, other instances take up to 60 seconds to notice.
+  Acceptable for copy and colours — do not cache anything strongly consistent
+  here.
+- **Rotating `ADMIN_JWT_SECRET` without `SETTINGS_SECRET_KEY` set makes stored
+  secrets undecryptable.** They fall back to `.env` rather than erroring, but
+  they are gone. Set `SETTINGS_SECRET_KEY` in production and the two become
+  independent.
+- **Global search uses unanchored regex**, which is not index-eligible. Fine at
+  this data size and capped per group; past a few hundred thousand rows the
+  upgrade is Atlas Search, not `$text` (which tokenises on words and cannot match
+  a fragment of a booking reference — the most common query here).
+- **Exports are capped at 10,000 rows** and buffered rather than streamed, so a
+  query failure produces a clean JSON error instead of a half-written file.
+- **Feature toggles hide modules from the public site only.** They do not disable
+  the API or the admin panel: turning off Restaurant should stop new reservations
+  being taken, not strand the ones already in the book.
+- **Maintenance mode is stored and served but not yet enforced by middleware** —
+  the flag is public so the frontend can act on it; a server-side gate is a
+  separate change.
+- **Theme colours are stored but not yet injected as CSS variables.** The palette
+  lives in `tailwind.config.js`, and wiring runtime colour overrides is a design
+  system change, not a settings change.
+
+### Environment variables added
+- `SETTINGS_SECRET_KEY` — optional. Keys the AES-256-GCM encryption for settings
+  secrets. Falls back to `ADMIN_JWT_SECRET`; see the limitation above. Example:
+  `SETTINGS_SECRET_KEY=****************` (32+ random characters).
+
+### Dependencies added
+`exceljs`, `pdfkit`, `@types/pdfkit` — for Excel and PDF exports.
+
+### Frontend
+`frontend/src/lib/settings.ts` is the single reader. Every accessor takes a
+fallback, and a **blank string counts as "not set"** so clearing a field restores
+the built-in copy rather than emptying a heading. `flag()` is deliberately
+asymmetric: only an explicit `false` hides a section, because a missing document
+or an unreachable API must never blank the website.
+
+`getSettings()` fetches with `no-store` and relies on React's `cache()` to
+collapse every call in one render into a single request. The first version used
+`cache: "force-cache"` *with* `next.revalidate`; Next refuses that combination
+and force-cache wins, which pinned the first response forever and meant admin
+edits never appeared. Freshness beats a saved round trip for a CMS.
+
+Legal pages `notFound()` when unpublished — the one place that is right, where
+`PropertyUnavailable` is used everywhere else. An empty policy is a deliberate
+state, not an unreachable API, and a refund policy rendered as a friendly
+placeholder is a legal claim nobody made.
+
+### Full endpoint list
+See `API_DOCUMENTATION.md`.
+

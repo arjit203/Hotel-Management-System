@@ -1,6 +1,7 @@
 import { Router } from "express";
 import * as adminUserController from "./adminUser.controller";
 import { authenticate, requireRole } from "../../middlewares/auth.middleware";
+import { auditLogger } from "../../middlewares/audit.middleware";
 
 /**
  * Admin-account management → mounted at `/api/v1/admin/users`.
@@ -23,6 +24,12 @@ const router = Router();
 
 router.use(authenticate("admin"));
 router.use(requireRole("super_admin"));
+// Records every mutation on this router — create, update, delete, status and
+// role changes, uploads — without a single controller or service knowing it
+// exists. Hooks res.on("finish"), so it runs after the response is sent and can
+// neither slow a request down nor fail one. Must come after authenticate(),
+// because it reads req.actor. See middlewares/audit.middleware.ts.
+router.use(auditLogger());
 
 router.get("/", adminUserController.listAdmins);
 router.post("/", adminUserController.createAdmin);

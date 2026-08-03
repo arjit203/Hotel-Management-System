@@ -24,6 +24,23 @@ function isValidSmtpConfig(): boolean {
   return !looksLikePlaceholder;
 }
 
+/**
+ * Drops the cached transporter so the next send rebuilds it from the current
+ * environment.
+ *
+ * The transporter is built once and reused, which is right for a process whose
+ * SMTP settings come from `.env` and never change. Now that the Settings module
+ * can write `SMTP_*` into `process.env` at runtime, a change would otherwise
+ * not be picked up until a restart. `settings.service.ts` calls this after
+ * saving integration credentials.
+ *
+ * Additive only — nothing about how mail is sent or when it degrades to
+ * console logging has changed.
+ */
+export function resetEmailTransport(): void {
+  transporter = null;
+}
+
 function getTransporter(): nodemailer.Transporter {
   if (transporter) return transporter;
 

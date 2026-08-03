@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Cormorant_Garamond, Jost } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/Header";
+import { getSettings, str, flag } from "@/lib/settings";
 import Footer from "@/components/Footer";
 import ScrollProgress from "@/components/motion/ScrollProgress";
 import PageTransition from "@/components/motion/PageTransition";
@@ -32,22 +33,59 @@ const sans = Jost({
   display: "swap",
 });
 
-export const metadata: Metadata = {
-  metadataBase: new URL(SITE_URL),
-  title: {
-    default: "7 Vachan — Luxury Hotel & Stays",
-    template: "%s | 7 Vachan",
-  },
-  description:
-    "7 Vachan Grand — a premium hotel experience with luxury rooms, fine dining, and warm hospitality in Satna.",
-  openGraph: {
-    siteName: "7 Vachan",
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-  },
-};
+/**
+ * Site-wide metadata, driven by Settings → SEO.
+ *
+ * A function rather than a constant so the values can be read from the database
+ * — Next calls `generateMetadata` per request on a dynamic route and caches it
+ * alongside the page otherwise, which is the same freshness the pages
+ * themselves get.
+ *
+ * Every field falls back to the string this file previously hardcoded, so an
+ * install that never opens Settings emits exactly the metadata it did before.
+ * The one addition is `robots`, which is only ever set to `noindex` when a
+ * Super Admin has explicitly turned indexing off — the default stays "index",
+ * because silently de-indexing a live site would be catastrophic and
+ * invisible.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await getSettings();
+
+  const siteName = str(settings, "general", "siteName", "7 Vachan");
+  const canonical = str(settings, "seo", "canonicalUrl", SITE_URL);
+  const indexable = flag(settings, "seo", "robotsIndex", true);
+  const ogImage = str(settings, "branding", "ogImageUrl");
+  const verification = str(settings, "seo", "googleSiteVerification");
+
+  return {
+    metadataBase: new URL(canonical || SITE_URL),
+    title: {
+      default: str(settings, "seo", "defaultTitle", "7 Vachan — Luxury Hotel & Stays"),
+      template: str(settings, "seo", "titleTemplate", "%s | 7 Vachan"),
+    },
+    description: str(
+      settings,
+      "seo",
+      "defaultDescription",
+      "7 Vachan Grand — a premium hotel experience with luxury rooms, fine dining, and warm hospitality in Satna."
+    ),
+    keywords: str(settings, "seo", "keywords") || undefined,
+    openGraph: {
+      siteName,
+      type: "website",
+      ...(ogImage ? { images: [{ url: ogImage }] } : {}),
+    },
+    twitter: {
+      card: "summary_large_image",
+      ...(ogImage ? { images: [ogImage] } : {}),
+    },
+    ...(indexable ? {} : { robots: { index: false, follow: false } }),
+    ...(verification ? { verification: { google: verification } } : {}),
+    ...(str(settings, "branding", "faviconUrl")
+      ? { icons: { icon: str(settings, "branding", "faviconUrl") } }
+      : {}),
+  };
+}
 
 export default function RootLayout({
   children,

@@ -4,6 +4,7 @@ import { AdminSessionProvider } from "@/lib/adminSession";
 import { BusinessProvider } from "@/lib/businessContext";
 import { ShellUiProvider } from "@/lib/shellUi";
 import { SummaryProvider } from "@/lib/summary";
+import { NotificationProvider } from "@/lib/notifications";
 import { ConfirmProvider } from "@/components/ui/ConfirmDialog";
 import { ToastProvider } from "@/components/ui/Toast";
 
@@ -22,11 +23,15 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     <AdminSessionProvider>
       <BusinessProvider>
         <SummaryProvider>
-          <ShellUiProvider>
-            <ToastProvider>
-              <ConfirmProvider>{children}</ConfirmProvider>
-            </ToastProvider>
-          </ShellUiProvider>
+          {/* Sits beside Summary rather than inside it: the bell polls on its
+              own schedule and must not restart whenever summary data reloads. */}
+          <NotificationProvider>
+            <ShellUiProvider>
+              <ToastProvider>
+                <ConfirmProvider>{children}</ConfirmProvider>
+              </ToastProvider>
+            </ShellUiProvider>
+          </NotificationProvider>
         </SummaryProvider>
       </BusinessProvider>
     </AdminSessionProvider>

@@ -2,10 +2,12 @@ import {
   BarChart3,
   BedDouble,
   CalendarCheck,
+  FileSpreadsheet,
   Image as ImageIcon,
   LayoutDashboard,
   MessageSquareQuote,
   PartyPopper,
+  ScrollText,
   Settings,
   Star,
   Tag,
@@ -101,7 +103,13 @@ export function buildNavSections(business: BusinessKey): NavSection[] {
       title: "Workspace",
       items: [
         { label: "Analytics", href: "/analytics", icon: BarChart3 },
+        { label: "Reports", href: "/reports", icon: FileSpreadsheet },
         { label: "Users", href: "/users", icon: UsersRound },
+        // Super Admin only. Left visible for everyone because the page itself
+        // explains the restriction — a menu item that silently vanishes reads
+        // as a bug, and hiding it would not be a security control anyway since
+        // the API is what refuses the request.
+        { label: "Audit logs", href: "/audit-logs", icon: ScrollText },
         { label: "Settings", href: "/settings", icon: Settings },
       ],
     },

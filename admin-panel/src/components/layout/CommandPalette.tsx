@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CornerDownLeft, Search } from "lucide-react";
+import { CornerDownLeft, Loader2, Search } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useBusiness } from "@/lib/businessContext";
 import { useSummary } from "@/lib/summary";
+import { consoleApi } from "@/lib/console";
 import { buildNavSections } from "./navigation";
 
 interface Entry {
@@ -14,15 +15,32 @@ interface Entry {
   sublabel?: string;
   group: string;
   href: string;
+  badge?: string;
 }
 
+/** How long to wait after the last keystroke before asking the server. */
+const SEARCH_DEBOUNCE_MS = 220;
+
 /**
- * ⌘K / Ctrl-K jump bar.
+ * ⌘K / Ctrl-K global search.
  *
- * Searches the navigation, every property, and the operational records already
- * held in memory by SummaryProvider (bookings by reference/guest, reservations
- * by reference/guest). It issues no requests of its own — this is a filter over
- * data the session already has, which is what makes it instant.
+ * ── Two tiers, deliberately ──
+ * Navigation and the property list are filtered in memory and appear on the
+ * first keystroke, because "take me to Offers" should never wait on a network
+ * round trip. Everything else — customers, bookings, rooms, reservations, hall
+ * enquiries, reviews, offers, FAQs — comes from `/admin/console/search`, which
+ * queries the database and groups results by module.
+ *
+ * The earlier version filtered only what `SummaryProvider` happened to be
+ * holding, which meant a booking outside the loaded window was simply
+ * unfindable, and rooms, enquiries, reviews, offers and FAQs were not searchable
+ * at all. Local results now render immediately and server groups slot in
+ * underneath when they arrive.
+ *
+ * ── RBAC ──
+ * The server decides which groups exist based on the caller's role, so a
+ * restaurant manager's search never returns hotel bookings. Nothing is filtered
+ * client-side; there is nothing to filter, because it never arrives.
  */
 export default function CommandPalette({
   open,
@@ -36,7 +54,11 @@ export default function CommandPalette({
   const { bookings, reservations } = useSummary();
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
+  const [remote, setRemote] = useState<Entry[]>([]);
+  const [searching, setSearching] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Discards a slow response whose query the user has already moved on from.
+  const searchId = useRef(0);
 
   const entries = useMemo<Entry[]>(() => {
     const nav: Entry[] = buildNavSections(business)
@@ -80,18 +102,67 @@ export default function CommandPalette({
     return [...nav, ...properties, ...bookingEntries, ...reservationEntries];
   }, [business, hotels, restaurants, bookings, reservations]);
 
+  const runSearch = useCallback(async (term: string) => {
+    const id = ++searchId.current;
+    setSearching(true);
+
+    const res = await consoleApi.search(term);
+
+    if (id !== searchId.current) return;
+    setSearching(false);
+
+    if (res.success && res.data) {
+      setRemote(
+        res.data.groups.flatMap((group) =>
+          group.results.map((r) => ({
+            id: `${group.key}-${r.id}`,
+            label: r.title,
+            sublabel: r.subtitle,
+            group: group.label,
+            href: r.href,
+            badge: r.badge,
+          }))
+        )
+      );
+    } else {
+      // A failed search should not blank the local results that already work.
+      setRemote([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    const term = query.trim();
+    if (term.length < 2) {
+      setRemote([]);
+      setSearching(false);
+      searchId.current++;
+      return;
+    }
+
+    const timer = setTimeout(() => void runSearch(term), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [query, runSearch]);
+
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const pool = q
-      ? entries.filter(
-          (e) =>
-            e.label.toLowerCase().includes(q) || (e.sublabel?.toLowerCase().includes(q) ?? false)
-        )
-      : entries.filter((e) => e.group === "Navigate" || e.group === "Properties");
-    return pool.slice(0, 25);
-  }, [entries, query]);
 
-  useEffect(() => setCursor(0), [query]);
+    if (!q) {
+      return entries.filter((e) => e.group === "Navigate" || e.group === "Properties").slice(0, 25);
+    }
+
+    const local = entries.filter(
+      (e) => e.label.toLowerCase().includes(q) || (e.sublabel?.toLowerCase().includes(q) ?? false)
+    );
+
+    // Local bookings and reservations also come back from the server; dedupe on
+    // the destination so the same record is not listed twice under two headings.
+    const seen = new Set(local.map((e) => e.href));
+    const merged = [...local, ...remote.filter((e) => !seen.has(e.href))];
+
+    return merged.slice(0, 40);
+  }, [entries, query, remote]);
+
+  useEffect(() => setCursor(0), [query, remote]);
 
   useEffect(() => {
     if (!open) return;
@@ -148,17 +219,22 @@ export default function CommandPalette({
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search pages, properties, bookings, reservations…"
+            placeholder="Search guests, bookings, rooms, enquiries, reviews, pages…"
             aria-label="Search the admin console"
             className="w-full bg-transparent py-3.5 text-md text-ink-800 placeholder:text-ink-400 focus:outline-none"
           />
+          {searching && <Loader2 size={14} className="shrink-0 animate-spin text-ink-400" />}
           <kbd className="kbd">Esc</kbd>
         </div>
 
         <div className="max-h-[52vh] overflow-y-auto py-2">
           {results.length === 0 ? (
             <p className="px-4 py-8 text-center text-base text-ink-500">
-              No matches for “{query}”.
+              {searching
+                ? "Searching…"
+                : query.trim().length === 1
+                  ? "Type one more character to search records."
+                  : `No matches for “${query}”.`}
             </p>
           ) : (
             results.map((entry, index) => {
@@ -192,6 +268,7 @@ export default function CommandPalette({
                         </span>
                       )}
                     </span>
+                    {entry.badge && <span className="badge-neutral shrink-0">{entry.badge}</span>}
                     {index === cursor && (
                       <CornerDownLeft size={13} className="shrink-0 text-ink-400" />
                     )}

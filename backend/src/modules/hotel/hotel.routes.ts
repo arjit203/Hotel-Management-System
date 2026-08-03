@@ -1,6 +1,7 @@
 import { Router } from "express";
 import * as hotelController from "./hotel.controller";
 import { authenticate, optionalAuthenticate, requireRole } from "../../middlewares/auth.middleware";
+import { auditLogger } from "../../middlewares/audit.middleware";
 import { uploadImage } from "../../middlewares/upload.middleware";
 
 // Admins allowed to manage hotel content — Super Admin (branchId=null) or the
@@ -65,6 +66,12 @@ publicBookingRouter.get("/me", authenticate("user"), hotelController.getMyBookin
 export const adminHotelRouter = Router();
 
 adminHotelRouter.use(authenticate("admin"));
+// Records every mutation on this router — create, update, delete, status and
+// role changes, uploads — without a single controller or service knowing it
+// exists. Hooks res.on("finish"), so it runs after the response is sent and can
+// neither slow a request down nor fail one. Must come after authenticate(),
+// because it reads req.actor. See middlewares/audit.middleware.ts.
+adminHotelRouter.use(auditLogger());
 
 // -- Hotel CRUD --
 adminHotelRouter.post("/", requireRole(...HOTEL_MANAGER_ROLES), hotelController.adminCreateHotel);

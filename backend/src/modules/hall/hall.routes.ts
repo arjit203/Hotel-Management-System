@@ -1,6 +1,7 @@
 import { Router } from "express";
 import * as hallController from "./hall.controller";
 import { authenticate, optionalAuthenticate, requireRole } from "../../middlewares/auth.middleware";
+import { auditLogger } from "../../middlewares/audit.middleware";
 import { uploadImage } from "../../middlewares/upload.middleware";
 
 /**
@@ -75,6 +76,12 @@ publicEnquiryRouter.put(
 export const adminHallRouter = Router();
 
 adminHallRouter.use(authenticate("admin"));
+// Records every mutation on this router — create, update, delete, status and
+// role changes, uploads — without a single controller or service knowing it
+// exists. Hooks res.on("finish"), so it runs after the response is sent and can
+// neither slow a request down nor fail one. Must come after authenticate(),
+// because it reads req.actor. See middlewares/audit.middleware.ts.
+adminHallRouter.use(auditLogger());
 
 // -- Hall CRUD --
 adminHallRouter.post("/", requireRole(...HALL_MANAGER_ROLES), hallController.adminCreateHall);
