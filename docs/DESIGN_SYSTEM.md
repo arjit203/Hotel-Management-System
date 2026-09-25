@@ -190,12 +190,29 @@ Scales with viewport, so headings need no per-breakpoint overrides.
 > labels. Metadata that isn't a category (guest counts, "From", "/ night") is
 > sentence case at 14–15px, not an uppercase label.
 
-> **Root size (2026-09-25 b):** `html` is `font-size: 106.25%` (17px), rising to
-> `112.5%` (18px) from 1536px (`globals.css`). Every px figure in this document
-> is the nominal size at a 16px root, so rendered sizes are ×1.0625 / ×1.125,
-> and rem spacing scales with them. Keep new sizes in `rem`/Tailwind steps, not
-> `px`, or they won't follow. Don't raise the root above 17px below 1536px: the
-> full desktop header (shown from `xl`, 1280px) only just fits at that width.
+> **Sizing rules (2026-09-25 g) — replaces the 2026-09-25 b root zoom.**
+> - **The root stays at 16px** (`html { font-size: 100% }`). Raising it zoomed the
+>   whole UI — spacing, header, buttons, cards and container all follow the root —
+>   which is what made the site look magnified. Don't raise it again.
+> - **Readability comes from the text scale only** (`tailwind.config.js`
+>   `fontSize`): `text-xs` 13px, `text-sm` 15px, `text-base` 17px, `text-lg`
+>   19px, body 17px. Font size and line height change; spacing does not.
+> - **Display sizes** (fluid `clamp()`): `display-sm` 26–34px, `display-md`
+>   32–46px, `display-lg` 38–60px, `display-xl` 46–84px.
+> - **Tall elements follow screen height, within limits**, so a whole section fits
+>   on any laptop or monitor (checked at 1366×650, 1536×730 and 1920×960):
+>   `.section` desktop padding `clamp(3rem, 7vh, 5rem)`; `.section-tight`
+>   `clamp(2.5rem, 6vh, 3.5rem)`; room-card image `clamp(10rem, 24vh, 14rem)`;
+>   estate cards `clamp(18rem, 46vh, 30rem)`; gallery rows
+>   `clamp(8.5rem, 19–20vh, 12rem)`. Phones and tablets keep fixed sizes.
+>   Use the same `clamp(min, Nvh, max)` pattern for any new full-width image band.
+> - **Neighbouring sections never share a background.** Alternate cream /
+>   sand (`bg-cream-dark`) / ink; where two dark bands must touch, separate them
+>   with `rule-fade-light`. Section components that appear on several pages take a
+>   `tone` prop rather than a hard-coded surface.
+> - Display-font numbers use lining figures (`.font-display`, `.price`).
+> - Header: 72px (88px from `lg`), shrinking to 64/72px on scroll. Buttons:
+>   `min-h-[2.75rem] px-6 py-2.5 text-sm`.
 
 ---
 

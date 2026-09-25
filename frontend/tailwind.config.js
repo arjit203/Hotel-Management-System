@@ -55,10 +55,17 @@ module.exports = {
       fontSize: {
         // Display scale with tracking + leading baked in, so headings are
         // consistent everywhere instead of being re-tuned per page.
-        "display-sm": ["clamp(1.75rem, 1.4rem + 1.6vw, 2.5rem)", { lineHeight: "1.15", letterSpacing: "-0.01em" }],
-        "display-md": ["clamp(2.25rem, 1.7rem + 2.6vw, 3.5rem)", { lineHeight: "1.1", letterSpacing: "-0.015em" }],
-        "display-lg": ["clamp(2.75rem, 1.9rem + 4vw, 4.75rem)", { lineHeight: "1.05", letterSpacing: "-0.02em" }],
-        "display-xl": ["clamp(3.25rem, 2rem + 6vw, 6.5rem)", { lineHeight: "1", letterSpacing: "-0.025em" }],
+        // Text scale: Tailwind defaults +1px (xs 12→13, sm 14→15, base 16→17,
+        // lg 18→19). Font size only — spacing is untouched, so text is easier to
+        // read without the layout growing.
+        xs: ["0.8125rem", { lineHeight: "1.125rem" }],
+        sm: ["0.9375rem", { lineHeight: "1.375rem" }],
+        base: ["1.0625rem", { lineHeight: "1.625rem" }],
+        lg: ["1.1875rem", { lineHeight: "1.75rem" }],
+        "display-sm": ["clamp(1.625rem, 1.35rem + 1.2vw, 2.125rem)", { lineHeight: "1.15", letterSpacing: "-0.01em" }],
+        "display-md": ["clamp(2rem, 1.6rem + 1.9vw, 2.875rem)", { lineHeight: "1.1", letterSpacing: "-0.015em" }],
+        "display-lg": ["clamp(2.375rem, 1.8rem + 2.9vw, 3.75rem)", { lineHeight: "1.05", letterSpacing: "-0.02em" }],
+        "display-xl": ["clamp(2.875rem, 1.9rem + 4.6vw, 5.25rem)", { lineHeight: "1", letterSpacing: "-0.025em" }],
       },
       letterSpacing: {
         eyebrow: "0.22em",

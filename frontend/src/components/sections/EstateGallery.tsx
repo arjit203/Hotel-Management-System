@@ -53,11 +53,14 @@ export default function EstateGallery({
   title = "One address, three worlds",
   /** How many tiles to show before the filter narrows things. */
   limit = 9,
+  tone = "sand",
 }: {
   images: EstateImage[];
   eyebrow?: string;
   title?: string;
   limit?: number;
+  /** Section surface; pages alternate it so neighbouring sections stay distinct. */
+  tone?: "cream" | "sand";
 }) {
   const reduceMotion = useReducedMotion();
   const [activeModule, setActiveModule] = useState<EstateModule | "all">("all");
@@ -97,7 +100,7 @@ export default function EstateGallery({
   if (images.length === 0) return null;
 
   return (
-    <section className="section bg-cream-dark">
+    <section className={`section ${tone === "sand" ? "bg-cream-dark" : "bg-cream"}`}>
       <div className="container-luxe">
         <div className="mb-12 flex flex-wrap items-end justify-between gap-6">
           <div className="max-w-xl">
@@ -146,7 +149,7 @@ export default function EstateGallery({
                a curated spread rather than a contact sheet. ── */}
         <div
           key={activeModule}
-          className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4"
+          className="grid grid-cols-2 gap-3 sm:gap-4 lg:auto-rows-[clamp(8.5rem,19vh,12rem)] lg:grid-cols-4"
         >
           {filtered.map((image, index) => (
             <motion.button
@@ -167,7 +170,7 @@ export default function EstateGallery({
               <LuxeImage
                 src={image.imageUrl}
                 alt={image.title || `${MODULE_LABEL[image.module]} photograph`}
-                wrapperClassName={index === 0 ? "aspect-square" : "aspect-square"}
+                wrapperClassName="aspect-[4/3] lg:aspect-auto lg:h-full"
                 zoom
                 hoverScrim
                 sizes={

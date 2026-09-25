@@ -117,7 +117,7 @@ export default function Header() {
             hands vertical space back to the content once the guest is reading. */}
         <div
           className={`container-luxe flex items-center justify-between transition-[height] duration-500 ease-luxe ${
-            scrolled ? "h-[72px] lg:h-20" : "h-20 lg:h-28"
+            scrolled ? "h-16 lg:h-[72px]" : "h-[72px] lg:h-[88px]"
           }`}
         >
           {/* ── Wordmark ── */}
@@ -406,7 +406,7 @@ export default function Header() {
       {/* Spacer: the header is fixed, so every page except the home hero needs
           its height reserved. Kept here rather than in each page so no page had
           to change. */}
-      {!isHome && <div aria-hidden="true" className="h-20 lg:h-28" />}
+      {!isHome && <div aria-hidden="true" className="h-[72px] lg:h-[88px]" />}
     </>
   );
 }

@@ -64,12 +64,12 @@ export default function PackageCards({
                   <LuxeImage
                     src={pkg.imageUrl}
                     alt={pkg.name}
-                    wrapperClassName="aspect-[16/9]"
+                    wrapperClassName="aspect-[16/9] lg:aspect-auto lg:h-[clamp(11rem,28vh,17rem)]"
                     zoom
                     sizes="(max-width: 1024px) 100vw, 50vw"
                   />
                 ) : (
-                  <div className="aspect-[16/9] bg-gradient-to-br from-ink-soft via-ink-light to-ink" />
+                  <div className="aspect-[16/9] lg:aspect-auto lg:h-[clamp(11rem,28vh,17rem)] bg-gradient-to-br from-ink-soft via-ink-light to-ink" />
                 )}
 
                 <span

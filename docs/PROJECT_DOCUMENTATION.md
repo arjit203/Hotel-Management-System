@@ -887,3 +887,33 @@ keys), not a code read. Method and what it proved, so the next QA run can repeat
 - Not reproducible here and therefore not re-tested: real SMTP delivery, Cloudinary
   upload of a real image, a real Razorpay Checkout in a browser, network failure
   mid-Checkout. Manual steps for these are in the Module 6 report.
+
+---
+
+## 12. Production deployment (test phase, 2026-09-25)
+
+| Piece | Host | URL / config |
+|---|---|---|
+| Public site | Vercel (Hobby), Root Directory `frontend` | https://hotel-management-system-frontend-cyan.vercel.app |
+| Admin panel | Vercel (Hobby), Root Directory `admin-panel` | https://hotel-management-system-admin-panel-rose.vercel.app |
+| API | Render Free Web Service, repo root | https://hotel-management-system-mdi4.onrender.com — build `npm ci --include=dev --workspace=backend && npm run build --workspace=backend`, start `npm run start --workspace=backend`, health `/api/v1/health` |
+| Database | Atlas `cluster0`, db `7vachan`, user `7vachan` (`readWrite@7vachan`) | local dev uses `7vachan_dev` |
+| Media / payments | Cloudinary (same account) / Razorpay **test mode** | |
+
+- **Env sources of truth (git-ignored, local only):** `backend/.env.production`
+  (everything Render has), `frontend/.env.vercel`, `admin-panel/.env.vercel`. Keep
+  them in step with the dashboards. `NEXT_PUBLIC_*` values are compiled in — a
+  change needs a Vercel **redeploy**.
+- **`--include=dev` is required** in the Render build: with `NODE_ENV=production`,
+  npm otherwise skips `typescript` and the build fails.
+- **CORS** allows exactly `FRONTEND_URL` and `ADMIN_PANEL_URL` (verified: both real
+  origins allowed, Vercel preview URLs and foreign origins blocked).
+- **`/api/v1/health` does not check the database** — a "Live" Render deploy with
+  Atlas blocked still passes it; check the log for `MongoDB connected successfully`
+  and that `/api/v1/hotels` returns data.
+- **Not configured yet:** SMTP (emails are logged, not sent — password reset
+  unavailable), custom domain, Razorpay live keys. Vercel Hobby is for
+  non-commercial use; a live business needs Vercel Pro.
+- **Render Free sleeps after 15 min idle** (first request ~30–60 s). Keep it awake
+  with an uptime monitor on `/api/v1/health` every ~10 min. Wake it before a Vercel
+  build, because the legal pages are generated at build time.

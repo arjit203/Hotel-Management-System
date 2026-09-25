@@ -456,7 +456,7 @@ export default async function MarriageHallPage() {
 
       {/* ══ FAQs ══ */}
       {faqs.length > 0 && (
-        <section className="section bg-cream">
+        <section className="section bg-cream-dark">
           <div className="container-luxe">
             <div className="mx-auto max-w-3xl">
               <div className="mb-12 text-center">

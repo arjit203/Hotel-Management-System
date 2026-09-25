@@ -4,6 +4,72 @@ Format: newest entries on top. Categories: Added / Changed / Fixed / Security / 
 
 ---
 
+## [2026-09-25 h] — Public site: UI polish (focus ring, section separation, numerals, small layout bugs)
+
+Presentation only; no route, API, data, booking or payment logic changed.
+
+### Fixed (`frontend/` only)
+- **Clicked/focused nav links and buttons showed a squared-off box.** The global
+  `:focus-visible` rule forced `border-radius: 2px` on whatever had focus. It no
+  longer sets a radius (outlines follow each element's own shape, so pill buttons
+  get a pill ring), and nav links show the gold underline + gold text as their
+  keyboard-focus indicator instead of an outline. Verified: a mouse click leaves
+  no box; Tab still shows a visible focus state.
+- **Home page read as one continuous block.** Neighbouring sections shared a
+  background (Introduction + Rooms both cream; Offers + Gallery + Testimonials all
+  sand). Sections now alternate cream / sand / ink: `FeaturedRooms` and
+  `EstateGallery` take an optional `tone` prop (defaults unchanged, so the hotel
+  page is unaffected); the two back-to-back dark bands are split by a hairline
+  (`ValueProps` with `flushTop`). Marriage Hall FAQs moved to sand (was cream after
+  a cream section); the room page's "You may also like" gets a top rule.
+- **Numbers at uneven heights** (stats "5 / 2 / 4 / 2", prices, phone numbers):
+  Cormorant's old-style figures; `.font-display` and `.price` now use lining
+  figures.
+- Hotel intro: the map pin sat detached at the far left when the address wrapped;
+  it now sits inline with the text. "Guest reviews" stat no longer reuses the star
+  icon.
+- Testimonials: fewer reviews than columns are centred instead of hugging the
+  left; the decorative quote mark sits inside the card instead of being cut off.
+- Package cards (Marriage Hall): image height follows screen height like the room
+  cards.
+
+### Verification
+- Automated scan of 32 public pages at 1536×730 and 375×812 for adjacent
+  same-background sections and stranded icon+text rows: only the restaurant menu's
+  category list remains (intentional — one menu, categories separated by a rule).
+- Headless-Chrome sweep of 36 pages at 375 / 768 / 1366×650 / 1920×960; `tsc`,
+  ESLint 0 warnings, `next build` 40/40.
+
+---
+
+## [2026-09-25 g] — Public site: UI back to true size, text-only readability, screen-height-aware sections
+
+The 2026-09-25 b change raised the root font size (17px, 18px from 1536px). Every
+size on the site follows the root, so it zoomed the whole UI — header, buttons,
+cards, images and spacing — not just the text. Presentation only: no route, API,
+data, booking or payment logic changed; admin panel untouched.
+
+### Changed (`frontend/` only)
+- Root back to 16px; readability kept through the text scale instead (`text-xs`
+  13, `sm` 15, `base` 17, `lg` 19px; body 17px) — font sizes only.
+- Display headings reduced (fluid ranges in `DESIGN_SYSTEM.md` §3); card titles,
+  prices and eyebrow spacing slightly tighter; buttons `px-6 py-2.5`,
+  `min-h 2.75rem`.
+- Header 112px → 88px on desktop (72px on phones), shrinking further on scroll.
+- Section padding and the tall media now follow screen height within limits
+  (`clamp(min, Nvh, max)`): `.section`, `.section-tight`, room-card image,
+  estate cards, both gallery grids. Estate gallery tiles are 4:3 instead of square.
+- Result at 1536×730 (a 1080p laptop at 125% scaling): Rooms & Suites content
+  fits on one screen (was ~35% taller); home page 10,406 → 7,914px tall at
+  1920×960. Phones and tablets keep their fixed sizes.
+
+### Verification
+- Headless Chrome on 36 public pages at 375 / 768 / 1366×650 / 1920×960: no
+  horizontal scroll, no text under 12px, no console errors (see Module 7 notes).
+- `tsc --noEmit`, ESLint (`next/core-web-vitals`) 0 warnings, `next build` 40/40.
+
+---
+
 ## [2026-09-25 f] — Deployment prep: dev/prod database split, backend dependency fix
 
 ### Fixed

@@ -100,6 +100,7 @@ export default function ValueProps({
       />
 
       <div className="container-luxe relative">
+        {flushTop && <div aria-hidden="true" className="rule-fade-light mb-12 sm:mb-14 lg:mb-16" />}
         <div className="mx-auto mb-12 max-w-2xl text-center sm:mb-14">
           <Reveal duration={0.6}>
             <p className="section-eyebrow flex justify-center !text-gold-light">{eyebrow}</p>

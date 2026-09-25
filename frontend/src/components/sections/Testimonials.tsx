@@ -51,6 +51,7 @@ export default function Testimonials({
               modules={[Autoplay, Pagination]}
               slidesPerView={1}
               spaceBetween={24}
+              centerInsufficientSlides
               pagination={{ clickable: true }}
               autoplay={{ delay: 6000, disableOnInteraction: false }}
               breakpoints={{ 768: { slidesPerView: 2 }, 1024: { slidesPerView: 3 } }}
@@ -65,7 +66,7 @@ export default function Testimonials({
                   <figure className="group relative flex h-full flex-col overflow-hidden rounded-luxe border border-ink/[0.06] bg-white p-9 transition-all duration-600 ease-luxe hover:-translate-y-1 hover:shadow-luxury">
                     <Quote
                       aria-hidden="true"
-                      className="absolute -right-2 -top-3 h-20 w-20 rotate-180 text-gold/[0.07] transition-colors duration-700 group-hover:text-gold/[0.13]"
+                      className="absolute right-5 top-5 h-12 w-12 rotate-180 text-gold/[0.07] transition-colors duration-700 group-hover:text-gold/[0.13]"
                       strokeWidth={1}
                     />
                     <StarRating rating={r.rating} size={13} />

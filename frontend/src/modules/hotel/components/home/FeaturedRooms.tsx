@@ -5,14 +5,22 @@ import Reveal from "@/components/motion/Reveal";
 import TextReveal from "@/components/motion/TextReveal";
 import { Stagger, StaggerItem } from "@/components/motion/Stagger";
 
-export default function FeaturedRooms({ rooms }: { rooms: RoomSummary[] }) {
+export default function FeaturedRooms({
+  rooms,
+  tone = "cream",
+}: {
+  rooms: RoomSummary[];
+  /** Section surface; pages alternate it so neighbouring sections stay distinct. */
+  tone?: "cream" | "sand";
+}) {
   if (rooms.length === 0) return null;
 
   return (
-    <section className="section container-luxe">
+    <section className={`section ${tone === "sand" ? "bg-cream-dark" : ""}`}>
+      <div className="container-luxe">
       {/* Asymmetric header: title left, supporting copy + link right. Centring
           every heading is what makes a page feel like a template. */}
-      <div className="mb-14 grid grid-cols-1 items-end gap-8 lg:grid-cols-12 lg:gap-12">
+      <div className="mb-8 grid grid-cols-1 items-end gap-6 lg:grid-cols-12 lg:gap-12">
         <div className="lg:col-span-7">
           <Reveal duration={0.6}>
             <p className="section-eyebrow">Accommodation</p>
@@ -33,13 +41,14 @@ export default function FeaturedRooms({ rooms }: { rooms: RoomSummary[] }) {
         </div>
       </div>
 
-      <Stagger className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+      <Stagger className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {rooms.slice(0, 3).map((room, i) => (
           <StaggerItem key={room._id} className="flex">
             <RoomCard room={room} priority={i === 0} />
           </StaggerItem>
         ))}
       </Stagger>
+      </div>
     </section>
   );
 }

@@ -57,7 +57,7 @@ export default function RoomCard({ room, priority = false }: { room: RoomSummary
     // equal height regardless of copy length.
     <article className="card-luxe card-hover group flex w-full flex-col overflow-hidden">
       {/* ── Media ── */}
-      <div className="media h-64 shrink-0 sm:h-72">
+      <div className="media h-52 shrink-0 sm:h-[clamp(10rem,24vh,14rem)]">
         {images.length > 0 ? (
           <>
             {images.map((src, i) => {
@@ -125,7 +125,7 @@ export default function RoomCard({ room, priority = false }: { room: RoomSummary
       </div>
 
       {/* ── Body ── */}
-      <div className="flex flex-1 flex-col p-7">
+      <div className="flex flex-1 flex-col p-6">
         <h3 className="card-title">
           {/* The stretched link: ::after covers the whole card. */}
           <Link
@@ -140,14 +140,14 @@ export default function RoomCard({ room, priority = false }: { room: RoomSummary
           {room.description.length > 110 ? `${room.description.slice(0, 110).trimEnd()}…` : room.description}
         </p>
 
-        <p className="mt-5 flex items-center gap-2 text-[0.9375rem] text-warm-600">
+        <p className="mt-4 flex items-center gap-2 text-[0.9375rem] text-warm-600">
           <Users size={16} strokeWidth={1.5} className="text-gold" /> Up to {room.maxOccupancy} guests
         </p>
 
-        <div className="mt-6 flex items-end justify-between gap-4 border-t border-ink/[0.07] pt-6">
+        <div className="mt-4 flex items-end justify-between gap-4 border-t border-ink/[0.07] pt-4">
           <p className="leading-none">
             <span className="mb-1.5 block text-sm text-warm-500">From</span>
-            <span className="price text-[1.75rem]">
+            <span className="price text-[1.5rem]">
               ₹<AnimatedNumber value={room.basePrice} />
             </span>
             <span className="ml-1 text-sm font-light text-warm-500">/ night</span>

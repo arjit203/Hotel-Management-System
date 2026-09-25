@@ -10,23 +10,17 @@
 
 @layer base {
   html {
-    /* Root size drives every rem-based size on the site (all type, buttons,
-       inputs, and the spacing around them), so raising it here scales the whole
-       UI proportionally — like a browser zoom — without touching any component.
-       17px by default; 18px from 1536px up, where the desktop nav has room.
-       Kept at 17px between xl (1280px) and 2xl because the full desktop header
-       only just fits at that width. */
-    font-size: 106.25%;
+    /* Root stays at the browser default (16px). It was raised to 17/18px on
+       2026-09-25 b to make text larger, but every rem-based size follows the root
+       (spacing, buttons, header, cards, container), so the whole UI zoomed.
+       Readability now comes from the text scale in tailwind.config.js instead,
+       which changes font sizes only. */
+    font-size: 100%;
     scroll-behavior: smooth;
     /* Header is sticky/overlaying — offset in-page anchor jumps so headings
        don't land underneath it. */
-    scroll-padding-top: 6rem;
+    scroll-padding-top: 5.5rem;
     -webkit-tap-highlight-color: transparent;
-  }
-  @media (min-width: 1536px) {
-    html {
-      font-size: 112.5%;
-    }
   }
 
   body {
@@ -34,7 +28,7 @@
     background: #faf7f2;
     /* 16px / 1.7 base. Jost runs optically small, so 15px body copy reads as
        ~14px — 16px is the floor for comfortable desktop reading. */
-    font-size: 1rem;
+    font-size: 1.0625rem; /* 17px — one step above the 16px default */
     line-height: 1.7;
     font-feature-settings: "kern" 1, "liga" 1;
     text-rendering: optimizeLegibility;
@@ -58,10 +52,19 @@
   }
 
   /* Gold focus ring — visible for keyboard users, invisible for mouse users. */
+  /* No border-radius here: setting one re-shaped whatever took focus, so pill
+     buttons and nav links turned into squared-off boxes. The outline now
+     follows each element's own corners. */
   :focus-visible {
     outline: 2px solid #b08d57;
     outline-offset: 3px;
-    border-radius: 2px;
+  }
+
+  /* Cormorant's default old-style figures sit at different heights ("5" and
+     "4" drop below "2"), which made stats, prices and phone numbers look
+     misaligned. Lining figures keep every digit on the same baseline. */
+  .font-display {
+    font-variant-numeric: lining-nums;
   }
 
   /* Refined scrollbar (WebKit) — thin, warm, unobtrusive. */
@@ -88,11 +91,13 @@
   .container-luxe {
     @apply mx-auto w-full max-w-content px-6 sm:px-8 lg:px-12;
   }
+  /* Desktop padding follows the screen height (7vh, 48–80px), so a 1366×650
+     laptop and a 1920×960 monitor both show a whole section. */
   .section {
-    @apply py-20 sm:py-24 lg:py-32;
+    @apply py-14 sm:py-16 lg:py-[clamp(3rem,7vh,5rem)];
   }
   .section-tight {
-    @apply py-14 sm:py-16 lg:py-20;
+    @apply py-10 sm:py-12 lg:py-[clamp(2.5rem,6vh,3.5rem)];
   }
 
   /* ---------- Typography ----------
@@ -104,7 +109,7 @@
      for uppercase labels with wide tracking (which read a full step larger than
      their nominal size). Running text never goes below 15px. */
   .section-eyebrow {
-    @apply inline-flex items-center gap-3 text-gold-dark text-[0.8125rem] tracking-eyebrow uppercase font-medium mb-5;
+    @apply inline-flex items-center gap-3 text-gold-dark text-[0.8125rem] tracking-eyebrow uppercase font-medium mb-3;
   }
   /* Hairline flourish before eyebrow text — a small luxury signature. */
   .section-eyebrow::before {
@@ -127,7 +132,7 @@
     @apply font-display font-normal text-display-xl text-cream;
   }
   .card-title {
-    @apply font-display font-medium text-[1.375rem] sm:text-2xl leading-snug text-ink;
+    @apply font-display font-medium text-[1.3125rem] sm:text-[1.4375rem] leading-snug text-ink;
   }
   /* Intro paragraph under a heading. */
   .lead {
@@ -143,7 +148,8 @@
   }
   /* Price figure — serif numerals read as "rate card", not "database field". */
   .price {
-    @apply font-display font-medium text-ink tabular-nums;
+    @apply font-display font-medium text-ink;
+    font-variant-numeric: lining-nums tabular-nums;
   }
 
   /* ---------- Buttons ----------
@@ -160,7 +166,7 @@
   .btn-gold,
   .btn-ghost-light {
     @apply relative inline-flex items-center justify-center gap-2.5 overflow-hidden rounded-full
-           min-h-[3rem] px-8 py-3.5 text-[0.9375rem] font-medium uppercase tracking-[0.08em]
+           min-h-[2.75rem] px-6 py-2.5 text-sm font-medium uppercase tracking-[0.08em]
            transition-all duration-400 ease-luxe will-change-transform;
     /* Keeps the sheen's negative z-index inside the button: above the button's
        own background, below its label — without asking every caller to wrap raw
@@ -237,8 +243,13 @@
            transition-transform duration-400 ease-luxe;
   }
   .nav-link:hover::after,
+  .nav-link:focus-visible::after,
   .nav-link[data-active="true"]::after {
     @apply scale-x-100;
+  }
+  /* Keyboard focus on a nav item shows the gold underline + colour, not a box. */
+  .nav-link:focus-visible {
+    @apply text-gold outline-none;
   }
 
   /* ---------- Surfaces ---------- */
@@ -340,7 +351,7 @@
 @layer utilities {
   /* Fixed-header offset for anchored sections. */
   .anchor-offset {
-    scroll-margin-top: 6rem;
+    scroll-margin-top: 5.5rem;
   }
   /* Opt-in GPU hinting for elements we animate on scroll. */
   .gpu {

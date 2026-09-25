@@ -60,7 +60,7 @@ export default function VerticalsPreview({ cards }: { cards: VerticalCard[] }) {
                   className="group relative block h-full overflow-hidden rounded-luxe
                              transition-all duration-600 ease-luxe hover:-translate-y-2 hover:shadow-lift"
                 >
-                  <div className="aspect-[3/4]">
+                  <div className="aspect-[3/4] md:aspect-auto md:h-[clamp(18rem,46vh,30rem)]">
                     {card.image ? (
                       <LuxeImage
                         src={card.image}

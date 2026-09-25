@@ -206,7 +206,7 @@ export default async function RoomDetailsPage({ params }: { params: { roomSlug: 
 
         {/* ── Related rooms ── */}
         {relatedRooms.length > 0 && (
-          <section className="mt-24">
+          <section className="mt-20 border-t border-ink/[0.08] pt-16 sm:pt-20">
             <div className="mb-10">
               <p className="section-eyebrow">Also Available</p>
               <TextReveal as="h2" text="You may also like" className="section-title" delay={0.05} />

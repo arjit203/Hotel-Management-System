@@ -52,7 +52,7 @@ export default function GalleryPreview({
       </div>
 
       <motion.div
-        className="grid auto-rows-[150px] grid-cols-2 gap-3 sm:auto-rows-[190px] sm:grid-cols-4 sm:gap-4"
+        className="grid auto-rows-[150px] grid-cols-2 gap-3 sm:auto-rows-[clamp(8.5rem,20vh,11.875rem)] sm:grid-cols-4 sm:gap-4"
         initial="hidden"
         whileInView="visible"
         viewport={VIEWPORT}

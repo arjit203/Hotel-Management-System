@@ -294,7 +294,7 @@ export default async function HomePage() {
         browseHref="/hotel/rooms"
       />
 
-      <FeaturedRooms rooms={rooms} />
+      <FeaturedRooms rooms={rooms} tone="sand" />
 
       {/* The estate: hotel, restaurant and banquet hall. Placed after the rooms
           so the home page still leads with the stay, but early enough that a
@@ -337,7 +337,7 @@ export default async function HomePage() {
         />
       )}
 
-      {showGallery && <EstateGallery images={interleaved} />}
+      {showGallery && <EstateGallery images={interleaved} tone="cream" />}
 
       {showTestimonials && (
         <Testimonials

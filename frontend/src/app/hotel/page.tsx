@@ -7,6 +7,7 @@ import {
   Clock,
   Mail,
   MapPin,
+  MessageSquareQuote,
   Phone,
   Sparkles,
   Star,
@@ -134,8 +135,8 @@ export default async function HotelPage() {
                 <StarRating rating={hotel.starRating} size={17} />
               </div>
               <p className="lead mx-auto mt-6 max-w-prose">{hotel.description}</p>
-              <p className="mt-6 flex items-center justify-center gap-2 text-xs uppercase tracking-luxe text-warm-400">
-                <MapPin size={13} className="text-gold" />
+              <p className="mx-auto mt-6 max-w-2xl text-center text-xs uppercase leading-relaxed tracking-luxe text-warm-500">
+                <MapPin size={13} className="-mt-0.5 mr-2 inline-block text-gold" />
                 {hotel.address}
               </p>
             </Reveal>
@@ -162,7 +163,7 @@ export default async function HotelPage() {
               <StatTile
                 value={reviewSummary.count}
                 label={reviewSummary.count === 1 ? "Guest review" : "Guest reviews"}
-                icon={<Star size={17} strokeWidth={1.5} />}
+                icon={<MessageSquareQuote size={17} strokeWidth={1.5} />}
               />
             ) : (
               <StatTile
