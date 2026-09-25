@@ -51,8 +51,9 @@ export const metadata: Metadata = {
  * or sent to an address someone else checks. There was no way to answer "so is
  * our date booked or not?" without phoning.
  *
- * Uses the existing public lookup route, which strips `adminNotes`, so nothing
- * internal leaks. Uncached — status is exactly the thing that changes.
+ * Uses the existing public lookup route, which strips `adminNotes` and masks the
+ * guest's email and phone, so nothing internal or personal leaks to someone who
+ * merely has the reference. Uncached — status is exactly the thing that changes.
  *
  * Server Component; only the cancel button is a client island.
  */
@@ -104,7 +105,7 @@ const TONE_STYLES = {
   pending: { ring: "border-gold/30 bg-gold/[0.06]", icon: Clock, iconTone: "text-gold" },
   good: { ring: "border-gold/40 bg-gold/[0.09]", icon: Sparkles, iconTone: "text-gold" },
   done: { ring: "border-green-600/25 bg-green-50", icon: CheckCircle2, iconTone: "text-green-700" },
-  bad: { ring: "border-ink/12 bg-cream-dark", icon: XCircle, iconTone: "text-warm-500" },
+  bad: { ring: "border-ink/[0.12] bg-cream-dark", icon: XCircle, iconTone: "text-warm-500" },
 } as const;
 
 /** The four steps, so a family can see where they are in the process. */
@@ -289,10 +290,7 @@ export default async function EnquiryStatusPage({
                 produce an error. */}
             {["pending", "reviewing", "approved"].includes(enquiry.status) && (
               <div className="mt-8 text-center">
-                <CancelEnquiryButton
-                  reference={enquiry.enquiryReference}
-                  guestEmail={enquiry.guestEmail}
-                />
+                <CancelEnquiryButton reference={enquiry.enquiryReference} />
               </div>
             )}
           </Reveal>

@@ -315,9 +315,14 @@ export const SETTING_DEFAULTS: Record<SettingCategory, Record<string, unknown>> 
     offersEnabled: true,
     galleryEnabled: true,
     faqsEnabled: true,
-    onlineOrdering: false,
+    // Both `true` because that is what the site rendered before these flags
+    // existed: the menu always shows the "Order Online" placeholder and the
+    // footer always shows the newsletter form. Every default must transcribe
+    // the pre-settings page, so an unconfigured install looks identical. (The
+    // flag gates the placeholder only — online ordering itself is Phase 2.)
+    onlineOrdering: true,
     guestCheckout: true,
-    newsletterSignup: false,
+    newsletterSignup: true,
   },
 
   // ------------------------------------------------------------- integrations

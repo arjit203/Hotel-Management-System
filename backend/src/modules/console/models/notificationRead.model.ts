@@ -56,7 +56,7 @@ export interface INotificationWatermark extends Document {
 }
 
 const notificationWatermarkSchema = new Schema<INotificationWatermark>({
-  adminId: { type: Schema.Types.ObjectId, ref: "Admin", required: true, unique: true, index: true },
+  adminId: { type: Schema.Types.ObjectId, ref: "Admin", required: true, unique: true },
   readBefore: { type: Date, required: true },
 });
 

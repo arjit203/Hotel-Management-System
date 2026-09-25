@@ -32,6 +32,8 @@ import { effectiveScope, type BusinessScope, type IAdmin } from "../auth/models/
 export type ActivityType =
   | "booking_created"
   | "booking_cancelled"
+  /** A cancelled booking whose gateway refund failed — needs a human to pay it back. */
+  | "refund_pending"
   | "payment_received"
   | "reservation_created"
   | "reservation_cancelled"
@@ -65,8 +67,10 @@ export interface ActivityItem {
 export const NOTIFIABLE_TYPES: ActivityType[] = [
   "booking_created",
   "booking_cancelled",
+  "refund_pending",
   "payment_received",
   "reservation_created",
+  "reservation_cancelled",
   "enquiry_created",
   "review_submitted",
 ];
@@ -107,31 +111,43 @@ export async function collectActivity(options: CollectOptions = {}): Promise<Act
   const [bookings, reservations, enquiries, reviews, offers] = await Promise.all([
     wants("hotel")
       ? HotelBooking.find({ updatedAt: { $gte: since } })
-          .select("guestName bookingReference status paymentStatus totalAmount advancePaid createdAt updatedAt")
+          .select(
+            "guestName bookingReference status paymentStatus totalAmount advancePaid paymentTime " +
+              "cancelledAt refundAmount refundStatus createdAt updatedAt"
+          )
           .sort({ updatedAt: -1 })
           .limit(perSource)
           .lean()
       : [],
     wants("restaurant")
       ? TableReservation.find({ updatedAt: { $gte: since } })
-          .select("guestName reservationReference status partySize reservationDate timeSlot createdAt updatedAt")
+          .select(
+            "guestName reservationReference status partySize reservationDate timeSlot cancelledAt createdAt updatedAt"
+          )
           .sort({ updatedAt: -1 })
           .limit(perSource)
           .lean()
       : [],
     wants("hall")
       ? HallEnquiry.find({ updatedAt: { $gte: since } })
-          .select("guestName reference status eventType eventDate guestCount createdAt updatedAt")
+          .select("guestName enquiryReference status eventType eventDate guestCount createdAt updatedAt")
           .sort({ updatedAt: -1 })
           .limit(perSource)
           .lean()
       : [],
-    Review.find({ createdAt: { $gte: since } })
+    // Vertical scope goes in the query: filtering after `.limit(perSource)`
+    // let out-of-scope rows use up the cap and starve an in-scope dashboard.
+    Review.find({ createdAt: { $gte: since }, reviewableType: { $in: modules } })
       .select("guestName reviewableType rating comment isApproved createdAt")
       .sort({ createdAt: -1 })
       .limit(perSource)
       .lean(),
-    Offer.find({ createdAt: { $gte: since }, isActive: true })
+    // "all" is filed under hotel below, so it's only fetched when hotel is in scope.
+    Offer.find({
+      createdAt: { $gte: since },
+      isActive: true,
+      applicableTo: { $in: wants("hotel") ? [...modules, "all"] : modules },
+    })
       .select("title applicableTo createdAt")
       .sort({ createdAt: -1 })
       .limit(perSource)
@@ -144,16 +160,35 @@ export async function collectActivity(options: CollectOptions = {}): Promise<Act
     const id = String(b._id);
     const guest = b.guestName || "A guest";
 
-    if (b.status === "cancelled") {
+    // Cancelled, refund pending and refunded are all the cancellation, never
+    // "Payment received" — a refunded booking still has paymentStatus "paid",
+    // so checking payment first would announce money that has gone back out.
+    //
+    // `at` is the event's own timestamp (cancelledAt / paymentTime), not
+    // updatedAt: any later edit bumps updatedAt, which would push an item the
+    // admin already cleared past the "mark all read" watermark and resurrect it.
+    if (b.status === "cancelled" || b.status === "refund_pending" || b.status === "refunded") {
+      const refund = Number(b.refundAmount ?? 0);
+      const refundText = `₹${refund.toLocaleString("en-IN")}`;
+      const needsAction = b.status === "refund_pending";
+      const detail = needsAction
+        ? `${b.bookingReference} cancelled · refund of ${refundText} could not be sent automatically and needs manual action.`
+        : b.status === "refunded" || b.refundStatus === "processed"
+          ? `${b.bookingReference} cancelled · ${refundText} refunded to the guest.`
+          : refund > 0
+            ? `${b.bookingReference} cancelled · refund of ${refundText} due.`
+            : `${b.bookingReference} is no longer holding rooms · no refund due.`;
+
       items.push({
-        key: `booking_cancelled:${id}`,
-        type: "booking_cancelled",
+        key: `${needsAction ? "refund_pending" : "booking_cancelled"}:${id}`,
+        type: needsAction ? "refund_pending" : "booking_cancelled",
         module: "hotel",
-        title: `Booking cancelled — ${guest}`,
-        detail: `${b.bookingReference} is no longer holding rooms.`,
+        title: needsAction ? `Refund needs attention — ${guest}` : `Booking cancelled — ${guest}`,
+        detail,
         href: `/bookings?search=${encodeURIComponent(b.bookingReference)}`,
-        at: b.updatedAt ?? b.createdAt,
+        at: b.cancelledAt ?? b.updatedAt ?? b.createdAt,
         tone: "warning",
+        amount: refund > 0 ? refund : undefined,
         reference: b.bookingReference,
       });
       continue;
@@ -169,7 +204,7 @@ export async function collectActivity(options: CollectOptions = {}): Promise<Act
         title: `Payment received — ${guest}`,
         detail: `Advance of ₹${Number(b.advancePaid).toLocaleString("en-IN")} confirmed against ${b.bookingReference}.`,
         href: `/bookings?search=${encodeURIComponent(b.bookingReference)}`,
-        at: b.updatedAt ?? b.createdAt,
+        at: b.paymentTime ?? b.updatedAt ?? b.createdAt,
         tone: "success",
         amount: b.advancePaid,
         reference: b.bookingReference,
@@ -182,7 +217,7 @@ export async function collectActivity(options: CollectOptions = {}): Promise<Act
         title: `New booking — ${guest}`,
         detail:
           b.status === "pending"
-            ? `${b.bookingReference} is awaiting payment; no room is held yet.`
+            ? `${b.bookingReference} is awaiting payment; its rooms are held only until the payment window expires.`
             : `${b.bookingReference} · ₹${Number(b.totalAmount ?? 0).toLocaleString("en-IN")}`,
         href: `/bookings?search=${encodeURIComponent(b.bookingReference)}`,
         at: b.createdAt,
@@ -205,7 +240,7 @@ export async function collectActivity(options: CollectOptions = {}): Promise<Act
       title: cancelled ? `Reservation cancelled — ${guest}` : `New reservation — ${guest}`,
       detail: `${r.partySize} cover${r.partySize === 1 ? "" : "s"} · ${formatDate(r.reservationDate)} at ${r.timeSlot}`,
       href: `/reservations?search=${encodeURIComponent(r.reservationReference)}`,
-      at: (cancelled ? r.updatedAt : r.createdAt) ?? r.createdAt,
+      at: (cancelled ? (r.cancelledAt ?? r.updatedAt) : r.createdAt) ?? r.createdAt,
       tone: cancelled ? "warning" : "info",
       reference: r.reservationReference,
     });
@@ -219,11 +254,11 @@ export async function collectActivity(options: CollectOptions = {}): Promise<Act
       module: "hall",
       title: `Hall enquiry — ${e.guestName || "A guest"}`,
       detail: `${e.eventType} for ${e.guestCount} on ${formatDate(e.eventDate)} · ${e.status}`,
-      href: `/enquiries?search=${encodeURIComponent(e.reference)}`,
+      href: `/enquiries?search=${encodeURIComponent(e.enquiryReference)}`,
       at: e.createdAt,
       // Pending is the one that needs a human — nothing is held until it is answered.
       tone: e.status === "pending" ? "warning" : "info",
-      reference: e.reference,
+      reference: e.enquiryReference,
     });
   }
 

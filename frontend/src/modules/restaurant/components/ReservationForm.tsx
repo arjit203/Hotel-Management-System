@@ -227,7 +227,7 @@ export default function ReservationForm({
                     }}
                     disabled={partySize <= 1}
                     aria-label="Fewer guests"
-                    className="flex h-9 w-9 items-center justify-center rounded-full border border-ink/12 text-warm-600 transition-colors hover:border-gold hover:text-gold disabled:opacity-30"
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-ink/[0.12] text-warm-600 transition-colors hover:border-gold hover:text-gold disabled:opacity-30"
                   >
                     <Minus size={13} />
                   </button>
@@ -242,7 +242,7 @@ export default function ReservationForm({
                     }}
                     disabled={partySize >= maxPartySize}
                     aria-label="More guests"
-                    className="flex h-9 w-9 items-center justify-center rounded-full border border-ink/12 text-warm-600 transition-colors hover:border-gold hover:text-gold disabled:opacity-30"
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-ink/[0.12] text-warm-600 transition-colors hover:border-gold hover:text-gold disabled:opacity-30"
                   >
                     <Plus size={13} />
                   </button>
@@ -298,7 +298,7 @@ export default function ReservationForm({
                                 className={`rounded-full px-5 py-2.5 text-xs font-medium uppercase tracking-luxe transition-all duration-400 ease-luxe ${
                                   selected
                                     ? "bg-ink text-cream"
-                                    : "border border-ink/12 text-warm-600 hover:border-gold hover:text-gold"
+                                    : "border border-ink/[0.12] text-warm-600 hover:border-gold hover:text-gold"
                                 }`}
                               >
                                 {formatTimeSlot(s.timeSlot)}

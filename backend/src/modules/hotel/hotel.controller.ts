@@ -1,9 +1,10 @@
 import { Request, Response, NextFunction } from "express";
+import { Types } from "mongoose";
 import * as hotelService from "./hotel.service";
 import * as bookingService from "./booking.service";
 import * as contentService from "../content/content.service";
 import { User } from "../auth/models/user.model";
-import { uploadImageBuffer, deleteImageByPublicId } from "../../utils/cloudinary.util";
+import { uploadImageBuffer, deleteImageByPublicId, safeUploadFolder } from "../../utils/cloudinary.util";
 import { ApiError } from "../../utils/apiError.util";
 import {
   createHotelSchema,
@@ -18,6 +19,9 @@ import {
   createReviewSchema,
   replyReviewSchema,
   removeReviewImageSchema,
+  retryPaymentSchema,
+  updateBookingStatusSchema,
+  adminListBookingsQuerySchema,
 } from "./hotel.validation";
 
 function handleZodError(res: Response, error: any) {
@@ -151,6 +155,14 @@ export async function createHotelReview(req: Request, res: Response, next: NextF
   if (!parsed.success) return handleZodError(res, parsed.error);
 
   try {
+    // The review is attached to this id, so it must be a real, live hotel —
+    // otherwise anyone could park reviews against arbitrary ids.
+    if (!Types.ObjectId.isValid(req.params.hotelId)) {
+      throw new ApiError(404, "Hotel not found.");
+    }
+    const hotel = await hotelService.getHotelById(req.params.hotelId);
+    if (!hotel.isActive) throw new ApiError(404, "Hotel not found.");
+
     const actor = (req as any).actor; // set by optionalAuthenticate('user') — may be undefined for guests
     let guestName = parsed.data.guestName;
     if (actor?.id) {
@@ -197,7 +209,7 @@ export async function adminListReviews(req: Request, res: Response, next: NextFu
 
 export async function adminApproveReview(req: Request, res: Response, next: NextFunction) {
   try {
-    const review = await contentService.approveReview(req.params.reviewId);
+    const review = await contentService.approveReview("hotel", req.params.reviewId);
     res.status(200).json({ success: true, message: "Review approved.", data: review });
   } catch (err) {
     next(err);
@@ -209,7 +221,7 @@ export async function adminReplyToReview(req: Request, res: Response, next: Next
   if (!parsed.success) return handleZodError(res, parsed.error);
 
   try {
-    const review = await contentService.replyToReview(req.params.reviewId, parsed.data.reply);
+    const review = await contentService.replyToReview("hotel", req.params.reviewId, parsed.data.reply);
     res.status(200).json({ success: true, message: "Reply saved.", data: review });
   } catch (err) {
     next(err);
@@ -218,7 +230,7 @@ export async function adminReplyToReview(req: Request, res: Response, next: Next
 
 export async function adminDeleteReview(req: Request, res: Response, next: NextFunction) {
   try {
-    await contentService.deleteReview(req.params.reviewId);
+    await contentService.deleteReview("hotel", req.params.reviewId);
     res.status(200).json({ success: true, message: "Review deleted." });
   } catch (err) {
     next(err);
@@ -232,7 +244,7 @@ export async function adminRemoveReviewImage(req: Request, res: Response, next: 
   if (!parsed.success) return handleZodError(res, parsed.error);
 
   try {
-    const review = await contentService.removeReviewImage(req.params.reviewId, parsed.data.imageUrl);
+    const review = await contentService.removeReviewImage("hotel", req.params.reviewId, parsed.data.imageUrl);
     res.status(200).json({ success: true, message: "Image removed.", data: review });
   } catch (err) {
     next(err);
@@ -251,7 +263,7 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
     res.status(201).json({
       success: true,
       message: "Booking created. Complete the advance payment to confirm.",
-      data: { booking, razorpayOrder },
+      data: { booking: bookingService.withoutSecrets(booking), razorpayOrder },
     });
   } catch (err) {
     next(err);
@@ -264,7 +276,11 @@ export async function verifyPayment(req: Request, res: Response, next: NextFunct
 
   try {
     const booking = await bookingService.verifyPayment(parsed.data);
-    res.status(200).json({ success: true, message: "Payment verified. Booking confirmed.", data: booking });
+    res.status(200).json({
+      success: true,
+      message: "Payment verified. Booking confirmed.",
+      data: bookingService.withoutSecrets(booking),
+    });
   } catch (err) {
     next(err);
   }
@@ -272,7 +288,10 @@ export async function verifyPayment(req: Request, res: Response, next: NextFunct
 
 export async function getBookingByReference(req: Request, res: Response, next: NextFunction) {
   try {
-    const booking = await bookingService.getBookingByReference(req.params.reference);
+    // optionalAuthenticate('user') sets actor only for a valid user token; the
+    // owning user gets the full booking, everyone else the masked projection.
+    const actor = (req as any).actor;
+    const booking = await bookingService.getBookingByReference(req.params.reference, actor?.id);
     res.status(200).json({ success: true, data: booking });
   } catch (err) {
     next(err);
@@ -300,7 +319,25 @@ export async function cancelBooking(req: Request, res: Response, next: NextFunct
       { guestEmail: parsed.data.guestEmail, userId: actor?.id },
       parsed.data.cancellationReason
     );
-    res.status(200).json({ success: true, message: "Booking cancelled.", data: booking });
+    res.status(200).json({ success: true, message: "Booking cancelled.", data: bookingService.withoutSecrets(booking) });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// Fresh Razorpay order for a still-pending booking (Checkout dismissed, failed,
+// or the order went stale). Ownership proved like cancellation.
+export async function retryPayment(req: Request, res: Response, next: NextFunction) {
+  const parsed = retryPaymentSchema.safeParse(req.body ?? {});
+  if (!parsed.success) return handleZodError(res, parsed.error);
+
+  try {
+    const actor = (req as any).actor; // optional — set only if a user JWT was provided
+    const result = await bookingService.retryBookingPayment(req.params.reference, {
+      guestEmail: parsed.data.guestEmail,
+      userId: actor?.id,
+    });
+    res.status(200).json({ success: true, message: "Payment order created.", data: result });
   } catch (err) {
     next(err);
   }
@@ -441,7 +478,8 @@ export async function adminAddGalleryItem(req: Request, res: Response, next: Nex
 
 export async function adminDeleteGalleryItem(req: Request, res: Response, next: NextFunction) {
   try {
-    await contentService.deleteGalleryItem(req.params.itemId);
+    const item = await contentService.deleteGalleryItem("hotel", req.params.itemId);
+    if (!item) throw new ApiError(404, "Gallery item not found.");
     res.status(200).json({ success: true, message: "Gallery item deleted." });
   } catch (err) {
     next(err);
@@ -464,7 +502,7 @@ export async function adminUploadImage(req: Request, res: Response, next: NextFu
     }
     // folder query param lets the admin panel namespace the asset, e.g.
     // ?folder=rooms | gallery | offers | hotel-cover. Falls back to "misc".
-    const folder = `7vachan/hotel/${(req.query.folder as string) || "misc"}`;
+    const folder = `7vachan/hotel/${safeUploadFolder(req.query.folder)}`;
     const result = await uploadImageBuffer(file.buffer, folder);
     res.status(201).json({ success: true, message: "Image uploaded.", data: result });
   } catch (err) {
@@ -478,7 +516,7 @@ export async function adminDeleteImage(req: Request, res: Response, next: NextFu
     if (!publicId) {
       throw new ApiError(400, "publicId is required.");
     }
-    await deleteImageByPublicId(publicId);
+    await deleteImageByPublicId(publicId, "7vachan/hotel/");
     res.status(200).json({ success: true, message: "Image deleted." });
   } catch (err) {
     next(err);
@@ -512,7 +550,9 @@ export async function adminCreateOffer(req: Request, res: Response, next: NextFu
 
 export async function adminUpdateOffer(req: Request, res: Response, next: NextFunction) {
   try {
-    const offer = await contentService.updateOffer(req.params.offerId, req.body);
+    // Raw body is fine: updateOffer whitelists the updatable fields itself.
+    const offer = await contentService.updateOffer("hotel", req.params.offerId, req.body ?? {});
+    if (!offer) throw new ApiError(404, "Offer not found.");
     res.status(200).json({ success: true, message: "Offer updated.", data: offer });
   } catch (err) {
     next(err);
@@ -521,7 +561,8 @@ export async function adminUpdateOffer(req: Request, res: Response, next: NextFu
 
 export async function adminDeleteOffer(req: Request, res: Response, next: NextFunction) {
   try {
-    await contentService.deleteOffer(req.params.offerId);
+    const offer = await contentService.deleteOffer("hotel", req.params.offerId);
+    if (!offer) throw new ApiError(404, "Offer not found.");
     res.status(200).json({ success: true, message: "Offer deleted." });
   } catch (err) {
     next(err);
@@ -551,7 +592,8 @@ export async function adminCreateFaq(req: Request, res: Response, next: NextFunc
 
 export async function adminDeleteFaq(req: Request, res: Response, next: NextFunction) {
   try {
-    await contentService.deleteFaq(req.params.faqId);
+    const faq = await contentService.deleteFaq("hotel", req.params.faqId);
+    if (!faq) throw new ApiError(404, "FAQ not found.");
     res.status(200).json({ success: true, message: "FAQ deleted." });
   } catch (err) {
     next(err);
@@ -560,11 +602,15 @@ export async function adminDeleteFaq(req: Request, res: Response, next: NextFunc
 
 // ================== ADMIN: BOOKINGS ==================
 
+// Without ?page the response stays the plain array the admin panel reads
+// (newest first, capped at ?limit, default 200). With ?page it is
+// { items, page, limit, total, totalPages }.
 export async function adminListBookings(req: Request, res: Response, next: NextFunction) {
+  const parsed = adminListBookingsQuerySchema.safeParse(req.query);
+  if (!parsed.success) return handleZodError(res, parsed.error);
+
   try {
-    const hotelId = req.query.hotelId as string | undefined;
-    const status = req.query.status as string | undefined;
-    const bookings = await bookingService.listBookingsForAdmin({ hotelId, status });
+    const bookings = await bookingService.listBookingsForAdmin(parsed.data);
     res.status(200).json({ success: true, data: bookings });
   } catch (err) {
     next(err);
@@ -572,10 +618,12 @@ export async function adminListBookings(req: Request, res: Response, next: NextF
 }
 
 export async function adminUpdateBookingStatus(req: Request, res: Response, next: NextFunction) {
+  const parsed = updateBookingStatusSchema.safeParse(req.body);
+  if (!parsed.success) return handleZodError(res, parsed.error);
+
   try {
-    const { status } = req.body;
-    const booking = await bookingService.updateBookingStatus(req.params.bookingId, status);
-    res.status(200).json({ success: true, message: "Booking status updated.", data: booking });
+    const booking = await bookingService.updateBookingStatus(req.params.bookingId, parsed.data.status);
+    res.status(200).json({ success: true, message: "Booking status updated.", data: bookingService.withoutSecrets(booking) });
   } catch (err) {
     next(err);
   }

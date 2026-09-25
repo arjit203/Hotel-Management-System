@@ -41,7 +41,7 @@ export default function RoomAvailabilityCheck({ roomId }: { roomId: string }) {
 
   // Shared `.field-line-sm` (globals.css). NOTE: this is the one place the
   // extraction normalises pixels — this component previously used `py-2` and
-  // `border-ink/15`, versus the shared `py-2.5` / `border-ink/12`. A 2px padding
+  // `border-ink/15`, versus the shared `py-2.5` / `border-ink/[0.12]`. A 2px padding
   // and a hairline-opacity difference; called out rather than hidden.
   const fieldClass = "field-line-sm";
 

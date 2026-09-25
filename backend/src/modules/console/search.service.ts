@@ -120,23 +120,31 @@ export async function globalSearch(
         : [],
       wants("hall")
         ? HallEnquiry.find({
-            $or: [{ reference: term }, { guestName: term }, { guestEmail: term }, { eventType: term }],
+            $or: [{ enquiryReference: term }, { guestName: term }, { guestEmail: term }, { eventType: term }],
           })
-            .select("reference guestName status eventType eventDate")
+            .select("enquiryReference guestName status eventType eventDate")
             .sort({ createdAt: -1 })
             .limit(PER_GROUP)
             .lean()
         : [],
-      Review.find({ $or: [{ guestName: term }, { comment: term }] })
+      // Scope is applied in the query, not after the limit: filtering in memory
+      // let another vertical's matches use up the cap and starve this one.
+      Review.find({ reviewableType: { $in: modules }, $or: [{ guestName: term }, { comment: term }] })
         .select("guestName comment rating reviewableType isApproved")
         .sort({ createdAt: -1 })
         .limit(PER_GROUP * 2)
         .lean(),
-      Offer.find({ $or: [{ title: term }, { description: term }] })
+      Offer.find({
+        applicableTo: { $in: [...modules, "all"] },
+        $or: [{ title: term }, { description: term }],
+      })
         .select("title applicableTo isActive validTo")
         .limit(PER_GROUP * 2)
         .lean(),
-      Faq.find({ $or: [{ question: term }, { answer: term }] })
+      Faq.find({
+        applicableTo: { $in: [...modules, "general"] },
+        $or: [{ question: term }, { answer: term }],
+      })
         .select("question applicableTo")
         .limit(PER_GROUP * 2)
         .lean(),
@@ -182,9 +190,9 @@ export async function globalSearch(
     module: "hall",
     results: (enquiries as any[]).map((e) => ({
       id: String(e._id),
-      title: `${e.guestName} · ${e.reference}`,
+      title: `${e.guestName} · ${e.enquiryReference}`,
       subtitle: `${e.eventType} on ${formatDate(e.eventDate)}`,
-      href: `/enquiries?search=${encodeURIComponent(e.reference)}`,
+      href: `/enquiries?search=${encodeURIComponent(e.enquiryReference)}`,
       badge: e.status,
     })),
   });
@@ -213,9 +221,9 @@ export async function globalSearch(
     })),
   });
 
-  // Reviews, offers and FAQs are polymorphic — filter to the caller's verticals
-  // in memory, since the vertical lives in a discriminator field rather than in
-  // separate collections.
+  // Reviews, offers and FAQs are polymorphic — the vertical lives in a
+  // discriminator field. The queries above already filter on it; the in-memory
+  // filters below are a belt-and-braces repeat of the same rule.
   push(groups, {
     key: "reviews",
     label: "Reviews",

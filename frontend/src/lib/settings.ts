@@ -130,3 +130,55 @@ export function addressLine(settings: PublicSettings): string {
     .filter(Boolean)
     .join(", ");
 }
+
+// ------------------------------------------------------------------ legal
+
+export interface LegalPageDef {
+  slug: string;
+  /** Key under the `legal` settings category. */
+  key: string;
+  title: string;
+  /** Short footer label. */
+  label: string;
+  blurb: string;
+}
+
+/**
+ * The four legal pages. Shared by the page route, the footer and the sitemap so
+ * the three can never disagree about what exists.
+ */
+export const LEGAL_PAGES: LegalPageDef[] = [
+  {
+    slug: "privacy",
+    key: "privacyPolicy",
+    title: "Privacy Policy",
+    label: "Privacy",
+    blurb: "What we collect when you book or enquire, and what we do with it.",
+  },
+  {
+    slug: "terms",
+    key: "termsAndConditions",
+    title: "Terms & Conditions",
+    label: "Terms",
+    blurb: "The terms you agree to when you stay, dine or book with us.",
+  },
+  {
+    slug: "cancellation",
+    key: "cancellationPolicy",
+    title: "Cancellation Policy",
+    label: "Cancellation",
+    blurb: "How to cancel, and what happens when you do.",
+  },
+  {
+    slug: "refund",
+    key: "refundPolicy",
+    title: "Refund Policy",
+    label: "Refund",
+    blurb: "When a refund applies and how long it takes to reach you.",
+  },
+];
+
+/** Legal pages whose content has been written — an empty policy is "not published". */
+export function publishedLegalPages(settings: PublicSettings): LegalPageDef[] {
+  return LEGAL_PAGES.filter((page) => str(settings, "legal", page.key).trim().length > 0);
+}

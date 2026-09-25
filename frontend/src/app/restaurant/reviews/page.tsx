@@ -1,5 +1,4 @@
 import { Metadata } from "next";
-import { notFound } from "next/navigation";
 import { getTheRestaurant } from "@/lib/restaurant";
 import ReviewsList from "@/components/ReviewsList";
 import ReviewForm from "@/components/ReviewForm";

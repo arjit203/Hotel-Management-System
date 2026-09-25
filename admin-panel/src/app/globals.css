@@ -244,3 +244,14 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* iOS Safari zooms the page when a focused field's font is under 16px. Below
+   `sm` (640px) every .input is 16px; the desktop size stays at text-base.
+   Deliberately outside @layer so it also beats per-use utilities such as the
+   `text-sm` on the table status selects. */
+@media (max-width: 639.98px) {
+  .input {
+    font-size: 16px;
+    line-height: 1.5rem;
+  }
+}

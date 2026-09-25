@@ -23,7 +23,7 @@ export default function Monogram({
   return (
     <span
       aria-hidden="true"
-      className={`flex shrink-0 items-center justify-center rounded-full bg-gold/12 font-display text-gold ${dimensions} ${className}`}
+      className={`flex shrink-0 items-center justify-center rounded-full bg-gold/[0.12] font-display text-gold ${dimensions} ${className}`}
     >
       {initial(name)}
     </span>

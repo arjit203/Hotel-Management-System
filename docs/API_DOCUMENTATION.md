@@ -153,20 +153,30 @@ Public. `optionalAuthenticate('user')` — if a valid User JWT is sent, the book
 ```
 `rooms[]` needs at least one entry — one booking can span several room categories under one `bookingReference`. Instant (no admin approval, unlike Marriage Hall), but **not yet confirmed**: the booking is created as `pending` together with a Razorpay order for the advance (`HOTEL_ADVANCE_PAYMENT_PERCENT`, default 20%). It becomes `confirmed` — and the confirmation email is sent — only in `POST /verify-payment` below.
 **201:** `{ success, message, data: { booking, razorpayOrder } }`
-**Errors:** `400` validation/date logic · `409` insufficient availability
+**Limits:** a stay is at most **60 nights**, check-in at most **2 years** ahead, `rooms[]` at most 10 lines and no duplicate `roomId` (`400`). The same stay caps apply to `GET /hotels/rooms/:roomId/availability`.
+**Payment hold:** a `pending` booking holds its rooms for **30 minutes** (`paymentExpiresAt`); after that it no longer counts against availability. If the Razorpay order cannot be created, the booking is set to `cancelled` / `paymentStatus: failed` and the call returns `502`.
+**`razorpayOrder.keyId`** carries the backend's public Razorpay key id, so Checkout always uses the key the order was created with (falls back to `NEXT_PUBLIC_RAZORPAY_KEY_ID`). The secret never leaves the server.
+**Errors:** `400` validation/date logic/stay caps · `403` online booking switched off in Settings → Booking · `409` insufficient availability · `502` payment gateway error
 
 ### `POST /api/v1/hotel-bookings/verify-payment`
-Public, rate-limited. Body: `{ razorpay_order_id, razorpay_payment_id, razorpay_signature }` from Razorpay Checkout. The server recomputes the HMAC-SHA256 signature with `RAZORPAY_KEY_SECRET`; only a match moves the booking to `confirmed` / `paymentStatus: paid` and sends the confirmation email. A client-reported success is never trusted.
+Public, own limiter (`paymentVerifyLimiter`, 120 / 15 min, so a paying guest is never blocked by form traffic on the same IP). Body: `{ razorpay_order_id, razorpay_payment_id, razorpay_signature }` from Razorpay Checkout. The server recomputes the HMAC-SHA256 signature with `RAZORPAY_KEY_SECRET` (constant-time compare); only a match moves the booking to `confirmed` / `paymentStatus: paid` and sends the confirmation email. A client-reported success is never trusted.
+The confirm is **one atomic conditional update** (`status: "pending"` → `confirmed`), so two concurrent verify calls can't both win: the loser gets `200` with the same booking if it carries the same payment id (idempotent retry), otherwise `409`. Only the winner sends emails. A bad signature is logged and changes nothing. A valid payment arriving after the 30-minute hold is still confirmed (the money was taken); if the rooms are gone meanwhile the server logs `OVERBOOK after late payment` for staff. `razorpaySignature` is never returned.
 **200:** `{ success, message, data: booking }`
-**Errors:** `400` signature mismatch · `404` no booking for that order · `409` already processed (booking no longer `pending` — replay protection)
+**Errors:** `400` signature mismatch · `404` no booking for that order · `409` already processed
+
+### `POST /api/v1/hotel-bookings/:reference/retry-payment`
+**New.** Public, `optionalAuthenticate('user')`, rate-limited. Body `{ guestEmail? }`, with ownership proved exactly as for cancellation. For a still-`pending` booking: re-checks availability, issues a fresh Razorpay order for the **same** booking and renews the 30-minute hold. Replaced order ids are kept in `previousRazorpayOrderIds`, so a guest who pays an older Checkout window is still matched.
+**200:** `{ success, data: { booking (public projection), razorpayOrder } }`
+**Errors:** `403` not the owner / booking switched off · `404` · `409` not pending, check-in passed, or rooms no longer available · `502` gateway
 
 ### `PUT /api/v1/hotel-bookings/reference/:reference/cancel`
 Public, `optionalAuthenticate('user')`, rate-limited. Body: `{ guestEmail?, cancellationReason? }`. Ownership is proved by `guestEmail` matching the booking or a logged-in `userId` match — the reference alone is not enough. Within `CANCELLATION_FREE_WINDOW_HOURS` (default 24) of check-in a paid advance is refunded through Razorpay; if the gateway refund fails the status becomes `refund_pending` for manual follow-up instead of failing the cancellation.
+The cancel is an atomic conditional update, so exactly one caller reaches the refund gateway. All refunds go through one `refundBooking(booking, amount, initiatedBy)` function; the result is stored as `razorpayRefundId`, `refundStatus` (`pending` | `processed` | `failed`), `refundedAt`, `refundError`. Razorpay `processed` → booking `refunded`; `pending` or a gateway failure → `refund_pending`.
 **200:** `{ success, message, data: booking }`
 **Errors:** `403` not the owner · `404` not found · `409` already cancelled / checked in / completed · `400` not a future booking
 
 ### `GET /api/v1/hotel-bookings/reference/:reference`
-Public. Looks up a booking by its human-friendly reference (e.g. `7V-8F3A9C21`) — used by the confirmation page.
+Public, `optionalAuthenticate('user')`, `publicLookupLimiter` (600 / 15 min). Looks up a booking by its reference (e.g. `7V-8F3A9C21`) for the confirmation page. **Unless the caller is the owning user, the response is a public projection:** `guestEmail` masked (`ra***@gm***.com`), `guestPhone` masked (last 3 digits), and `userId`, `razorpayOrderId`, `razorpayPaymentId`, `razorpaySignature`, `razorpayRefundId`, `refundError`, `adminNotes` omitted. Field names are otherwise unchanged. This matters because the guest's email is the ownership proof for cancellation — it must not be readable from the reference alone.
 
 ### `GET /api/v1/hotel-bookings/me`
 Protected (User JWT required). Lists the logged-in user's own bookings.
@@ -320,7 +330,7 @@ Creates a reservation **directly as `confirmed`** — instant, no approval step,
 - `409` restaurant closed that weekday · not enough free tables (message states how many are free)
 
 ### `GET /api/v1/table-reservations/reference/:reference`
-Public lookup for the confirmation page.
+Public lookup for the confirmation page. `optionalAuthenticate("user")`, `publicLookupLimiter`. Unless the caller is the owning user, `guestEmail` / `guestPhone` are masked and `userId` is omitted (same rule as hotel bookings).
 **200:** `{ success, data: TableReservation }` · **404** not found
 
 ### `GET /api/v1/table-reservations/me`
@@ -427,7 +437,7 @@ Mounted at `/api/v1/hall-enquiries`.
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/hall-enquiries` | Submit an enquiry. `optionalAuthenticate("user")`. Body `{ hallId, eventDate, alternateDate?, eventType, guestCount, packageId?, decorationThemeId?, cateringPreference?, budgetRange?, guestName, guestEmail, guestPhone, specialRequirements? }`. Returns a `7VH-XXXXXXXX` reference. |
-| GET | `/hall-enquiries/reference/:reference` | Public lookup. `adminNotes` is **excluded**. |
+| GET | `/hall-enquiries/reference/:reference` | Public lookup, `optionalAuthenticate("user")`, `publicLookupLimiter`. `adminNotes` is always excluded; unless the caller is the owning user, `guestEmail` / `guestPhone` are masked and `userId` / `respondedAt` omitted. |
 | GET | `/hall-enquiries/me` | `authenticate("user")`. The signed-in user's enquiries. |
 | PUT | `/hall-enquiries/reference/:reference/cancel` | Guest withdrawal. Body `{ guestEmail?, cancellationReason? }`. Ownership is proved by matching the enquiry email or the logged-in user — never by the reference alone. |
 
@@ -466,9 +476,10 @@ Mounted at `/api/v1/admin/halls`. All routes require `authenticate("admin")`.
 ### Enquiry status lifecycle
 ```
 pending → reviewing → approved → confirmed
-                   ↘ declined
-(any)  → cancelled                (guest-initiated withdrawal)
+   ↘          ↘          ↘   ↖______↙   (confirmed → approved undoes a mistaken confirmation)
+    declined / cancelled (terminal)       (cancelled also = guest-initiated withdrawal)
 ```
+Admin transitions are enforced server-side (`409` otherwise): `pending → reviewing|approved|declined|cancelled`, `reviewing → approved|declined|cancelled`, `approved → confirmed|declined|cancelled`, `confirmed → approved|cancelled`. Re-sending the current status is allowed and only saves `adminNotes`. **Confirming** is refused with `400` for a past date and `409` when another enquiry is already confirmed for that hall and date, or a staff block/booking holds it; the calendar row is claimed atomically (unique `{hallId, date}`). Opening a date as `available` (single or range) is refused with `409` while a confirmed enquiry holds it.
 
 **`approved` ≠ `confirmed`, and the difference matters.** `approved` means the venue is willing and the offline conversation has started; the date stays *tentative* on the public calendar because several families can be discussing the same auspicious date. `confirmed` is the only status that writes a `booked` override onto the calendar — and moving away from `confirmed` releases it again, but only if that override was created by this enquiry (a hand-placed manager block on the same day is never silently removed).
 
@@ -811,3 +822,46 @@ Notes that matter when reading the numbers:
 | PUT | `/admin/halls/:hallId/availability/range` | `{ from, to, status, reason? }` — applies one status across an inclusive date range. Capped at 366 days. `available` deletes the overrides rather than storing markers, matching the single-date route. |
 
 Written as one `bulkWrite`, so a 90-day block is a single round-trip rather than ninety.
+
+---
+
+## Production-readiness changes (2026-09-25) — contract summary
+
+Everything below is additive or a stricter error; no existing route or success shape was removed.
+
+**All APIs**
+- Invalid ObjectId → `400 "Invalid id."` (was 500) · duplicate key → `409` · Mongoose validation → `400` with `errors[]` · malformed JSON → `400` · body over 100 kb → `413`.
+- Query strings use Express's *simple* parser: bracket syntax (`?x[$ne]=1`) is no longer turned into objects, which closes query-operator injection. Nothing in either app used bracket params.
+- CORS: only `FRONTEND_URL`, `ADMIN_PANEL_URL` and `CORS_EXTRA_ORIGINS` get CORS headers (permissive when both URLs are unset, for local dev). Requests with no `Origin` (server-side Next fetches) are unaffected.
+
+**Auth**
+- Admin tokens carry a `tv` (token version) claim. A password reset (self-service or by a Super Admin) or a deactivation increments `tokenVersion`, so every existing session for that account gets `401 "Your session has ended. Please sign in again."` Tokens issued before this change have no `tv` and count as version 0 — nobody was logged out by the deploy.
+- Accounts on a retired role (`staff`, `branch_admin`) get `403 "This account's role has been retired…"` on every admin route; login refuses them with the same `401` as a wrong password. A Super Admin can now deactivate or re-role such an account without a 500.
+- JWTs are signed and verified with HS256 only. User and admin auth routes have separate rate-limit counters (20 / 15 min each).
+
+**Content (reviews, gallery, FAQs, offers) — all three admin routers**
+- Every moderate / update / delete filters on the router's vertical. An id belonging to another business returns `404`. Offer updates accept only `title, description, imageUrl, validFrom, validTo, isActive`; other fields are ignored.
+- `DELETE /admin/{hotels,restaurants,halls}/upload-image` only deletes public ids under that vertical's folder (`7vachan/<vertical>/`) — `403` otherwise. `?folder=` on upload is sanitised to `[a-zA-Z0-9_-]`.
+
+**Admin status updates**
+- Hotel (`PUT /admin/hotels/bookings/:id/status`, Zod-validated body): `pending → confirmed|cancelled` (confirm only when `paymentStatus` is `paid`), `confirmed → checked_in|cancelled`, `checked_in → checked_out`, `checked_out → completed`. `refunded` / `refund_pending` cannot be set by hand; cancelled bookings cannot be reactivated. `409` otherwise.
+- Restaurant: `confirmed → seated|no_show|cancelled|completed`, `seated → completed`; others terminal. `409` otherwise.
+- Hall: see *Enquiry status lifecycle* above.
+- All three apply the change with an atomic conditional update; a concurrent change returns `409`.
+
+**Admin lists** — `GET /admin/hotels/bookings`, `/admin/restaurants/reservations`, `/admin/halls/enquiries/list`
+- Optional `?page=&limit=` (default 200, max 500). **Without `page` the response is still a plain array, now capped at the newest 200.** With `page`, pagination metadata is included. Hotel also accepts `?from=&to=` (check-in date, `to` exclusive).
+
+**Restaurant availability**
+- Available-table counts now include any reservation whose sitting (`reservationDurationMinutes`, default 90) overlaps the slot, not just the exact same slot, so counts are lower than before. Slots that have already started today (IST) report `canSeatParty` / `canReserve: false`, and booking one returns `400`.
+
+**Settings-driven switches** (Settings → Booking / Email)
+- `booking.hotelEnabled`, `booking.restaurantEnabled`, `booking.hallEnquiriesEnabled` set to `false` make the matching create endpoint return `403` with a friendly message.
+- `booking.hotelAdvancePercent` (1–100) and `booking.cancellationFreeWindowHours` now drive charges and refunds. Precedence: stored setting → env var → built-in default.
+- `email.adminNotificationEmail` overrides `ADMIN_NOTIFICATION_EMAIL`. Staff are now also emailed on a new confirmed hotel booking.
+- Settings saves validate `seo.canonicalUrl` (blank or absolute http(s) URL) and `booking.hotelAdvancePercent` (1–100): `400` otherwise.
+- `GET /settings` (public) no longer includes `maintenance.lastBackupAt`, `maintenance.backupNote` or `business.ownerName`.
+
+**Console**
+- New activity type `refund_pending` ("Refund needs attention"); `reservation_cancelled` is now notifiable. Cancelled / refunded hotel bookings no longer appear as "Payment received". Hall enquiry references resolve correctly in activity, search and exports.
+- The revenue export groups by payment time and adds **Refunded** and **Net received** columns.

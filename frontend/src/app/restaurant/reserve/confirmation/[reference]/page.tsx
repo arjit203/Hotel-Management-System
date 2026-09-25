@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, MapPin, Phone, Clock, Users } from "lucide-react";
@@ -26,12 +27,23 @@ interface ReservationData {
   createdAt?: string;
 }
 
-/** Live lookup — must never be cached, same as the hotel booking confirmation. */
+// A personal record reached by reference — never indexed, never followed.
+export const metadata: Metadata = {
+  title: "Your Table Reservation",
+  robots: { index: false, follow: false },
+};
+
+/**
+ * Live lookup — must never be cached, same as the hotel booking confirmation.
+ * The API masks the guest's email and phone on this public route, since the
+ * reference alone is not proof of identity.
+ */
 async function getReservation(reference: string): Promise<ReservationData | null> {
   try {
-    const res = await fetch(`${API_BASE_URL}/table-reservations/reference/${reference}`, {
-      cache: "no-store",
-    });
+    const res = await fetch(
+      `${API_BASE_URL}/table-reservations/reference/${encodeURIComponent(reference)}`,
+      { cache: "no-store" }
+    );
     const json = await res.json();
     return json.success ? json.data : null;
   } catch {
@@ -148,7 +160,8 @@ export default async function ReservationConfirmationPage({
       <div className="mt-9">
         <ConfirmationActions
           bookingReference={reservation.reservationReference}
-          guestEmail={reservation.guestEmail}
+          // A masked address ("ra***@gm***.com") is not a usable mailto recipient.
+          guestEmail={reservation.guestEmail.includes("*") ? "" : reservation.guestEmail}
           brandName={restaurant?.name || "7 Vachan"}
         />
       </div>

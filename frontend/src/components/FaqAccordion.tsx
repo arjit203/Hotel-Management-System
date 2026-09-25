@@ -54,7 +54,7 @@ export default function FaqAccordion({ faqs }: { faqs: FaqItem[] }) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search questions…"
-          className="w-full border-0 border-b border-ink/12 bg-transparent py-3 pl-8 text-sm font-light text-ink placeholder:text-warm-400 focus:border-gold focus:outline-none focus:ring-0"
+          className="w-full border-0 border-b border-ink/[0.12] bg-transparent py-3 pl-8 text-sm font-light text-ink placeholder:text-warm-400 focus:border-gold focus:outline-none focus:ring-0"
         />
         <span
           aria-hidden="true"
@@ -87,7 +87,7 @@ export default function FaqAccordion({ faqs }: { faqs: FaqItem[] }) {
                       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition-all duration-500 ease-luxe ${
                         isOpen
                           ? "rotate-[135deg] border-gold bg-gold text-ink"
-                          : "border-ink/12 text-ink/50 group-hover:border-gold group-hover:text-gold"
+                          : "border-ink/[0.12] text-ink/50 group-hover:border-gold group-hover:text-gold"
                       }`}
                     >
                       <Plus size={14} strokeWidth={2} />

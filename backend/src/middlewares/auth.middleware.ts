@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { verifyJwt, ActorType } from "../utils/token.util";
-import { Admin } from "../modules/auth/models/admin.model";
+import { Admin, isLegacyRole } from "../modules/auth/models/admin.model";
 
 // Extend Express Request to carry the authenticated actor.
 declare global {
@@ -59,7 +59,7 @@ export function authenticate(actorType: ActorType) {
      * ── Admin tokens are re-checked against the database on every request ──
      *
      * A JWT carries the role it was signed with, so without this an admin
-     * demoted from super_admin to staff would keep full access until their
+     * demoted from super_admin to hotel_manager would keep full access until their
      * token expired — up to seven days — and a deactivated account would keep
      * working entirely. The brief requires permission changes to take effect
      * immediately, and that cannot be done from the token alone.
@@ -72,7 +72,7 @@ export function authenticate(actorType: ActorType) {
      */
     if (actorType === "admin") {
       try {
-        const admin = await Admin.findById(payload.id).select("role isActive name email");
+        const admin = await Admin.findById(payload.id).select("role isActive name email tokenVersion");
 
         if (!admin) {
           return res.status(401).json({ success: false, message: "This account no longer exists." });
@@ -81,6 +81,24 @@ export function authenticate(actorType: ActorType) {
           return res
             .status(403)
             .json({ success: false, message: "This account has been deactivated." });
+        }
+        // A role removed from ADMIN_ROLES (`branch_admin`, `staff`). Every
+        // requireRole list would refuse it anyway, but the console routes have
+        // no requireRole, so refuse it here, once, for every admin route.
+        if (isLegacyRole(admin.role)) {
+          return res.status(403).json({
+            success: false,
+            message:
+              "This account's role has been retired. Ask a Super Admin to assign a current role.",
+          });
+        }
+        // Revocation: a password reset or deactivation bumps tokenVersion, which
+        // invalidates every token signed before it. A token without `tv`
+        // (issued before the claim existed) counts as 0, the stored default.
+        if ((payload.tv ?? 0) !== (admin.tokenVersion ?? 0)) {
+          return res
+            .status(401)
+            .json({ success: false, message: "Your session has ended. Please sign in again." });
         }
 
         // The live role wins over whatever the token was signed with.

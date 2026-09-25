@@ -34,11 +34,71 @@ import { applyIntegrationEnv } from "./modules/settings/settings.service";
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5100;
+
+/**
+ * JWT secrets. Without them every login fails with a 500 at sign time, which is
+ * confusing to diagnose — so say so at boot. In production it is fatal: an API
+ * that cannot authenticate anyone should not come up looking healthy.
+ */
+{
+  const missing = ["JWT_SECRET", "ADMIN_JWT_SECRET"].filter((name) => !process.env[name]);
+  if (missing.length > 0) {
+    console.error(
+      `\n⚠️  ${missing.join(" and ")} ${missing.length > 1 ? "are" : "is"} not set. ` +
+        "Logins will fail until it is configured in backend/.env.\n"
+    );
+    if (process.env.NODE_ENV === "production") process.exit(1);
+  }
+}
+
+/**
+ * `req.ip` (used by the rate limiters and the audit log) only reflects the real
+ * client behind a reverse proxy when Express is told how many hops to trust.
+ * Default 0 = trust nothing, so a client can't spoof X-Forwarded-For.
+ */
+app.set("trust proxy", Number(process.env.TRUST_PROXY_HOPS) || 0);
+
+/**
+ * Flat query strings only. The default "extended" parser turns `?x[$ne]=1`
+ * into `{ x: { $ne: "1" } }`, which is a NoSQL-operator injection vector for
+ * any handler that passes a query value into a Mongo filter. No route uses
+ * bracket/nested params (list filters are comma-separated).
+ */
+app.set("query parser", "simple");
+
+/**
+ * CORS allowlist: the public site, the admin panel and any extras
+ * (CORS_EXTRA_ORIGINS, comma-separated). Requests with no Origin header
+ * (server-side Next fetches, curl, health checks) are allowed. If neither app
+ * URL is configured we stay permissive so local dev can't break.
+ */
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  process.env.ADMIN_PANEL_URL,
+  ...(process.env.CORS_EXTRA_ORIGINS || "").split(","),
+]
+  .map((o) => (o || "").trim().replace(/\/+$/, ""))
+  .filter(Boolean);
+const corsPermissive = !process.env.FRONTEND_URL && !process.env.ADMIN_PANEL_URL;
 
 app.use(helmet());
-app.use(cors());
-app.use(express.json());
+app.use(
+  cors(
+    corsPermissive
+      ? undefined
+      : {
+          origin(origin, callback) {
+            if (!origin || allowedOrigins.includes(origin.replace(/\/+$/, ""))) {
+              return callback(null, true);
+            }
+            // Not an error: the browser simply gets no CORS headers and blocks it.
+            return callback(null, false);
+          },
+        }
+  )
+);
+app.use(express.json({ limit: "100kb" }));
 
 app.get("/api/v1/health", (_req, res) => {
   res.json({ status: "ok", service: "7vachan-backend", timestamp: new Date().toISOString() });

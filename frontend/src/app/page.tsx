@@ -18,6 +18,7 @@ import {
   type AmenitySetting,
 } from "@/lib/settings";
 import { resolveIcon } from "@/lib/settingsIcons";
+import { ogDefaults, DEFAULT_TITLE, DEFAULT_DESCRIPTION } from "@/lib/seo";
 import OffersPreview from "@/components/sections/OffersPreview";
 import EstateGallery, { EstateImage } from "@/components/sections/EstateGallery";
 import Testimonials from "@/components/sections/Testimonials";
@@ -41,28 +42,23 @@ export async function generateMetadata(): Promise<Metadata> {
   const [data, settings] = await Promise.all([getTheHotel(), getSettings()]);
   const hotel = data?.hotel;
 
-  const title =
-    hotel?.metaTitle ||
-    str(settings, "seo", "defaultTitle", "7 Vachan — Luxury Hotel & Stays");
+  const title = hotel?.metaTitle || str(settings, "seo", "defaultTitle", DEFAULT_TITLE);
   const description =
-    hotel?.metaDescription ||
-    str(
-      settings,
-      "seo",
-      "defaultDescription",
-      "7 Vachan — a premium hotel experience with luxury rooms, fine dining, and warm hospitality in Satna."
-    );
+    hotel?.metaDescription || str(settings, "seo", "defaultDescription", DEFAULT_DESCRIPTION);
   const ogImage =
     data?.gallery?.[0]?.imageUrl || str(settings, "branding", "ogImageUrl") || undefined;
 
   return {
-    title,
+    // Absolute: the default title already carries the brand, so the layout's
+    // "%s · 7 Vachan" template would print it twice.
+    title: { absolute: title },
     description,
     alternates: { canonical: "/" },
     openGraph: {
+      ...(await ogDefaults()),
       title,
       description,
-      images: ogImage ? [ogImage] : undefined,
+      ...(ogImage ? { images: [ogImage] } : {}),
     },
   };
 }
@@ -285,6 +281,7 @@ export default async function HomePage() {
           label: str(settings, "homepage", "heroSecondaryCtaLabel", "Explore the estate"),
           href: str(settings, "homepage", "heroSecondaryCtaHref", "#estate"),
         }}
+        overlapped
       />
       <QuickBookingWidget />
 

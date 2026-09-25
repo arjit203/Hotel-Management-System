@@ -1,4 +1,4 @@
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+import { getSiteUrl, jsonLdString } from "@/lib/seo";
 
 /**
  * JSON-LD for the Marriage Hall.
@@ -10,7 +10,7 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
  * Deliberately carries no `priceRange` or `offers`: the venue has not published
  * pricing, and emitting a made-up range would be structured-data misinformation.
  */
-export default function HallSchema({
+export default async function HallSchema({
   hall,
   image,
   reviewSummary,
@@ -26,6 +26,7 @@ export default function HallSchema({
   image?: string;
   reviewSummary?: { average: number; count: number };
 }) {
+  const SITE_URL = await getSiteUrl();
   const jsonLd: Record<string, unknown> = {
     "@context": "https://schema.org",
     "@type": "EventVenue",
@@ -51,7 +52,7 @@ export default function HallSchema({
   return (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      dangerouslySetInnerHTML={{ __html: jsonLdString(jsonLd) }}
     />
   );
 }

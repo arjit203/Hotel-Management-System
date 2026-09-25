@@ -14,7 +14,8 @@ export async function generateMetadata(): Promise<Metadata> {
   const name = data?.hall.name ?? "our banquet hall";
 
   return {
-    title: `Decoration Themes — ${name}`,
+    alternates: { canonical: "/marriage-hall/decorations" },
+    title: `Decoration Themes — Marriage Hall`,
     description: `Classic, Royal, Traditional, Modern, Floral, Luxury, Minimal and Outdoor decoration themes at ${name}, each with its own colour palette. Floral styling for the mandap, stage, entrance and ceiling.`,
   };
 }

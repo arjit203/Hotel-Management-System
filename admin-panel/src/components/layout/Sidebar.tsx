@@ -1,10 +1,12 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useBusiness } from "@/lib/businessContext";
+import { useAdminSession } from "@/lib/adminSession";
 import { buildNavSections, isNavItemActive } from "./navigation";
 import BusinessSelector from "./BusinessSelector";
 
@@ -25,7 +27,27 @@ interface Props {
 export default function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCloseMobile }: Props) {
   const pathname = usePathname();
   const { business } = useBusiness();
-  const sections = buildNavSections(business);
+  const { admin } = useAdminSession();
+  const sections = buildNavSections(business, admin?.role);
+
+  // Mobile drawer: Escape closes it and the page behind stops scrolling —
+  // same behaviour as Modal.
+  useEffect(() => {
+    if (!mobileOpen) return;
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onCloseMobile();
+    }
+    window.addEventListener("keydown", onKeyDown);
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mobileOpen, onCloseMobile]);
 
   // Built per-render for both surfaces: the permanent rail honours `collapsed`,
   // the mobile drawer is always full-width (a 64px drawer would be pointless).

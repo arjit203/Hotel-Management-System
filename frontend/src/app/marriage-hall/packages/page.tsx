@@ -12,7 +12,8 @@ export async function generateMetadata(): Promise<Metadata> {
   const name = data?.hall.name ?? "our banquet hall";
 
   return {
-    title: `Packages — ${name}`,
+    alternates: { canonical: "/marriage-hall/packages" },
+    title: `Packages — Marriage Hall`,
     description: `Wedding and event packages at ${name}. Each tier covers the venue, decoration, catering and service — adjusted around your family and guest list.`,
   };
 }

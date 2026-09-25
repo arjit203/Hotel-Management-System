@@ -24,7 +24,7 @@ const userSchema = new Schema<IUser>(
       unique: true,
       lowercase: true,
       trim: true,
-      index: true,
+      // `unique` already builds the index; a second `index: true` is redundant.
     },
     phone: { type: String, trim: true },
     passwordHash: { type: String, required: true, select: false },

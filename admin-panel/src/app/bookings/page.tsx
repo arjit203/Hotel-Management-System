@@ -23,7 +23,9 @@ import { Drawer } from "@/components/ui/Modal";
 import { TableSkeleton } from "@/components/ui/States";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
+import { OutOfScopeState, useIsOutOfScope } from "@/components/layout/PropertyScopeNotice";
 import { adminApi, formatApiError } from "@/lib/api";
+import { nextHotelStatuses, statusSelectOptions } from "@/lib/statusTransitions";
 import { useSummary, type HotelBookingSummary } from "@/lib/summary";
 import { currency, dateTime, humanise, isToday, nightsBetween, shortDate } from "@/lib/format";
 
@@ -45,8 +47,9 @@ type WindowFilter = "all" | "today" | "upcoming" | "past";
  *
  * Reads `GET /admin/hotels/bookings` (through the shared summary cache) and
  * writes only via `PUT /admin/hotels/bookings/:id/status`, exactly as before.
- * Status transitions are not validated client-side — the backend owns that
- * rule — but destructive ones ask for confirmation first.
+ * The backend owns the transition rules (409 on an illegal move, surfaced as a
+ * toast); the controls here only offer the moves `lib/statusTransitions.ts`
+ * says are legal, and destructive ones ask for confirmation first.
  */
 /**
  * useSearchParams() forces client-side rendering, so Next requires a Suspense
@@ -77,6 +80,7 @@ function BookingsView() {
   const { toastSuccess, toastError } = useToast();
   const confirm = useConfirm();
   const { bookings, loading, error, reload } = useSummary();
+  const outOfScope = useIsOutOfScope("hotel");
 
   const [statusFilter, setStatusFilter] = useState("");
   const [windowFilter, setWindowFilter] = useState<WindowFilter>("all");
@@ -171,13 +175,17 @@ function BookingsView() {
     if (!ok) return;
 
     let failures = 0;
+    let firstError = "";
     for (const booking of list) {
       const res = await adminApi.put(`/admin/hotels/bookings/${booking._id}/status`, { status });
-      if (!res.success) failures += 1;
+      if (!res.success) {
+        failures += 1;
+        if (!firstError) firstError = `${booking.bookingReference}: ${formatApiError(res)}`;
+      }
     }
 
     clear();
-    if (failures > 0) toastError(`${failures} booking(s) could not be updated.`);
+    if (failures > 0) toastError(`${failures} booking(s) could not be updated.\n${firstError}`);
     else toastSuccess(`${list.length} booking(s) updated.`);
     reload();
   }
@@ -259,13 +267,13 @@ function BookingsView() {
       render: (b) => (
         <select
           value={b.status}
-          disabled={busyId === b._id}
+          disabled={busyId === b._id || nextHotelStatuses(b).length === 0}
           onClick={(e) => e.stopPropagation()}
           onChange={(e) => void updateStatus(b, e.target.value)}
           aria-label={`Status for ${b.bookingReference}`}
           className="input w-auto min-w-[8.5rem] py-1 text-sm capitalize"
         >
-          {STATUS_OPTIONS.map((s) => (
+          {statusSelectOptions(b.status, nextHotelStatuses(b)).map((s) => (
             <option key={s} value={s}>
               {humanise(s)}
             </option>
@@ -274,6 +282,15 @@ function BookingsView() {
       ),
     },
   ];
+
+  if (outOfScope) {
+    return (
+      <RequireAdmin>
+        <PageHeader title="Hotel bookings" breadcrumbs={[{ label: "Bookings" }]} />
+        <OutOfScopeState business="hotel" what="hotel bookings" />
+      </RequireAdmin>
+    );
+  }
 
   return (
     <RequireAdmin>
@@ -414,13 +431,13 @@ function BookingsView() {
             label: "Mark checked in",
             icon: <LogIn size={14} />,
             separated: true,
-            disabled: b.status === "checked_in",
+            disabled: !nextHotelStatuses(b).includes("checked_in"),
             onClick: () => void updateStatus(b, "checked_in"),
           },
           {
             label: "Mark checked out",
             icon: <LogOut size={14} />,
-            disabled: b.status === "checked_out",
+            disabled: !nextHotelStatuses(b).includes("checked_out"),
             onClick: () => void updateStatus(b, "checked_out"),
           },
           {
@@ -428,7 +445,7 @@ function BookingsView() {
             icon: <XCircle size={14} />,
             danger: true,
             separated: true,
-            disabled: b.status === "cancelled",
+            disabled: !nextHotelStatuses(b).includes("cancelled"),
             onClick: () => void updateStatus(b, "cancelled"),
           },
         ]}
@@ -505,7 +522,7 @@ function BookingsView() {
 
             <DetailBlock title="Change status">
               <div className="flex flex-wrap gap-2 pt-1">
-                {STATUS_OPTIONS.map((s) => (
+                {statusSelectOptions(selected.status, nextHotelStatuses(selected)).map((s) => (
                   <button
                     key={s}
                     disabled={s === selected.status || busyId === selected._id}

@@ -58,7 +58,27 @@ export function uploadImageBuffer(
   });
 }
 
-export async function deleteImageByPublicId(publicId: string): Promise<void> {
+/**
+ * Sanitises the `?folder=` an admin client sends on upload so it can't climb out
+ * of its vertical's namespace (`../settings`, absolute paths, odd characters).
+ */
+export function safeUploadFolder(folder: unknown): string {
+  const cleaned = typeof folder === "string" ? folder.replace(/[^a-zA-Z0-9_-]/g, "") : "";
+  return cleaned || "misc";
+}
+
+/**
+ * `allowedPrefix` scopes a delete to one vertical's folder (e.g. "7vachan/hotel/")
+ * so a manager can't destroy another business's assets, the site branding, or
+ * guest review photos by passing their public id. Every admin caller passes it.
+ */
+export async function deleteImageByPublicId(publicId: string, allowedPrefix?: string): Promise<void> {
+  if (typeof publicId !== "string" || !publicId || publicId.includes("..")) {
+    throw new ApiError(400, "Invalid image id.");
+  }
+  if (allowedPrefix && !publicId.startsWith(allowedPrefix)) {
+    throw new ApiError(403, "You can only remove images that belong to this section.");
+  }
   if (!isCloudinaryConfigured()) {
     throw new ApiError(500, "Image storage is not configured on the server. Contact the administrator.");
   }

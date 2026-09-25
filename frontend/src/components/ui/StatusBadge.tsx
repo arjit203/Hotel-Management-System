@@ -22,6 +22,12 @@ const STATUS_STYLES: Record<string, string> = {
   cancelled: "border-red-300/60 bg-red-50 text-red-700",
   refund_pending: "border-amber-300/60 bg-amber-50 text-amber-800",
   refunded: "border-ink/15 bg-ink/[0.04] text-ink/70",
+  // Table reservation and hall enquiry statuses, mapped onto the same palette.
+  seated: "border-sky-300/60 bg-sky-50 text-sky-800",
+  no_show: "border-ink/15 bg-ink/[0.04] text-ink/70",
+  reviewing: "border-amber-300/60 bg-amber-50 text-amber-800",
+  approved: "border-gold/40 bg-gold/10 text-gold-dark",
+  declined: "border-red-300/60 bg-red-50 text-red-700",
 };
 
 const FALLBACK = "border-ink/15 bg-ink/[0.04] text-ink/70";

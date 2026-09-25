@@ -1,3 +1,4 @@
+import { isValidObjectId } from "mongoose";
 import { Hall } from "./models/hall.model";
 import { HallPackage } from "./models/hallPackage.model";
 import { HallShowcase, HallShowcaseType } from "./models/hallShowcase.model";
@@ -28,6 +29,11 @@ export function startOfDayUTC(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
 
+/** A malformed id in a URL is a 404, not a Mongoose CastError surfacing as a 500. */
+function assertObjectId(id: string, notFound: string): void {
+  if (!isValidObjectId(id)) throw new ApiError(404, notFound);
+}
+
 // ============================================================
 // HALL
 // ============================================================
@@ -45,6 +51,7 @@ export async function getHallBySlug(slug: string) {
 }
 
 export async function getHallById(id: string) {
+  assertObjectId(id, "Marriage hall not found.");
   const hall = await Hall.findById(id);
   if (!hall || !hall.isActive) throw new ApiError(404, "Marriage hall not found.");
   return hall;
@@ -57,6 +64,7 @@ export async function createHall(input: CreateHallInput) {
 }
 
 export async function updateHall(id: string, updates: UpdateHallInput) {
+  assertObjectId(id, "Marriage hall not found.");
   if (updates.slug) {
     const clash = await Hall.findOne({ slug: updates.slug, _id: { $ne: id } });
     if (clash) throw new ApiError(409, "Another marriage hall already uses that slug.");
@@ -72,6 +80,7 @@ export async function updateHall(id: string, updates: UpdateHallInput) {
  * hall out from under a family mid-conversation would strand the enquiry.
  */
 export async function deleteHall(id: string) {
+  assertObjectId(id, "Marriage hall not found.");
   const liveEnquiries = await HallEnquiry.countDocuments({
     hallId: id,
     status: { $in: ["pending", "reviewing", "approved", "confirmed"] },
@@ -97,6 +106,7 @@ export async function listPackages(hallId: string) {
 }
 
 export async function getPackageById(id: string) {
+  assertObjectId(id, "Package not found.");
   const pkg = await HallPackage.findById(id);
   if (!pkg || !pkg.isActive) throw new ApiError(404, "Package not found.");
   return pkg;
@@ -119,12 +129,14 @@ export async function createPackage(hallId: string, input: CreateHallPackageInpu
 }
 
 export async function updatePackage(id: string, updates: Partial<CreateHallPackageInput>) {
+  assertObjectId(id, "Package not found.");
   const pkg = await HallPackage.findByIdAndUpdate(id, updates, { new: true });
   if (!pkg) throw new ApiError(404, "Package not found.");
   return pkg;
 }
 
 export async function deletePackage(id: string) {
+  assertObjectId(id, "Package not found.");
   const pkg = await HallPackage.findByIdAndUpdate(id, { isActive: false }, { new: true });
   if (!pkg) throw new ApiError(404, "Package not found.");
   return pkg;
@@ -153,6 +165,7 @@ export async function getShowcaseSection(hallId: string, showcaseType: HallShowc
 }
 
 export async function getShowcaseById(id: string) {
+  assertObjectId(id, "Showcase entry not found.");
   const entry = await HallShowcase.findById(id);
   if (!entry || !entry.isActive) throw new ApiError(404, "Showcase entry not found.");
   return entry;
@@ -164,12 +177,14 @@ export async function createShowcase(hallId: string, input: CreateHallShowcaseIn
 }
 
 export async function updateShowcase(id: string, updates: Partial<CreateHallShowcaseInput>) {
+  assertObjectId(id, "Showcase entry not found.");
   const entry = await HallShowcase.findByIdAndUpdate(id, updates, { new: true });
   if (!entry) throw new ApiError(404, "Showcase entry not found.");
   return entry;
 }
 
 export async function deleteShowcase(id: string) {
+  assertObjectId(id, "Showcase entry not found.");
   const entry = await HallShowcase.findByIdAndUpdate(id, { isActive: false }, { new: true });
   if (!entry) throw new ApiError(404, "Showcase entry not found.");
   return entry;
@@ -281,6 +296,15 @@ export async function setAvailability(
   const date = startOfDayUTC(new Date(input.date));
 
   if (input.status === "available") {
+    // A confirmed family holds this date. Opening it would let a second family
+    // enquire for a day that is already promised; un-confirm the enquiry instead.
+    const held = await HallEnquiry.exists({ hallId, eventDate: date, status: "confirmed" });
+    if (held) {
+      throw new ApiError(
+        409,
+        "A confirmed enquiry holds this date. Change that enquiry's status first to release it."
+      );
+    }
     await HallAvailability.findOneAndDelete({ hallId, date });
     return { hallId, date, status: "available" as const, cleared: true };
   }
@@ -321,6 +345,22 @@ export async function setAvailabilityRange(
   }
 
   if (input.status === "available") {
+    // Same rule as the single-date override: never open a date a confirmed
+    // enquiry holds.
+    const held = await HallEnquiry.find({
+      hallId,
+      eventDate: { $in: dates },
+      status: "confirmed",
+    })
+      .select("eventDate")
+      .lean();
+    if (held.length > 0) {
+      const list = held.map((e) => toDateKey(e.eventDate)).join(", ");
+      throw new ApiError(
+        409,
+        `Confirmed enquiries hold ${list}. Change those enquiries' status first to release them.`
+      );
+    }
     const result = await HallAvailability.deleteMany({ hallId, date: { $in: dates } });
     return { hallId, from, to, status: input.status, cleared: result.deletedCount ?? 0, applied: 0 };
   }
@@ -354,6 +394,7 @@ export async function setAvailabilityRange(
 }
 
 export async function listAvailabilityOverrides(hallId: string) {
+  assertObjectId(hallId, "Marriage hall not found.");
   return HallAvailability.find({ hallId }).sort({ date: 1 });
 }
 

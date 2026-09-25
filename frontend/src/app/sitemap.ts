@@ -1,10 +1,15 @@
 import { MetadataRoute } from "next";
 import { getTheHotel } from "@/lib/hotel";
-import { getTheRestaurant } from "@/lib/restaurant";
-
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+import { getSettings, publishedLegalPages } from "@/lib/settings";
+import { siteUrl, isIndexable } from "@/lib/seo";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const settings = await getSettings();
+  // Indexing switched off in Settings → SEO: advertise nothing.
+  if (!isIndexable(settings)) return [];
+
+  const SITE_URL = siteUrl(settings);
+
   const staticRoutes = [
     "",
     "/hotel",
@@ -49,9 +54,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
-  // Touch the restaurant fetch so a missing/unreachable restaurant simply omits
-  // nothing extra rather than breaking sitemap generation.
-  await getTheRestaurant();
+  // Only policies that have been written — an unpublished one 404s.
+  const legalRoutes = publishedLegalPages(settings).map((page) => ({
+    url: `${SITE_URL}/legal/${page.slug}`,
+    lastModified: new Date(),
+    changeFrequency: "yearly" as const,
+    priority: 0.3,
+  }));
 
-  return [...staticRoutes, ...roomRoutes];
+  return [...staticRoutes, ...roomRoutes, ...legalRoutes];
 }

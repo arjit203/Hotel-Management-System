@@ -1,5 +1,4 @@
 import { Metadata } from "next";
-import { notFound } from "next/navigation";
 import { BedDouble, Clock, Mail, MapPin, MessageCircle, Phone } from "lucide-react";
 import { getTheHotel } from "@/lib/hotel";
 import MapPlaceholder from "@/components/MapPlaceholder";

@@ -25,4 +25,7 @@ const faqSchema = new Schema<IFaq>(
   { timestamps: true }
 );
 
+// Every FAQ read filters on vertical + owner.
+faqSchema.index({ applicableTo: 1, ownerId: 1 });
+
 export const Faq = model<IFaq>("Faq", faqSchema);

@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { Building2, Info } from "lucide-react";
-import { BUSINESS_LABEL, useBusiness } from "@/lib/businessContext";
+import { Building2, Info, ShieldAlert } from "lucide-react";
+import { BUSINESS_LABEL, useBusiness, type BusinessKey } from "@/lib/businessContext";
+import { useAdminSession } from "@/lib/adminSession";
+import { canAccessBusiness, managerVertical } from "@/lib/roles";
+import { humanise } from "@/lib/format";
 import { EmptyState } from "@/components/ui/States";
 
 /**
@@ -68,5 +71,42 @@ export function NoPropertyState({ what }: { what: string }) {
         }
       />
     </div>
+  );
+}
+
+/**
+ * True once the session is known and the signed-in role can't work in
+ * `business`. Pages use it to show `OutOfScopeState` instead of an empty list
+ * that would read as "there are no bookings".
+ */
+export function useIsOutOfScope(business: BusinessKey): boolean {
+  const { admin, ready } = useAdminSession();
+  return ready && Boolean(admin) && !canAccessBusiness(admin?.role, business);
+}
+
+/**
+ * Shown in place of a vertical's operational list when the role doesn't cover
+ * that vertical. Same shape as the Super-Admin-only explanation on Settings.
+ * UX only — the API refuses these requests regardless.
+ */
+export function OutOfScopeState({ business, what }: { business: BusinessKey; what: string }) {
+  const { admin } = useAdminSession();
+  const own = managerVertical(admin?.role);
+
+  return (
+    <EmptyState
+      icon={<ShieldAlert size={20} />}
+      title="Not in your section"
+      description={`This section belongs to the ${BUSINESS_LABEL[business]} team. ${
+        own
+          ? `As ${humanise(admin?.role ?? "")}, you manage the ${BUSINESS_LABEL[own]} only`
+          : "Your role does not cover it"
+      }, so ${what} are not shown here — the API refuses them for your role as well.`}
+      action={
+        <Link href="/" className="btn-secondary">
+          Back to the dashboard
+        </Link>
+      }
+    />
   );
 }

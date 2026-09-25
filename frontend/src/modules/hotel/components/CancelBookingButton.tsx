@@ -25,7 +25,9 @@ export default function CancelBookingButton({
   async function handleCancel() {
     let guestEmail: string | undefined;
     if (requireEmailPrompt) {
-      guestEmail = window.prompt("Please confirm the email used for this booking:") || undefined;
+      // Deliberately no default value: the page only has the MASKED email, and
+      // the typed address is the proof of ownership the API checks.
+      guestEmail = window.prompt("Please confirm the email used for this booking:")?.trim() || undefined;
       if (!guestEmail) return;
     }
     if (!window.confirm("Are you sure you want to cancel this booking? This cannot be undone.")) {
@@ -36,7 +38,7 @@ export default function CancelBookingButton({
     setError("");
     const token = getUserToken();
     const res = await api.put(
-      `/hotel-bookings/reference/${bookingReference}/cancel`,
+      `/hotel-bookings/reference/${encodeURIComponent(bookingReference)}/cancel`,
       { guestEmail },
       { headers: token ? { Authorization: `Bearer ${token}` } : {} }
     );

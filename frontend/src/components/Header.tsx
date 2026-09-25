@@ -268,7 +268,7 @@ export default function Header() {
           {/* ── Mobile trigger ── */}
           <button
             onClick={() => setMobileOpen(true)}
-            className={`transition-colors duration-300 xl:hidden ${
+            className={`-mr-2.5 p-2.5 transition-colors duration-300 xl:hidden ${
               transparent ? "text-cream hover:text-gold" : "text-ink hover:text-gold"
             }`}
             aria-label="Open menu"
@@ -292,7 +292,7 @@ export default function Header() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.35, ease: EASE_LUXE }}
-            className="fixed inset-0 z-[70] bg-ink/97 backdrop-blur-md xl:hidden"
+            className="fixed inset-0 z-[70] bg-ink/[0.97] backdrop-blur-md xl:hidden"
           >
             <div className="container-luxe flex h-20 items-center justify-between">
               <span className="font-display text-2xl text-cream">
@@ -300,7 +300,7 @@ export default function Header() {
               </span>
               <button
                 onClick={() => setMobileOpen(false)}
-                className="text-cream transition-colors hover:text-gold"
+                className="-mr-2.5 p-2.5 text-cream transition-colors hover:text-gold"
                 aria-label="Close menu"
               >
                 <X size={24} strokeWidth={1.5} />
@@ -406,7 +406,7 @@ export default function Header() {
       {/* Spacer: the header is fixed, so every page except the home hero needs
           its height reserved. Kept here rather than in each page so no page had
           to change. */}
-      {!isHome && <div aria-hidden="true" className="h-20 lg:h-24" />}
+      {!isHome && <div aria-hidden="true" className="h-20 lg:h-28" />}
     </>
   );
 }

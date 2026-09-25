@@ -1,5 +1,4 @@
 import { Metadata } from "next";
-import { notFound } from "next/navigation";
 import { CalendarCheck, Mail, MapPin, MessageCircle, Phone, UtensilsCrossed } from "lucide-react";
 import Link from "next/link";
 import { getTheRestaurant } from "@/lib/restaurant";

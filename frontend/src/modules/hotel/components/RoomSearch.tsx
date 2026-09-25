@@ -45,9 +45,11 @@ export default function RoomSearch({
   const [hasSearched, setHasSearched] = useState(false);
   const [page, setPage] = useState(1);
   const [showFilters, setShowFilters] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   async function runSearch(f: typeof filters) {
     setSearching(true);
+    setSearchError(null);
     const params = new URLSearchParams();
     if (f.checkInDate) params.set("checkInDate", f.checkInDate);
     if (f.checkOutDate) params.set("checkOutDate", f.checkOutDate);
@@ -67,7 +69,11 @@ export default function RoomSearch({
         setRooms(json.data);
         setHasSearched(true);
         setPage(1);
+      } else {
+        setSearchError(json.message || "We couldn't search rooms just now. Please try again.");
       }
+    } catch {
+      setSearchError("We couldn't reach the server. Check your connection and try again.");
     } finally {
       setSearching(false);
     }
@@ -206,7 +212,7 @@ export default function RoomSearch({
         </p>
         <button
           onClick={() => setShowFilters((v) => !v)}
-          className="inline-flex items-center gap-2 rounded-full border border-ink/12 px-5 py-2.5 text-xs uppercase tracking-luxe text-ink transition-colors duration-400 hover:border-gold hover:text-gold lg:hidden"
+          className="inline-flex items-center gap-2 rounded-full border border-ink/[0.12] px-5 py-2.5 text-xs uppercase tracking-luxe text-ink transition-colors duration-400 hover:border-gold hover:text-gold lg:hidden"
           aria-expanded={showFilters}
         >
           {showFilters ? <X size={13} /> : <SlidersHorizontal size={13} />}
@@ -268,6 +274,12 @@ export default function RoomSearch({
           </div>
         </form>
       </div>
+
+      {searchError && (
+        <p role="alert" className="mb-8 text-center text-sm text-red-700">
+          {searchError}
+        </p>
+      )}
 
       {/* ── Results ── */}
       {searching ? (

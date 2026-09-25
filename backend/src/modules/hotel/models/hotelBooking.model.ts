@@ -39,15 +39,27 @@ export interface IHotelBooking extends Document {
   bookingReference: string; // human-friendly reference shown to guest
   // -- Razorpay payment tracking (Feature 1, Phase 3.6) --
   razorpayOrderId?: string;
+  // Orders superseded by retry-payment. Kept so a guest who still completes an
+  // older Checkout is matched to their booking instead of getting a 404.
+  previousRazorpayOrderIds?: string[];
   razorpayPaymentId?: string;
   razorpaySignature?: string;
   paymentStatus?: "created" | "paid" | "failed";
   paymentTime?: Date;
+  // A pending booking holds inventory only until this moment (set on create and
+  // on retry-payment). Optional: rows created before it existed fall back to
+  // createdAt + the same hold window in the availability query.
+  paymentExpiresAt?: Date;
   // -- Cancellation (Feature 2, Phase 3.6) --
   cancelledAt?: Date;
   cancellationReason?: string;
   refundEligible?: boolean; // computed at cancellation time from the cancellation policy
   refundAmount?: number; // amount owed back to the guest, if any (actual refund wired in Feature 1)
+  // -- Refund tracking (all optional; absent on bookings never refunded) --
+  razorpayRefundId?: string;
+  refundStatus?: "pending" | "processed" | "failed";
+  refundedAt?: Date;
+  refundError?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -94,20 +106,32 @@ const hotelBookingSchema = new Schema<IHotelBooking>(
     advancePaid: { type: Number, default: 0 },
     balanceDue: { type: Number, required: true, min: 0 },
     specialRequest: { type: String, trim: true },
-    bookingReference: { type: String, required: true, unique: true, index: true },
+    bookingReference: { type: String, required: true, unique: true },
     razorpayOrderId: { type: String, index: true },
-    razorpayPaymentId: { type: String },
+    previousRazorpayOrderIds: { type: [String], default: undefined, index: true },
+    // Unique + sparse: one Razorpay payment can confirm at most one booking,
+    // and bookings with no payment yet (the field absent) don't collide.
+    razorpayPaymentId: { type: String, unique: true, sparse: true },
     razorpaySignature: { type: String, select: false }, // not needed in normal reads
     paymentStatus: { type: String, enum: ["created", "paid", "failed"] },
     paymentTime: { type: Date },
+    paymentExpiresAt: { type: Date },
     cancelledAt: { type: Date },
     cancellationReason: { type: String, trim: true },
     refundEligible: { type: Boolean },
     refundAmount: { type: Number, min: 0 },
+    razorpayRefundId: { type: String },
+    refundStatus: { type: String, enum: ["pending", "processed", "failed"] },
+    refundedAt: { type: Date },
+    refundError: { type: String },
   },
   { timestamps: true }
 );
 
 hotelBookingSchema.index({ "rooms.roomId": 1, checkInDate: 1, checkOutDate: 1, status: 1 });
+hotelBookingSchema.index({ userId: 1, createdAt: -1 }); // My Bookings
+hotelBookingSchema.index({ guestEmail: 1 }); // ownership checks / support lookups
+hotelBookingSchema.index({ hotelId: 1, status: 1, createdAt: -1 }); // admin list filters
+hotelBookingSchema.index({ updatedAt: -1 }); // console activity feed
 
 export const HotelBooking = model<IHotelBooking>("HotelBooking", hotelBookingSchema);

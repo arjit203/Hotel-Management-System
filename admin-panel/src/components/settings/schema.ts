@@ -58,7 +58,15 @@ export interface FieldSpec {
   full?: boolean;
   min?: number;
   max?: number;
+  /**
+   * Saved, but nothing on the public site reads it yet. Appends
+   * `NOT_YET_ACTIVE` to the field's hint so nobody expects a visible change.
+   */
+  inactive?: boolean;
 }
+
+/** Hint suffix for settings that are stored but not yet used by the site. */
+export const NOT_YET_ACTIVE = "Not yet active — saved, but the site does not use it yet.";
 
 export interface SectionSpec {
   title: string;
@@ -87,9 +95,9 @@ export const CATEGORY_SPECS: CategorySpec[] = [
         title: "Identity",
         fields: [
           { key: "siteName", label: "Site name", type: "text" },
-          { key: "tagline", label: "Tagline", type: "text" },
+          { key: "tagline", inactive: true, label: "Tagline", type: "text" },
           {
-            key: "shortDescription",
+            key: "shortDescription", inactive: true,
             label: "Short description",
             type: "textarea",
             full: true,
@@ -100,11 +108,11 @@ export const CATEGORY_SPECS: CategorySpec[] = [
       {
         title: "Regional",
         fields: [
-          { key: "defaultLanguage", label: "Language code", type: "text", placeholder: "en" },
-          { key: "timezone", label: "Timezone", type: "text", placeholder: "Asia/Kolkata" },
-          { key: "currency", label: "Currency code", type: "text", placeholder: "INR" },
-          { key: "currencySymbol", label: "Currency symbol", type: "text", placeholder: "₹" },
-          { key: "dateFormat", label: "Date format", type: "text", placeholder: "DD MMM YYYY" },
+          { key: "defaultLanguage", inactive: true, label: "Language code", type: "text", placeholder: "en" },
+          { key: "timezone", inactive: true, label: "Timezone", type: "text", placeholder: "Asia/Kolkata" },
+          { key: "currency", inactive: true, label: "Currency code", type: "text", placeholder: "INR" },
+          { key: "currencySymbol", inactive: true, label: "Currency symbol", type: "text", placeholder: "₹" },
+          { key: "dateFormat", inactive: true, label: "Date format", type: "text", placeholder: "DD MMM YYYY" },
         ],
       },
     ],
@@ -119,13 +127,13 @@ export const CATEGORY_SPECS: CategorySpec[] = [
       {
         title: "Registration",
         fields: [
-          { key: "legalName", label: "Registered business name", type: "text" },
-          { key: "ownerName", label: "Owner / proprietor", type: "text" },
-          { key: "gstin", label: "GSTIN", type: "text", placeholder: "22AAAAA0000A1Z5" },
-          { key: "registrationNumber", label: "Registration number", type: "text" },
-          { key: "foundedYear", label: "Founded", type: "text", placeholder: "2019" },
+          { key: "legalName", inactive: true, label: "Registered business name", type: "text" },
+          { key: "ownerName", inactive: true, label: "Owner / proprietor", type: "text" },
+          { key: "gstin", inactive: true, label: "GSTIN", type: "text", placeholder: "22AAAAA0000A1Z5" },
+          { key: "registrationNumber", inactive: true, label: "Registration number", type: "text" },
+          { key: "foundedYear", inactive: true, label: "Founded", type: "text", placeholder: "2019" },
           {
-            key: "registeredAddress",
+            key: "registeredAddress", inactive: true,
             label: "Registered address",
             type: "textarea",
             full: true,
@@ -145,8 +153,8 @@ export const CATEGORY_SPECS: CategorySpec[] = [
       {
         title: "Marks",
         fields: [
-          { key: "logoUrl", label: "Logo (light backgrounds)", type: "image" },
-          { key: "logoDarkUrl", label: "Logo (dark backgrounds)", type: "image" },
+          { key: "logoUrl", inactive: true, label: "Logo (light backgrounds)", type: "image" },
+          { key: "logoDarkUrl", inactive: true, label: "Logo (dark backgrounds)", type: "image" },
           {
             key: "faviconUrl",
             label: "Favicon",
@@ -165,9 +173,9 @@ export const CATEGORY_SPECS: CategorySpec[] = [
         title: "Home page hero",
         description: "A video wins over the image when both are set.",
         fields: [
-          { key: "heroImageUrl", label: "Hero image", type: "image" },
+          { key: "heroImageUrl", inactive: true, label: "Hero image", type: "image" },
           {
-            key: "heroVideoUrl",
+            key: "heroVideoUrl", inactive: true,
             label: "Hero video URL",
             type: "text",
             hint: "A direct MP4 link. Keep it short and under a few megabytes — it loads before anything else.",
@@ -187,11 +195,11 @@ export const CATEGORY_SPECS: CategorySpec[] = [
         title: "Reach us",
         fields: [
           { key: "phonePrimary", label: "Primary phone", type: "text" },
-          { key: "phoneSecondary", label: "Secondary phone", type: "text" },
-          { key: "whatsapp", label: "WhatsApp number", type: "text" },
+          { key: "phoneSecondary", inactive: true, label: "Secondary phone", type: "text" },
+          { key: "whatsapp", inactive: true, label: "WhatsApp number", type: "text" },
           { key: "email", label: "General email", type: "text" },
-          { key: "reservationsEmail", label: "Reservations email", type: "text" },
-          { key: "openingHours", label: "Opening hours", type: "text", placeholder: "Reception open 24 hours" },
+          { key: "reservationsEmail", inactive: true, label: "Reservations email", type: "text" },
+          { key: "openingHours", inactive: true, label: "Opening hours", type: "text", placeholder: "Reception open 24 hours" },
         ],
       },
       {
@@ -202,21 +210,21 @@ export const CATEGORY_SPECS: CategorySpec[] = [
           { key: "city", label: "City", type: "text" },
           { key: "state", label: "State", type: "text" },
           { key: "postalCode", label: "PIN code", type: "text" },
-          { key: "country", label: "Country", type: "text" },
+          { key: "country", inactive: true, label: "Country", type: "text" },
         ],
       },
       {
         title: "Map",
         fields: [
           {
-            key: "mapEmbedUrl",
+            key: "mapEmbedUrl", inactive: true,
             label: "Google Maps embed URL",
             type: "text",
             full: true,
             hint: "From Google Maps → Share → Embed a map. Paste only the src URL.",
           },
-          { key: "latitude", label: "Latitude", type: "text" },
-          { key: "longitude", label: "Longitude", type: "text" },
+          { key: "latitude", inactive: true, label: "Latitude", type: "text" },
+          { key: "longitude", inactive: true, label: "Longitude", type: "text" },
         ],
       },
     ],
@@ -266,9 +274,9 @@ export const CATEGORY_SPECS: CategorySpec[] = [
       {
         title: "About the estate",
         fields: [
-          { key: "aboutEyebrow", label: "Eyebrow", type: "text" },
-          { key: "aboutTitle", label: "Title", type: "text" },
-          { key: "aboutBody", label: "Body", type: "textarea", full: true },
+          { key: "aboutEyebrow", inactive: true, label: "Eyebrow", type: "text" },
+          { key: "aboutTitle", inactive: true, label: "Title", type: "text" },
+          { key: "aboutBody", inactive: true, label: "Body", type: "textarea", full: true },
         ],
       },
       {
@@ -295,12 +303,12 @@ export const CATEGORY_SPECS: CategorySpec[] = [
       {
         title: "Other section headings",
         fields: [
-          { key: "galleryEyebrow", label: "Gallery eyebrow", type: "text" },
-          { key: "galleryTitle", label: "Gallery title", type: "text" },
+          { key: "galleryEyebrow", inactive: true, label: "Gallery eyebrow", type: "text" },
+          { key: "galleryTitle", inactive: true, label: "Gallery title", type: "text" },
           { key: "offersEyebrow", label: "Offers eyebrow", type: "text" },
           { key: "offersTitle", label: "Offers title", type: "text" },
-          { key: "testimonialsEyebrow", label: "Testimonials eyebrow", type: "text" },
-          { key: "testimonialsTitle", label: "Testimonials title", type: "text" },
+          { key: "testimonialsEyebrow", inactive: true, label: "Testimonials eyebrow", type: "text" },
+          { key: "testimonialsTitle", inactive: true, label: "Testimonials title", type: "text" },
         ],
       },
       {
@@ -326,6 +334,7 @@ export const CATEGORY_SPECS: CategorySpec[] = [
     sections: [
       {
         title: "Palette",
+        description: NOT_YET_ACTIVE,
         fields: [
           { key: "primaryColor", label: "Accent (gold)", type: "color" },
           { key: "inkColor", label: "Ink (text / dark surfaces)", type: "color" },
@@ -334,6 +343,7 @@ export const CATEGORY_SPECS: CategorySpec[] = [
       },
       {
         title: "Type",
+        description: NOT_YET_ACTIVE,
         fields: [
           { key: "displayFont", label: "Display font", type: "text" },
           { key: "bodyFont", label: "Body font", type: "text" },
@@ -352,6 +362,7 @@ export const CATEGORY_SPECS: CategorySpec[] = [
       },
       {
         title: "Behaviour",
+        description: NOT_YET_ACTIVE,
         fields: [
           {
             key: "enableAnimations",
@@ -381,20 +392,20 @@ export const CATEGORY_SPECS: CategorySpec[] = [
             key: "hotelAdvancePercent",
             label: "Advance charged (%)",
             type: "number",
-            min: 0,
+            min: 1,
             max: 100,
-            hint: "The rest is collected at the property.",
+            hint: "Between 1 and 100. The rest is collected at the property.",
           },
-          { key: "hotelMinNights", label: "Minimum nights", type: "number", min: 1 },
-          { key: "hotelMaxNights", label: "Maximum nights", type: "number", min: 1 },
-          { key: "hotelCheckInTime", label: "Check-in time", type: "text", placeholder: "14:00" },
-          { key: "hotelCheckOutTime", label: "Check-out time", type: "text", placeholder: "11:00" },
+          { key: "hotelMinNights", inactive: true, label: "Minimum nights", type: "number", min: 1 },
+          { key: "hotelMaxNights", inactive: true, label: "Maximum nights", type: "number", min: 1 },
+          { key: "hotelCheckInTime", inactive: true, label: "Check-in time", type: "text", placeholder: "14:00" },
+          { key: "hotelCheckOutTime", inactive: true, label: "Check-out time", type: "text", placeholder: "11:00" },
           {
             key: "cancellationFreeWindowHours",
             label: "Free cancellation window (hours)",
             type: "number",
             min: 0,
-            hint: "Cancellations inside this window are refunded automatically.",
+            hint: "Guests who cancel at least this many hours before check-in are refunded automatically.",
           },
         ],
       },
@@ -402,9 +413,9 @@ export const CATEGORY_SPECS: CategorySpec[] = [
         title: "Restaurant",
         fields: [
           { key: "restaurantEnabled", label: "Accept table reservations", type: "toggle" },
-          { key: "restaurantMaxPartySize", label: "Maximum party size", type: "number", min: 1 },
-          { key: "restaurantSlotMinutes", label: "Slot length (minutes)", type: "number", min: 15 },
-          { key: "restaurantAdvanceDays", label: "Book up to (days ahead)", type: "number", min: 1 },
+          { key: "restaurantMaxPartySize", inactive: true, label: "Maximum party size", type: "number", min: 1 },
+          { key: "restaurantSlotMinutes", inactive: true, label: "Slot length (minutes)", type: "number", min: 15 },
+          { key: "restaurantAdvanceDays", inactive: true, label: "Book up to (days ahead)", type: "number", min: 1 },
         ],
       },
       {
@@ -413,7 +424,7 @@ export const CATEGORY_SPECS: CategorySpec[] = [
           "Hall bookings are approval-first by design — an enquiry holds nothing until an admin confirms it. There is no instant-booking switch here, and there will not be one.",
         fields: [
           { key: "hallEnquiriesEnabled", label: "Accept enquiries", type: "toggle" },
-          { key: "hallAdvanceDays", label: "Enquire up to (days ahead)", type: "number", min: 1 },
+          { key: "hallAdvanceDays", inactive: true, label: "Enquire up to (days ahead)", type: "number", min: 1 },
         ],
       },
     ],
@@ -429,27 +440,27 @@ export const CATEGORY_SPECS: CategorySpec[] = [
         title: "Gateway",
         fields: [
           {
-            key: "gateway",
+            key: "gateway", inactive: true,
             label: "Provider",
             type: "select",
             options: [{ value: "razorpay", label: "Razorpay" }],
             hint: "Razorpay is mandated by RULES.md. Listed for clarity, not as a choice.",
           },
           {
-            key: "liveMode",
+            key: "liveMode", inactive: true,
             label: "Live mode",
             type: "toggle",
             hint: "A label for your own reference. Test vs live is decided by which keys you save under Integrations.",
           },
-          { key: "currency", label: "Currency", type: "text" },
-          { key: "invoicePrefix", label: "Invoice prefix", type: "text" },
+          { key: "currency", inactive: true, label: "Currency", type: "text" },
+          { key: "invoicePrefix", inactive: true, label: "Invoice prefix", type: "text" },
         ],
       },
       {
         title: "What the guest sees",
         fields: [
           {
-            key: "refundPolicyNote",
+            key: "refundPolicyNote", inactive: true,
             label: "Refund note",
             type: "textarea",
             full: true,
@@ -469,19 +480,19 @@ export const CATEGORY_SPECS: CategorySpec[] = [
       {
         title: "Sender",
         fields: [
-          { key: "fromName", label: "From name", type: "text" },
+          { key: "fromName", inactive: true, label: "From name", type: "text" },
           { key: "adminNotificationEmail", label: "Notify this address", type: "text" },
-          { key: "ccOnBooking", label: "CC on bookings", type: "text" },
-          { key: "signature", label: "Email signature", type: "text", full: true },
+          { key: "ccOnBooking", inactive: true, label: "CC on bookings", type: "text" },
+          { key: "signature", inactive: true, label: "Email signature", type: "text", full: true },
         ],
       },
       {
         title: "Send these",
         fields: [
-          { key: "sendBookingConfirmation", label: "Booking confirmation", type: "toggle" },
-          { key: "sendCancellationEmail", label: "Cancellation notice", type: "toggle" },
-          { key: "sendEnquiryAcknowledgement", label: "Hall enquiry acknowledgement", type: "toggle" },
-          { key: "sendReviewNotification", label: "New review alert", type: "toggle" },
+          { key: "sendBookingConfirmation", inactive: true, label: "Booking confirmation", type: "toggle" },
+          { key: "sendCancellationEmail", inactive: true, label: "Cancellation notice", type: "toggle" },
+          { key: "sendEnquiryAcknowledgement", inactive: true, label: "Hall enquiry acknowledgement", type: "toggle" },
+          { key: "sendReviewNotification", inactive: true, label: "New review alert", type: "toggle" },
         ],
       },
     ],
@@ -503,7 +514,13 @@ export const CATEGORY_SPECS: CategorySpec[] = [
             type: "text",
             hint: "%s is replaced by the page's own title.",
           },
-          { key: "canonicalUrl", label: "Canonical base URL", type: "text" },
+          {
+            key: "canonicalUrl",
+            label: "Canonical base URL",
+            type: "text",
+            placeholder: "https://www.example.com",
+            hint: "A full URL starting with https://.",
+          },
           { key: "defaultDescription", label: "Default description", type: "textarea", full: true },
           { key: "keywords", label: "Keywords", type: "text", full: true, hint: "Comma separated." },
           {
@@ -555,6 +572,7 @@ export const CATEGORY_SPECS: CategorySpec[] = [
     sections: [
       {
         title: "Businesses",
+        description: NOT_YET_ACTIVE,
         fields: [
           { key: "hotelModule", label: "Hotel", type: "toggle" },
           { key: "restaurantModule", label: "Restaurant", type: "toggle" },
@@ -563,6 +581,7 @@ export const CATEGORY_SPECS: CategorySpec[] = [
       },
       {
         title: "Content",
+        description: NOT_YET_ACTIVE,
         fields: [
           { key: "reviewsEnabled", label: "Reviews", type: "toggle" },
           { key: "offersEnabled", label: "Offers", type: "toggle" },
@@ -572,6 +591,7 @@ export const CATEGORY_SPECS: CategorySpec[] = [
       },
       {
         title: "Behaviour",
+        description: NOT_YET_ACTIVE,
         fields: [
           {
             key: "guestCheckout",
@@ -627,7 +647,7 @@ export const CATEGORY_SPECS: CategorySpec[] = [
       },
       {
         title: "Google",
-        fields: [{ key: "googleMapsApiKey", label: "Maps API key", type: "secret" }],
+        fields: [{ key: "googleMapsApiKey", inactive: true, label: "Maps API key", type: "secret" }],
       },
     ],
   },
@@ -638,10 +658,11 @@ export const CATEGORY_SPECS: CategorySpec[] = [
     icon: Wrench,
     description: "Take the public site offline temporarily, and keep a note of your last backup.",
     caution:
-      "Maintenance mode replaces the public website with a holding page for everyone. This console stays reachable.",
+      "Maintenance mode is not enforced yet: switching it on saves the setting, but the public website stays online for now. This console stays reachable either way.",
     sections: [
       {
         title: "Maintenance mode",
+        description: NOT_YET_ACTIVE,
         fields: [
           { key: "maintenanceMode", label: "Show the maintenance page", type: "toggle" },
           { key: "maintenanceMessage", label: "Message", type: "textarea", full: true },

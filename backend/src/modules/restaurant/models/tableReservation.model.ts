@@ -70,7 +70,7 @@ const tableReservationSchema = new Schema<ITableReservation>(
       default: "confirmed",
       index: true,
     },
-    reservationReference: { type: String, required: true, unique: true, index: true },
+    reservationReference: { type: String, required: true, unique: true },
     specialRequest: { type: String, trim: true },
     occasion: { type: String, trim: true },
     cancelledAt: { type: Date },
@@ -81,6 +81,10 @@ const tableReservationSchema = new Schema<ITableReservation>(
 
 // The availability query's access pattern: area + date + slot, active only.
 tableReservationSchema.index({ diningAreaId: 1, reservationDate: 1, timeSlot: 1, status: 1 });
+// Guest lookups by email, the admin "recently changed" view, and "my reservations".
+tableReservationSchema.index({ guestEmail: 1 });
+tableReservationSchema.index({ updatedAt: -1 });
+tableReservationSchema.index({ userId: 1, createdAt: -1 });
 
 export const TableReservation = model<ITableReservation>(
   "TableReservation",

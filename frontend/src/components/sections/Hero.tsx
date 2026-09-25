@@ -22,6 +22,11 @@ interface HeroProps {
   /** Brand-level copy — defaults suit any 7 Vachan vertical. */
   eyebrow?: string;
   tagline?: string;
+  /**
+   * The next element overlaps the hero's bottom edge (the home page's
+   * QuickBookingWidget, `-mt-16 sm:-mt-20`). Lifts the bottom cues clear of it.
+   */
+  overlapped?: boolean;
 }
 
 const SLIDE_MS = 6500;
@@ -47,6 +52,7 @@ export default function Hero({
   secondaryCta,
   eyebrow = "Welcome to",
   tagline = "Where quiet luxury meets the warmth of true hospitality.",
+  overlapped = false,
 }: HeroProps) {
   const reduceMotion = useReducedMotion();
   const slides = images.length > 0 ? images : [];
@@ -194,7 +200,9 @@ export default function Hero({
         initial={{ opacity: 0, x: -16 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.9, ease: EASE_LUXE, delay: 1.35 }}
-        className="absolute bottom-12 left-6 z-10 hidden sm:block lg:left-12"
+        className={`absolute ${
+          overlapped ? "bottom-24 sm:bottom-28" : "bottom-12"
+        } left-6 z-10 hidden sm:block lg:left-12`}
       >
         <button type="button" className="group flex items-center gap-3.5 text-left" aria-label="Watch the film">
           <span
@@ -214,7 +222,11 @@ export default function Hero({
 
       {/* ── Slide indicators: thin rules, not dots ── */}
       {slides.length > 1 && (
-        <div className="absolute bottom-32 left-1/2 z-10 flex -translate-x-1/2 gap-2.5 sm:bottom-36">
+        <div
+          className={`absolute ${
+            overlapped ? "bottom-36 sm:bottom-40" : "bottom-32 sm:bottom-36"
+          } left-1/2 z-10 flex -translate-x-1/2 gap-2.5`}
+        >
           {slides.map((_, i) => (
             <button
               key={i}
@@ -234,7 +246,9 @@ export default function Hero({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 1, delay: 1.5 }}
-        className="absolute bottom-10 left-1/2 z-10 -translate-x-1/2 sm:bottom-12"
+        className={`absolute ${
+          overlapped ? "bottom-24 sm:bottom-28" : "bottom-10 sm:bottom-12"
+        } left-1/2 z-10 -translate-x-1/2`}
       >
         <span className="flex flex-col items-center gap-2 text-xs font-medium uppercase tracking-luxe text-cream/70">
           Scroll

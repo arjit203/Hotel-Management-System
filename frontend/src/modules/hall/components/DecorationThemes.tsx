@@ -78,7 +78,7 @@ export default function DecorationThemes({
                             transition-all duration-400 ease-luxe ${
                               isActive
                                 ? "border-gold bg-gold text-ink shadow-gold"
-                                : "border-ink/12 text-warm-500 hover:border-gold/50 hover:text-ink"
+                                : "border-ink/[0.12] text-warm-500 hover:border-gold/50 hover:text-ink"
                             }`}
               >
                 {category}

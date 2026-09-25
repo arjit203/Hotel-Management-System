@@ -68,6 +68,13 @@ export interface IAdmin extends Document {
   createdBy?: Types.ObjectId | null;
   passwordResetToken?: string;
   passwordResetExpires?: Date;
+  /**
+   * Revocation counter, signed into admin JWTs as `tv`. `authenticate("admin")`
+   * refuses a token whose `tv` differs, so incrementing this (password reset,
+   * deactivation) logs out every existing session at once. Optional with
+   * default 0 so existing documents and existing tokens (no `tv`) still match.
+   */
+  tokenVersion?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -81,7 +88,8 @@ const adminSchema = new Schema<IAdmin>(
       unique: true,
       lowercase: true,
       trim: true,
-      index: true,
+      // No `index: true` — `unique` already builds the index; both together
+      // makes Mongoose warn about a duplicate index at boot.
     },
     phone: { type: String, trim: true },
     passwordHash: { type: String, required: true, select: false },
@@ -101,6 +109,7 @@ const adminSchema = new Schema<IAdmin>(
     createdBy: { type: Schema.Types.ObjectId, ref: "Admin", default: null },
     passwordResetToken: { type: String, select: false },
     passwordResetExpires: { type: Date, select: false },
+    tokenVersion: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

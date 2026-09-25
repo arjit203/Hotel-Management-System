@@ -1,4 +1,4 @@
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+import { getSiteUrl, jsonLdString } from "@/lib/seo";
 
 /**
  * schema.org `Restaurant` JSON-LD. Deliberately parallel to HotelSchema — same
@@ -19,7 +19,7 @@ const DAY_URIS = [
   "https://schema.org/Saturday",
 ];
 
-export default function RestaurantSchema({
+export default async function RestaurantSchema({
   restaurant,
   image,
   reviewSummary,
@@ -36,6 +36,7 @@ export default function RestaurantSchema({
   image?: string;
   reviewSummary?: { average: number; count: number };
 }) {
+  const SITE_URL = await getSiteUrl();
   const jsonLd: Record<string, unknown> = {
     "@context": "https://schema.org",
     "@type": "Restaurant",
@@ -77,6 +78,6 @@ export default function RestaurantSchema({
   }
 
   return (
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(jsonLd) }} />
   );
 }

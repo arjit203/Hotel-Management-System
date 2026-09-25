@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
@@ -51,9 +52,23 @@ interface BookingData {
   subtotal?: number;
 }
 
+// A booking page is personal: never indexed, never followed, whatever the
+// site-wide SEO settings say.
+export const metadata: Metadata = {
+  title: "Your Booking",
+  description: "Your 7 Vachan hotel booking details.",
+  robots: { index: false, follow: false },
+};
+
+// The invoice framing (heading + INV- number) applies only once the advance is
+// paid and the stay is real. A pending or cancelled booking is just a summary.
+const INVOICE_STATUSES = ["confirmed", "checked_in", "checked_out", "completed"];
+
 async function getBooking(reference: string): Promise<BookingData | null> {
   try {
-    const res = await fetch(`${API_BASE_URL}/hotel-bookings/reference/${reference}`, {
+    // This server-side fetch carries no user token, so the API returns the
+    // public projection: guestEmail / guestPhone arrive masked.
+    const res = await fetch(`${API_BASE_URL}/hotel-bookings/reference/${encodeURIComponent(reference)}`, {
       cache: "no-store",
     });
     const json = await res.json();
@@ -81,6 +96,7 @@ export default async function BookingConfirmationPage({
 
   const nights = nightsBetween(booking.checkInDate, booking.checkOutDate);
   const advancePaid = booking.advancePaid ?? 0;
+  const isInvoice = INVOICE_STATUSES.includes(booking.status);
   const isCancellable =
     ["pending", "confirmed"].includes(booking.status) && new Date(booking.checkInDate) > new Date();
 
@@ -125,13 +141,15 @@ export default async function BookingConfirmationPage({
               Hotel &amp; Stays
             </p>
           </div>
-          <p className="font-display text-[1.75rem] uppercase tracking-wide text-ink">Invoice</p>
+          <p className="font-display text-[1.75rem] uppercase tracking-wide text-ink">
+            {isInvoice ? "Invoice" : "Booking summary"}
+          </p>
         </div>
 
         {/* Meta row */}
         <div className="flex flex-wrap gap-x-10 gap-y-3 border-y border-ink/[0.08] px-8 py-4 sm:px-10">
           {[
-            { label: "Invoice No.", value: `INV-${booking.bookingReference}` },
+            ...(isInvoice ? [{ label: "Invoice No.", value: `INV-${booking.bookingReference}` }] : []),
             { label: "Booking Reference", value: booking.bookingReference },
             {
               label: "Date",
@@ -265,10 +283,12 @@ export default async function BookingConfirmationPage({
         />
       </div>
 
-      <p className="no-print mt-7 text-center text-sm font-light text-warm-500">
-        A confirmation email has been sent to {booking.guestEmail}. Please keep your reference handy
-        at check-in.
-      </p>
+      {isInvoice && (
+        <p className="no-print mt-7 text-center text-sm font-light text-warm-500">
+          A confirmation email has been sent to {booking.guestEmail}. Please keep your reference handy
+          at check-in.
+        </p>
+      )}
 
       {/* ── Secondary actions ── */}
       <div className="no-print mt-10 flex flex-col items-center gap-5 border-t border-ink/[0.08] pt-9">

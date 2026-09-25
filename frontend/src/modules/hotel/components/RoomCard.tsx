@@ -29,7 +29,7 @@ export interface RoomSummary {
  * the entire card via an ::after overlay, so the whole surface is clickable
  * without emitting three duplicate links (image / title / "Details") to screen
  * readers and keyboard users. "Details" is therefore a visual affordance, not a
- * second link, and the photos are alt="" because the heading already names them.
+ * second link. Photos carry a short descriptive alt (room name + position).
  */
 export default function RoomCard({ room, priority = false }: { room: RoomSummary; priority?: boolean }) {
   const [activeIndex, setActiveIndex] = useState(0);
@@ -74,7 +74,7 @@ export default function RoomCard({ room, priority = false }: { room: RoomSummary
                   src={cldImage(src, { width: IMAGE_WIDTHS.card })}
                   srcSet={cldSrcSet(src, [400, 800, 1200])}
                   sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 400px"
-                  alt=""
+                  alt={`${room.name} — photo ${i + 1} of ${images.length}`}
                   loading={priority && i === 0 ? "eager" : "lazy"}
                   decoding="async"
                   // Catches an image that finished loading before hydration, when

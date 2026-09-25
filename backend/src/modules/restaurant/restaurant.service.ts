@@ -1,3 +1,4 @@
+import { isValidObjectId } from "mongoose";
 import { Restaurant } from "./models/restaurant.model";
 import { MenuCategory } from "./models/menuCategory.model";
 import { MenuItem } from "./models/menuItem.model";
@@ -24,6 +25,11 @@ import {
  * type, exactly as the Hotel module does with `"hotel"`.
  */
 
+/** A malformed id in a URL is a 404, not a Mongoose CastError surfacing as a 500. */
+function assertObjectId(id: string, notFound: string): void {
+  if (!isValidObjectId(id)) throw new ApiError(404, notFound);
+}
+
 // ---------- RESTAURANT ----------
 
 export async function listRestaurants(filters: { branchId?: string } = {}) {
@@ -39,6 +45,8 @@ export async function getRestaurantBySlug(slug: string) {
 }
 
 export async function getRestaurantById(id: string) {
+  // A malformed id is simply "not found", never a CastError 500.
+  if (!isValidObjectId(id)) throw new ApiError(404, "Restaurant not found.");
   const restaurant = await Restaurant.findById(id);
   if (!restaurant || !restaurant.isActive) throw new ApiError(404, "Restaurant not found.");
   return restaurant;
@@ -51,6 +59,7 @@ export async function createRestaurant(input: CreateRestaurantInput) {
 }
 
 export async function updateRestaurant(id: string, updates: UpdateRestaurantInput) {
+  assertObjectId(id, "Restaurant not found.");
   if (updates.slug) {
     const clash = await Restaurant.findOne({ slug: updates.slug, _id: { $ne: id } });
     if (clash) throw new ApiError(409, "A restaurant with that slug already exists.");
@@ -65,6 +74,7 @@ export async function updateRestaurant(id: string, updates: UpdateRestaurantInpu
  * exists so reservation history is never orphaned.
  */
 export async function deleteRestaurant(id: string) {
+  assertObjectId(id, "Restaurant not found.");
   const activeAreas = await DiningArea.countDocuments({ restaurantId: id, isActive: true });
   if (activeAreas > 0) {
     throw new ApiError(
@@ -91,12 +101,14 @@ export async function createMenuCategory(restaurantId: string, input: CreateMenu
 }
 
 export async function updateMenuCategory(id: string, updates: Partial<CreateMenuCategoryInput>) {
+  assertObjectId(id, "Menu category not found.");
   const category = await MenuCategory.findByIdAndUpdate(id, updates, { new: true });
   if (!category) throw new ApiError(404, "Menu category not found.");
   return category;
 }
 
 export async function deleteMenuCategory(id: string) {
+  assertObjectId(id, "Menu category not found.");
   const itemCount = await MenuItem.countDocuments({ categoryId: id, isActive: true });
   if (itemCount > 0) {
     throw new ApiError(
@@ -112,6 +124,7 @@ export async function deleteMenuCategory(id: string) {
 // ---------- MENU ITEMS ----------
 
 export async function getMenuItemById(id: string) {
+  if (!isValidObjectId(id)) throw new ApiError(404, "Menu item not found.");
   const item = await MenuItem.findById(id);
   if (!item || !item.isActive) throw new ApiError(404, "Menu item not found.");
   return item;
@@ -131,6 +144,7 @@ export async function createMenuItem(restaurantId: string, input: CreateMenuItem
 }
 
 export async function updateMenuItem(id: string, updates: Partial<CreateMenuItemInput>) {
+  assertObjectId(id, "Menu item not found.");
   if (updates.categoryId) {
     const item = await getMenuItemById(id);
     const category = await MenuCategory.findById(updates.categoryId);
@@ -144,6 +158,7 @@ export async function updateMenuItem(id: string, updates: Partial<CreateMenuItem
 }
 
 export async function deleteMenuItem(id: string) {
+  assertObjectId(id, "Menu item not found.");
   const item = await MenuItem.findByIdAndUpdate(id, { isActive: false }, { new: true });
   if (!item) throw new ApiError(404, "Menu item not found.");
   return item;
@@ -213,6 +228,7 @@ export async function listDiningAreas(restaurantId: string) {
 }
 
 export async function getDiningAreaById(id: string) {
+  if (!isValidObjectId(id)) throw new ApiError(404, "Dining area not found.");
   const area = await DiningArea.findById(id);
   if (!area || !area.isActive) throw new ApiError(404, "Dining area not found.");
   return area;
@@ -230,12 +246,14 @@ export async function createDiningArea(restaurantId: string, input: CreateDining
 }
 
 export async function updateDiningArea(id: string, updates: Partial<CreateDiningAreaInput>) {
+  assertObjectId(id, "Dining area not found.");
   const area = await DiningArea.findByIdAndUpdate(id, updates, { new: true });
   if (!area) throw new ApiError(404, "Dining area not found.");
   return area;
 }
 
 export async function deleteDiningArea(id: string) {
+  assertObjectId(id, "Dining area not found.");
   // Guard on FUTURE reservations only — past ones are history and must not block
   // an area being retired.
   const upcoming = await TableReservation.countDocuments({
@@ -269,22 +287,71 @@ export function tablesNeededFor(partySize: number, maxPartySizePerTable: number)
   return Math.max(1, Math.ceil(partySize / Math.max(1, maxPartySizePerTable)));
 }
 
+/** "19:30" → 1170. Returns NaN for anything that isn't HH:MM. */
+export function slotToMinutes(timeSlot: string): number {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(String(timeSlot).trim());
+  if (!match) return NaN;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+const IST_OFFSET_MS = 330 * 60 * 1000; // Asia/Kolkata is UTC+05:30 with no DST.
+
+/**
+ * "Today" and "now" as the restaurant experiences them (Asia/Kolkata), expressed
+ * in this module's date convention: the IST calendar date at midnight UTC, plus
+ * minutes since IST midnight. Server time zone never matters.
+ */
+export function nowInIST(): { today: Date; minutes: number } {
+  const shifted = new Date(Date.now() + IST_OFFSET_MS);
+  return {
+    today: startOfDayUTC(shifted),
+    minutes: shifted.getUTCHours() * 60 + shifted.getUTCMinutes(),
+  };
+}
+
+/** True when `timeSlot` on `day` has already started, judged in IST. */
+export function isSlotInPast(day: Date, timeSlot: string): boolean {
+  const { today, minutes } = nowInIST();
+  const d = startOfDayUTC(day).getTime();
+  if (d < today.getTime()) return true;
+  if (d > today.getTime()) return false;
+  const slot = slotToMinutes(timeSlot);
+  return !Number.isNaN(slot) && slot <= minutes;
+}
+
 /**
  * Bookable tables for an area at a date+slot.
  *
- *   totalTables − manualBlocks(day-wide + slot-specific) − activeReservations(slot)
+ *   totalTables − manualBlocks(day-wide + slot-specific) − overlappingReservations
+ *
+ * A reservation holds its tables for the restaurant's `reservationDurationMinutes`
+ * (default 90), so a 19:00 party still occupies its table at 19:30. Any active
+ * reservation whose sitting `[start, start + duration)` overlaps this slot's
+ * `[slot, slot + duration)` counts against it.
  *
  * Computed on read, exactly as the Hotel module computes room availability. Only
  * `confirmed` and `seated` reservations consume capacity — cancelled, completed
  * and no-show do not.
+ *
+ * `durationMinutes` may be passed by callers that already hold the restaurant
+ * (the day grid) to save a lookup per slot.
  */
 export async function getAvailableTables(
   diningAreaId: string,
   date: Date,
-  timeSlot: string
+  timeSlot: string,
+  durationMinutes?: number
 ): Promise<number> {
   const area = await getDiningAreaById(diningAreaId);
   const day = startOfDayUTC(date);
+
+  let duration = durationMinutes;
+  if (!duration) {
+    const restaurant = await Restaurant.findById(area.restaurantId)
+      .select("reservationDurationMinutes")
+      .lean();
+    duration = restaurant?.reservationDurationMinutes || 90;
+  }
 
   // A day-wide override has no timeSlot; a slot override matches this slot.
   // Both count, so a closed day plus a blocked slot sum together.
@@ -295,18 +362,26 @@ export async function getAvailableTables(
   });
   const blocked = overrides.reduce((sum, o) => sum + o.blockedTables, 0);
 
-  const reserved = await TableReservation.aggregate<{ total: number }>([
-    {
-      $match: {
-        diningAreaId: area._id,
-        reservationDate: day,
-        timeSlot,
-        status: { $in: ["confirmed", "seated"] },
-      },
-    },
-    { $group: { _id: null, total: { $sum: "$tablesReserved" } } },
-  ]);
-  const reservedTables = reserved[0]?.total ?? 0;
+  // One area's active reservations for one day is a handful of rows, so the
+  // overlap test runs here rather than as string arithmetic in an aggregation.
+  const sameDay = await TableReservation.find({
+    diningAreaId: area._id,
+    reservationDate: day,
+    status: { $in: ["confirmed", "seated"] },
+  })
+    .select("timeSlot tablesReserved")
+    .lean();
+
+  const slotStart = slotToMinutes(timeSlot);
+  const reservedTables = sameDay.reduce((sum, r) => {
+    const start = slotToMinutes(r.timeSlot);
+    // Unparseable legacy data: fall back to the old exact-slot rule.
+    const overlaps =
+      Number.isNaN(start) || Number.isNaN(slotStart)
+        ? r.timeSlot === timeSlot
+        : start < slotStart + duration! && slotStart < start + duration!;
+    return overlaps ? sum + r.tablesReserved : sum;
+  }, 0);
 
   return Math.max(0, area.totalTables - blocked - reservedTables);
 }
@@ -330,6 +405,7 @@ export async function getDayAvailability(
   const restaurant = await getRestaurantById(restaurantId);
   const areas = await listDiningAreas(restaurantId);
   const slots = restaurant.reservationSlots;
+  const duration = restaurant.reservationDurationMinutes || 90;
 
   return Promise.all(
     areas.map(async (area) => {
@@ -339,11 +415,18 @@ export async function getDayAvailability(
 
       const slotResults = await Promise.all(
         slots.map(async (timeSlot) => {
-          const availableTables = await getAvailableTables(String(area._id), date, timeSlot);
+          const availableTables = await getAvailableTables(
+            String(area._id),
+            date,
+            timeSlot,
+            duration
+          );
           return {
             timeSlot,
             availableTables,
-            canSeatParty: partyFitsArea && availableTables >= needed,
+            // A sitting that has already started today can't be reserved.
+            canSeatParty:
+              partyFitsArea && availableTables >= needed && !isSlotInPast(date, timeSlot),
           };
         })
       );
@@ -381,5 +464,6 @@ export async function setTableAvailability(
 }
 
 export async function listTableAvailability(diningAreaId: string) {
+  assertObjectId(diningAreaId, "Dining area not found.");
   return TableAvailability.find({ diningAreaId }).sort({ date: 1, timeSlot: 1 });
 }

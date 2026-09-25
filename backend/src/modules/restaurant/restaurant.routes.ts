@@ -3,7 +3,11 @@ import * as restaurantController from "./restaurant.controller";
 import { authenticate, optionalAuthenticate, requireRole } from "../../middlewares/auth.middleware";
 import { auditLogger } from "../../middlewares/audit.middleware";
 import { uploadImage } from "../../middlewares/upload.middleware";
-import { publicFormLimiter, publicUploadLimiter } from "../../middlewares/rateLimit.middleware";
+import {
+  publicFormLimiter,
+  publicUploadLimiter,
+  publicLookupLimiter,
+} from "../../middlewares/rateLimit.middleware";
 
 /**
  * Restaurant routes.
@@ -74,6 +78,9 @@ publicReservationRouter.post(
 publicReservationRouter.get("/me", authenticate("user"), restaurantController.getMyReservations);
 publicReservationRouter.get(
   "/reference/:reference",
+  publicLookupLimiter,
+  // Optional: the owner's token unlocks unmasked contact details.
+  optionalAuthenticate("user"),
   restaurantController.getReservationByReference
 );
 publicReservationRouter.put(

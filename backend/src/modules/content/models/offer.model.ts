@@ -32,5 +32,7 @@ const offerSchema = new Schema<IOffer>(
 );
 
 offerSchema.index({ applicableTo: 1, ownerId: 1, isActive: 1 });
+// Newest-first lists (admin offer list, console activity feed).
+offerSchema.index({ createdAt: -1 });
 
 export const Offer = model<IOffer>("Offer", offerSchema);

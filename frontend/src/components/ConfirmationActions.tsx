@@ -35,8 +35,12 @@ export default function ConfirmationActions({
 }) {
   const [copied, setCopied] = useState(false);
 
+  // The public booking lookup masks the email (`ra***@gm***.com`). A masked
+  // address is not a recipient, so the mail client is opened without one and
+  // the guest picks their own inbox.
+  const recipient = guestEmail && !guestEmail.includes("*") ? encodeURIComponent(guestEmail) : "";
   const mailtoHref =
-    `mailto:${encodeURIComponent(guestEmail)}` +
+    `mailto:${recipient}` +
     `?subject=${encodeURIComponent(`Booking confirmation — ${brandName} (${bookingReference})`)}` +
     `&body=${encodeURIComponent(
       `Booking reference: ${bookingReference}\n\n` +

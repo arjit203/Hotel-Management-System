@@ -34,9 +34,9 @@ import { useShellUi } from "@/lib/shellUi";
 import { settingsApi, type AllSettings, type SettingCategory } from "@/lib/settingsApi";
 import { formatApiError } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import { PUBLIC_SITE_URL } from "@/lib/siteUrl";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5100/api/v1";
-const PUBLIC_SITE_URL = process.env.NEXT_PUBLIC_FRONTEND_URL || "http://localhost:3000";
 
 /**
  * Platform settings — the CMS for everything that used to require a deploy.

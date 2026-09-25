@@ -37,8 +37,8 @@ import ReviewsManager, { ReviewItem } from "@/components/content/ReviewsManager"
 import { adminApi, formatApiError, publicGet, uploadImage } from "@/lib/api";
 import { useBusiness } from "@/lib/businessContext";
 import { currency, slugify } from "@/lib/format";
+import { PUBLIC_SITE_URL } from "@/lib/siteUrl";
 
-const PUBLIC_SITE_URL = process.env.NEXT_PUBLIC_FRONTEND_URL || "http://localhost:3000";
 const ROOM_CATEGORIES = ["Deluxe", "Executive", "Luxury", "Suite"];
 const GALLERY_CATEGORIES = ["Exterior", "Interior", "Rooms", "Food", "Building"];
 

@@ -117,7 +117,7 @@ export default function ReviewForm({
   if (submitted) {
     return (
       <div className="py-6 text-center">
-        <span className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-gold/12">
+        <span className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-gold/[0.12]">
           <Check size={22} strokeWidth={1.5} className="text-gold" />
         </span>
         <p className="card-title">Thank you</p>

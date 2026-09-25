@@ -1,4 +1,3 @@
-import { Types } from "mongoose";
 import { Hotel } from "./models/hotel.model";
 import { Room } from "./models/room.model";
 import { RoomAvailability } from "./models/roomAvailability.model";
@@ -9,7 +8,45 @@ import {
   UpdateHotelInput,
   CreateRoomInput,
   UpdateRoomInput,
+  stayRangeError,
 } from "./hotel.validation";
+
+// ---------- PENDING-PAYMENT HOLD ----------
+// A 'pending' booking (created, advance not yet paid) holds its rooms only for
+// this long. Before this existed an abandoned checkout blocked the rooms
+// forever. Bookings get `paymentExpiresAt = now + hold` on create and on
+// retry-payment; older rows without the field fall back to createdAt + hold.
+export const PENDING_HOLD_MINUTES = 30;
+
+/**
+ * Mongo filter for "this booking currently occupies its rooms": confirmed or
+ * checked in, or pending and still inside its payment hold. Same active-status
+ * semantics as before (pending/confirmed/checked_in), minus expired pendings.
+ */
+export function activeBookingFilter(now: Date = new Date()): Record<string, unknown> {
+  const legacyCutoff = new Date(now.getTime() - PENDING_HOLD_MINUTES * 60 * 1000);
+  return {
+    $or: [
+      { status: { $in: ["confirmed", "checked_in"] } },
+      {
+        status: "pending",
+        $or: [
+          { paymentExpiresAt: { $gt: now } },
+          { paymentExpiresAt: null, createdAt: { $gt: legacyCutoff } },
+        ],
+      },
+    ],
+  };
+}
+
+/** True when a pending booking's payment hold has lapsed. */
+export function isPaymentHoldExpired(
+  booking: { paymentExpiresAt?: Date | null; createdAt: Date },
+  now: Date = new Date()
+): boolean {
+  if (booking.paymentExpiresAt) return booking.paymentExpiresAt.getTime() <= now.getTime();
+  return booking.createdAt.getTime() <= now.getTime() - PENDING_HOLD_MINUTES * 60 * 1000;
+}
 
 // ---------- HOTEL CRUD ----------
 export async function listHotels(filters: { branchId?: string; isActive?: boolean } = {}) {
@@ -145,7 +182,7 @@ export async function searchRooms(hotelId: string, filters: RoomSearchFilters) {
     const availabilityResults = await Promise.all(
       rooms.map(async (room) => ({
         room,
-        available: await getAvailableCount(String(room._id), checkIn, checkOut),
+        available: await getAvailableCount(String(room._id), checkIn, checkOut, room),
       }))
     );
     rooms = availabilityResults.filter((r) => r.available > 0).map((r) => r.room);
@@ -159,9 +196,13 @@ export async function searchRooms(hotelId: string, filters: RoomSearchFilters) {
   // scope here per "never redesign database unless required"). Falls back to
   // "newest" rather than silently faking a per-room rating value.
   if (filters.sortBy === "popularity") {
+    const roomIds = rooms.map((r) => r._id);
     const counts = await HotelBooking.aggregate([
+      // Narrow to bookings touching these rooms BEFORE unwinding, so the
+      // pipeline doesn't explode every booking in the collection first.
+      { $match: { "rooms.roomId": { $in: roomIds }, status: { $ne: "cancelled" } } },
       { $unwind: "$rooms" },
-      { $match: { "rooms.roomId": { $in: rooms.map((r) => r._id) }, status: { $ne: "cancelled" } } },
+      { $match: { "rooms.roomId": { $in: roomIds } } },
       { $group: { _id: "$rooms.roomId", count: { $sum: 1 } } },
     ]);
     const countMap = new Map(counts.map((c) => [String(c._id), c.count]));
@@ -199,28 +240,52 @@ function enumerateDates(checkIn: Date, checkOut: Date): Date[] {
  * - overlappingConfirmedOrPendingBookings(date), taking the MINIMUM across all
  * nights in the range (a stay is only bookable if every night has capacity).
  */
-export async function getAvailableCount(roomId: string, checkIn: Date, checkOut: Date): Promise<number> {
-  const room = await getRoomById(roomId);
-  const dates = enumerateDates(checkIn, checkOut);
+export async function getAvailableCount(
+  roomId: string,
+  checkIn: Date,
+  checkOut: Date,
+  // Pass the room when the caller already loaded it, to skip a second lookup.
+  knownRoom?: { totalRooms: number },
+  // Leave one booking out of the count — used when re-checking a booking's own
+  // rooms (retry-payment, late payment), which would otherwise count itself.
+  options: { excludeBookingId?: string } = {}
+): Promise<number> {
+  if (isNaN(checkIn.getTime()) || isNaN(checkOut.getTime())) {
+    throw new ApiError(400, "Invalid date range.");
+  }
+  // Guard here as well as in the Zod schemas: every caller (search, booking,
+  // retry) ends up here, and the night loop below is proportional to the range.
+  const rangeError = stayRangeError(checkIn, checkOut);
+  if (rangeError) throw new ApiError(400, rangeError);
 
+  const dates = enumerateDates(checkIn, checkOut);
   if (dates.length === 0) {
     throw new ApiError(400, "Invalid date range.");
   }
+  const room = knownRoom ?? (await getRoomById(roomId));
 
   // Overlapping bookings (any booking whose [checkIn, checkOut) overlaps requested range)
   // Feature 4: roomId now lives inside the rooms[] array, not top-level —
   // a single booking may reserve this room type alongside others.
+  // Pending bookings count only while their payment hold is live.
   const overlappingBookings = await HotelBooking.find({
     "rooms.roomId": roomId,
-    status: { $in: ["pending", "confirmed", "checked_in"] },
+    ...activeBookingFilter(),
     checkInDate: { $lt: checkOut },
     checkOutDate: { $gt: checkIn },
-  }).select("checkInDate checkOutDate rooms");
+    ...(options.excludeBookingId ? { _id: { $ne: options.excludeBookingId } } : {}),
+  })
+    .select("checkInDate checkOutDate rooms")
+    .lean();
 
+  // Overrides are stored at midnight UTC, so a half-open range over the stay's
+  // nights matches exactly the dates the old `$in: dates` did.
   const blockedOverrides = await RoomAvailability.find({
     roomId,
-    date: { $in: dates },
-  }).select("date blockedCount");
+    date: { $gte: dates[0], $lt: toMidnightUTC(checkOut) },
+  })
+    .select("date blockedCount")
+    .lean();
 
   const blockedByDate = new Map<string, number>();
   for (const override of blockedOverrides) {

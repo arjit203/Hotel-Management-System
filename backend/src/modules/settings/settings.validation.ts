@@ -58,3 +58,61 @@ export const updateSettingsSchema = z
   });
 
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
+
+/**
+ * ── Per-key rules, for the few values that feed logic rather than copy ──
+ *
+ * The structural schema above is enough for text and colours. These keys are
+ * different: a bad value doesn't look wrong, it breaks something downstream.
+ * `hotelAdvancePercent: 0` creates a 0-paise Razorpay order (which the gateway
+ * rejects, so nobody can book), and a malformed `canonicalUrl` is written into
+ * every page's <link rel="canonical"> and the sitemap. Blank / null means
+ * "not set" everywhere in this module, so it is always accepted.
+ *
+ * Kept as a table so adding a rule is one line, not a new schema per category.
+ */
+type KeyRule = (value: unknown) => string | null;
+
+function isBlank(value: unknown): boolean {
+  return value === null || value === undefined || (typeof value === "string" && value.trim() === "");
+}
+
+const absoluteHttpUrl: KeyRule = (value) => {
+  if (isBlank(value)) return null;
+  if (typeof value !== "string") return "Must be a URL.";
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol === "http:" || url.protocol === "https:") return null;
+  } catch {
+    /* fall through */
+  }
+  return "Must be blank or a full http(s) URL, e.g. https://7vachan.com";
+};
+
+const percent1to100: KeyRule = (value) => {
+  if (isBlank(value)) return null;
+  const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  if (!Number.isFinite(n) || n < 1 || n > 100) return "Must be a number from 1 to 100.";
+  return null;
+};
+
+const KEY_RULES: Partial<Record<string, Record<string, KeyRule>>> = {
+  seo: { canonicalUrl: absoluteHttpUrl },
+  booking: { hotelAdvancePercent: percent1to100 },
+};
+
+/** Per-key errors for one category's patch, in the usual `{ field, message }` shape. */
+export function validateCategoryPatch(
+  category: string,
+  patch: Record<string, unknown>
+): { field: string; message: string }[] {
+  const rules = KEY_RULES[category];
+  if (!rules) return [];
+  const errors: { field: string; message: string }[] = [];
+  for (const [key, rule] of Object.entries(rules)) {
+    if (!(key in patch)) continue;
+    const message = rule(patch[key]);
+    if (message) errors.push({ field: key, message });
+  }
+  return errors;
+}

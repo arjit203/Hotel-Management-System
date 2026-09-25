@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  AlertTriangle,
   Bell,
   BedDouble,
   CalendarClock,
@@ -22,14 +23,15 @@ import {
   XCircle,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { adminApi, clearToken } from "@/lib/api";
+import { adminApi } from "@/lib/api";
+import { useAdminSession } from "@/lib/adminSession";
+import { isSuperAdmin } from "@/lib/roles";
+import { PUBLIC_SITE_URL } from "@/lib/siteUrl";
 import { initials, humanise, relativeTime } from "@/lib/format";
 import { useSummary } from "@/lib/summary";
 import { useNotifications } from "@/lib/notifications";
 import type { ActivityType } from "@/lib/console";
 import CommandPalette from "./CommandPalette";
-
-const PUBLIC_SITE_URL = process.env.NEXT_PUBLIC_FRONTEND_URL || "http://localhost:3000";
 
 interface Props {
   admin: { name: string; email: string; role: string } | null;
@@ -43,6 +45,7 @@ const NOTIFICATION_ICON: Record<ActivityType, typeof Bell> = {
   payment_received: CreditCard,
   reservation_created: UtensilsCrossed,
   reservation_cancelled: XCircle,
+  refund_pending: AlertTriangle,
   enquiry_created: PartyPopper,
   review_submitted: Star,
   offer_published: Star,
@@ -62,6 +65,7 @@ const NOTIFICATION_ICON: Record<ActivityType, typeof Bell> = {
  */
 export default function Topbar({ admin, onOpenMobileNav }: Props) {
   const router = useRouter();
+  const { signOut } = useAdminSession();
   const { stats, loading, reload } = useSummary();
   const {
     items: notifications,
@@ -75,6 +79,12 @@ export default function Topbar({ admin, onOpenMobileNav }: Props) {
   const [profileOpen, setProfileOpen] = useState(false);
   const notificationsRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
+
+  // The provider only polls the unread count; the list itself is fetched when
+  // the tray is actually opened.
+  useEffect(() => {
+    if (notificationsOpen) void reloadNotifications();
+  }, [notificationsOpen, reloadNotifications]);
 
   // ⌘K / Ctrl-K opens search from anywhere.
   useEffect(() => {
@@ -145,8 +155,9 @@ export default function Topbar({ admin, onOpenMobileNav }: Props) {
     // invalidated server-side (there is no blocklist), so a failed call must
     // not stop the sign-out the person actually asked for.
     void adminApi.post("/auth/admin/logout", {});
-    clearToken();
-    localStorage.removeItem("admin_info");
+    // signOut() also forgets the remembered vertical/property, so the next
+    // person to sign in on this device starts in their own scope.
+    signOut();
     router.push("/login");
   }
 
@@ -207,14 +218,14 @@ export default function Topbar({ admin, onOpenMobileNav }: Props) {
               {unreadCount > 0 && (
                 // A number rather than a dot: "3 things happened" and "40 things
                 // happened" call for different reactions.
-                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-danger-500 px-1 text-[10px] font-semibold leading-none text-white">
+                <span className="absolute -right-0.5 -top-0.5 flex h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full bg-danger-500 px-1 text-xs font-semibold leading-none text-white">
                   {unreadCount > 99 ? "99+" : unreadCount}
                 </span>
               )}
             </button>
 
             {notificationsOpen && (
-              <div className="absolute right-0 z-drawer mt-1.5 w-[22rem] animate-scale-in overflow-hidden rounded-lg border border-line bg-white shadow-lg">
+              <div className="absolute right-0 z-drawer mt-1.5 w-[min(22rem,calc(100vw-1.5rem))] animate-scale-in max-sm:fixed max-sm:inset-x-3 max-sm:top-14 max-sm:w-auto overflow-hidden rounded-lg border border-line bg-white shadow-lg">
                 <div className="flex items-center justify-between border-b border-line px-3.5 py-2.5">
                   <p className="text-sm font-semibold text-ink-800">
                     Notifications
@@ -382,14 +393,16 @@ export default function Topbar({ admin, onOpenMobileNav }: Props) {
                   <UserRound size={15} />
                   Your profile
                 </Link>
-                <Link
-                  href="/settings"
-                  onClick={() => setProfileOpen(false)}
-                  className="flex items-center gap-2.5 px-3.5 py-2 text-base text-ink-700 hover:bg-surface-muted"
-                >
-                  <Settings size={15} />
-                  Settings
-                </Link>
+                {isSuperAdmin(admin?.role) && (
+                  <Link
+                    href="/settings"
+                    onClick={() => setProfileOpen(false)}
+                    className="flex items-center gap-2.5 px-3.5 py-2 text-base text-ink-700 hover:bg-surface-muted"
+                  >
+                    <Settings size={15} />
+                    Settings
+                  </Link>
+                )}
                 <div className="my-1 h-px bg-line" />
                 <button
                   onClick={handleLogout}

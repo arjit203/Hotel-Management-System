@@ -24,7 +24,9 @@ import { Drawer } from "@/components/ui/Modal";
 import { TableSkeleton } from "@/components/ui/States";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
+import { OutOfScopeState, useIsOutOfScope } from "@/components/layout/PropertyScopeNotice";
 import { adminApi, formatApiError } from "@/lib/api";
+import { nextReservationStatuses, statusSelectOptions } from "@/lib/statusTransitions";
 import { useSummary, type ReservationSummary } from "@/lib/summary";
 import { dateTime, humanise, isToday, shortDate, timeSlotLabel } from "@/lib/format";
 
@@ -70,6 +72,7 @@ function ReservationsView() {
   const { toastSuccess, toastError } = useToast();
   const confirm = useConfirm();
   const { reservations, loading, error, reload } = useSummary();
+  const outOfScope = useIsOutOfScope("restaurant");
 
   const [statusFilter, setStatusFilter] = useState("");
   const [windowFilter, setWindowFilter] = useState<WindowFilter>("all");
@@ -171,16 +174,22 @@ function ReservationsView() {
     if (!ok) return;
 
     let failures = 0;
+    let firstError = "";
     for (const reservation of list) {
       const res = await adminApi.put(
         `/admin/restaurants/reservations/${reservation._id}/status`,
         { status }
       );
-      if (!res.success) failures += 1;
+      if (!res.success) {
+        failures += 1;
+        if (!firstError) firstError = `${reservation.reservationReference}: ${formatApiError(res)}`;
+      }
     }
 
     clear();
-    if (failures > 0) toastError(`${failures} reservation(s) could not be updated.`);
+    if (failures > 0) {
+      toastError(`${failures} reservation(s) could not be updated.\n${firstError}`);
+    }
     else toastSuccess(`${list.length} reservation(s) updated.`);
     reload();
   }
@@ -260,25 +269,32 @@ function ReservationsView() {
       render: (r) => (
         <select
           value={r.status}
-          disabled={busyId === r._id}
+          disabled={busyId === r._id || nextReservationStatuses(r.status).length === 0}
           onClick={(e) => e.stopPropagation()}
           onChange={(e) => void updateStatus(r, e.target.value)}
           aria-label={`Status for ${r.reservationReference}`}
           className="input w-auto min-w-[8rem] py-1 text-sm capitalize"
         >
-          {/* Include the current value even if it isn't settable, so the select
-              never silently shows the wrong status. */}
-          {(STATUS_OPTIONS.includes(r.status) ? STATUS_OPTIONS : [r.status, ...STATUS_OPTIONS]).map(
-            (s) => (
-              <option key={s} value={s}>
-                {humanise(s)}
-              </option>
-            )
-          )}
+          {/* The current value first (so the select never shows the wrong
+              status), then only the moves the API will accept. */}
+          {statusSelectOptions(r.status, nextReservationStatuses(r.status)).map((s) => (
+            <option key={s} value={s}>
+              {humanise(s)}
+            </option>
+          ))}
         </select>
       ),
     },
   ];
+
+  if (outOfScope) {
+    return (
+      <RequireAdmin>
+        <PageHeader title="Table reservations" breadcrumbs={[{ label: "Reservations" }]} />
+        <OutOfScopeState business="restaurant" what="table reservations" />
+      </RequireAdmin>
+    );
+  }
 
   return (
     <RequireAdmin>
@@ -436,13 +452,13 @@ function ReservationsView() {
             label: "Mark seated",
             icon: <Armchair size={14} />,
             separated: true,
-            disabled: r.status === "seated",
+            disabled: !nextReservationStatuses(r.status).includes("seated"),
             onClick: () => void updateStatus(r, "seated"),
           },
           {
             label: "Mark completed",
             icon: <CheckCircle2 size={14} />,
-            disabled: r.status === "completed",
+            disabled: !nextReservationStatuses(r.status).includes("completed"),
             onClick: () => void updateStatus(r, "completed"),
           },
           {
@@ -450,14 +466,14 @@ function ReservationsView() {
             icon: <UserX size={14} />,
             danger: true,
             separated: true,
-            disabled: r.status === "no_show",
+            disabled: !nextReservationStatuses(r.status).includes("no_show"),
             onClick: () => void updateStatus(r, "no_show"),
           },
           {
             label: "Cancel reservation",
             icon: <XCircle size={14} />,
             danger: true,
-            disabled: r.status === "cancelled",
+            disabled: !nextReservationStatuses(r.status).includes("cancelled"),
             onClick: () => void updateStatus(r, "cancelled"),
           },
         ]}
@@ -532,7 +548,7 @@ function ReservationsView() {
 
             <DetailBlock title="Change status">
               <div className="flex flex-wrap gap-2 p-3.5">
-                {STATUS_OPTIONS.map((s) => (
+                {statusSelectOptions(selected.status, nextReservationStatuses(selected.status)).map((s) => (
                   <button
                     key={s}
                     disabled={s === selected.status || busyId === selected._id}

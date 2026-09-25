@@ -173,8 +173,11 @@ See `API_DOCUMENTATION.md`.
 ### Known Limitations (by design, not gaps)
 - **Booking race condition**: availability is checked immediately before booking creation but without a DB transaction/distributed lock. Under concurrent requests for the last available room, a double-booking is theoretically possible. Flagged explicitly as a hardening item for the future **Booking Engine** module (per `RULES.md`, that module is shared across Hotel/Hall/Restaurant) rather than solved ad hoc inside the Hotel module alone.
 - ~~Admin Panel frontend UI not built~~ — superseded: the admin console now covers all Hotel management screens (§7).
-- **Booking Settings are not wired to the booking service.** Settings → Booking stores `hotelAdvancePercent` and `cancellationFreeWindowHours`, but `booking.service.ts` reads only `HOTEL_ADVANCE_PAYMENT_PERCENT` / `CANCELLATION_FREE_WINDOW_HOURS` from env. Editing those two fields in the admin panel does not change charges or refunds yet.
-- **Browser Razorpay key is build-time.** Checkout uses `NEXT_PUBLIC_RAZORPAY_KEY_ID` (and optional `NEXT_PUBLIC_RAZORPAY_CONFIG_ID`), inlined at `next build`. Changing the Key ID in Settings → Integrations updates only the backend, so the two must be kept in step manually.
+- ~~Booking Settings are not wired~~ — fixed 2026-09-25: `hotelAdvancePercent`, `cancellationFreeWindowHours` and `hotelEnabled` now drive `booking.service.ts` (stored setting → env → default).
+- ~~Browser Razorpay key is build-time~~ — fixed 2026-09-25: the create/retry responses carry `razorpayOrder.keyId`, which Checkout prefers over `NEXT_PUBLIC_RAZORPAY_KEY_ID`.
+- **No Razorpay webhook or reconciliation job yet.** Confirmation still depends on the browser's verify call. Mitigations now in place: 30-minute payment holds (abandoned checkouts stop blocking rooms), retry-payment on the same booking, idempotent verify, and late payments are confirmed rather than refused. A signed `payment.captured` webhook reusing the same confirm path is the next step.
+- **Admin "cancel" does not refund.** Only guest cancellation inside the free window triggers a refund; the single `refundBooking()` function is the place to add admin or partial refunds later.
+- **Invoice is the printable confirmation page**, not a generated document. It is labelled "Invoice" only once the booking is confirmed; there is no GST breakdown yet.
 - **Real Google Maps embed not implemented** — `MapPlaceholder` component shows a link-out to Google Maps search rather than an embedded interactive map, pending `GOOGLE_MAPS_API_KEY` billing setup (env var already reserved).
 - **Restaurant online-ordering-style deferred features don't apply here** — Hotel has no Phase-2-deferred features; all 14 requested Hotel Module requirements are fully implemented now.
 
@@ -721,15 +724,35 @@ query; one set of writers renders any of them. A seventh export is one object.
   a fragment of a booking reference — the most common query here).
 - **Exports are capped at 10,000 rows** and buffered rather than streamed, so a
   query failure produces a clean JSON error instead of a half-written file.
-- **Feature toggles hide modules from the public site only.** They do not disable
-  the API or the admin panel: turning off Restaurant should stop new reservations
-  being taken, not strand the ones already in the book.
-- **Maintenance mode is stored and served but not yet enforced by middleware** —
-  the flag is public so the frontend can act on it; a server-side gate is a
-  separate change.
+- **Most settings are stored but not yet consumed** (audited 2026-09-25). Wired:
+  general.siteName, branding favicon/OG image, contact phone/email/address,
+  social, homepage hero/value props/amenities/offers/show* switches, all SEO keys
+  (including GA4 / GTM / Facebook Pixel, injected only when the id is valid),
+  legal pages, integrations, and — new — `booking.hotelEnabled`,
+  `hotelAdvancePercent`, `cancellationFreeWindowHours`, `restaurantEnabled`,
+  `hallEnquiriesEnabled` and `email.adminNotificationEmail`. Every other key is
+  labelled **"Not yet active"** in the admin panel so it no longer claims an effect.
+- **Feature toggles (`features.*`) are not enforced.** The admin panel says so.
+  `features.newsletterSignup` and `features.onlineOrdering` defaults were changed
+  to `true` so that wiring them later can't change what the site shows today.
+- **Maintenance mode is stored but not enforced** — `isMaintenanceMode()` has no
+  caller; the admin caution text now says enforcement is not active yet.
+- **Theme colours are not injected**, and several unwired homepage/theme defaults
+  differ from what renders today — copy the rendered values into the defaults
+  before wiring any of them.
 - **Theme colours are stored but not yet injected as CSS variables.** The palette
   lives in `tailwind.config.js`, and wiring runtime colour overrides is a design
   system change, not a settings change.
+
+### Environment variables added (2026-09-25, production readiness)
+| Var | Purpose | Default / example |
+|---|---|---|
+| `CORS_EXTRA_ORIGINS` | Extra allowed browser origins, comma-separated, beyond `FRONTEND_URL` / `ADMIN_PANEL_URL` | empty · `https://www.example.com,https://staging.example.com` |
+| `TRUST_PROXY_HOPS` | Reverse-proxy hops to trust so `req.ip` (rate limits, audit IPs) is the real client. **Set to 1 behind Nginx / Render / a load balancer** | `0` |
+| `DISABLE_PUBLIC_DNS_OVERRIDE` | `true` skips forcing the 8.8.8.8 / 1.1.1.1 resolvers in `config/db.ts` (needed on networks that only allow internal DNS) | unset (override on) |
+| `NODE_ENV` | `production` makes missing `JWT_SECRET` / `ADMIN_JWT_SECRET` fatal at boot, and stops full email bodies (which contain reset links) being logged | unset |
+
+`PORT` now falls back to `5100` (was 5000) to match both frontends.
 
 ### Environment variables added
 - `SETTINGS_SECRET_KEY` — optional. Keys the AES-256-GCM encryption for settings

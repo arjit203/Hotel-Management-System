@@ -1,5 +1,5 @@
 import { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { ogDefaults } from "@/lib/seo";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, BedDouble, Users } from "lucide-react";
 import { getAmenityIcon } from "@/lib/amenityIcons";
@@ -23,11 +23,15 @@ export async function generateMetadata({
   if (!data) return {};
 
   return {
-    title: data.room.metaTitle || `${data.room.name} — ${data.hotel.name}`,
+    // The layout template appends the brand; adding the hotel name here too
+    // printed it twice ("Deluxe — 7 Vachan · 7 Vachan").
+    title: data.room.metaTitle || data.room.name,
     description: data.room.metaDescription || data.room.description.slice(0, 155),
     alternates: { canonical: `/hotel/rooms/${params.roomSlug}` },
     openGraph: {
-      images: data.room.images?.[0] ? [data.room.images[0]] : undefined,
+      ...(await ogDefaults()),
+      title: data.room.metaTitle || data.room.name,
+      ...(data.room.images?.[0] ? { images: [data.room.images[0]] } : {}),
     },
   };
 }

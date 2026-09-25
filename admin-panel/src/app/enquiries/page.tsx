@@ -3,7 +3,6 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
-  CalendarCheck,
   CalendarClock,
   CheckCircle2,
   Copy,
@@ -27,7 +26,9 @@ import { TextArea } from "@/components/ui/Field";
 import { TableSkeleton } from "@/components/ui/States";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
+import { OutOfScopeState, useIsOutOfScope } from "@/components/layout/PropertyScopeNotice";
 import { adminApi, formatApiError } from "@/lib/api";
+import { nextEnquiryStatuses, statusSelectOptions } from "@/lib/statusTransitions";
 import { useSummary, type HallEnquirySummary } from "@/lib/summary";
 import { dateTime, humanise, relativeTime, shortDate } from "@/lib/format";
 
@@ -87,6 +88,7 @@ function EnquiriesView() {
   const { toastSuccess, toastError } = useToast();
   const confirm = useConfirm();
   const { hallEnquiries, loading, error, reload } = useSummary();
+  const outOfScope = useIsOutOfScope("hall");
 
   const [statusFilter, setStatusFilter] = useState("");
   const [windowFilter, setWindowFilter] = useState<WindowFilter>("all");
@@ -288,13 +290,13 @@ function EnquiriesView() {
       render: (e) => (
         <select
           value={e.status}
-          disabled={busyId === e._id}
+          disabled={busyId === e._id || nextEnquiryStatuses(e.status).length === 0}
           onClick={(ev) => ev.stopPropagation()}
           onChange={(ev) => void updateStatus(e, ev.target.value)}
           aria-label={`Status for ${e.enquiryReference}`}
           className="input w-auto min-w-[8.5rem] py-1 text-sm capitalize"
         >
-          {STATUS_OPTIONS.map((s) => (
+          {statusSelectOptions(e.status, nextEnquiryStatuses(e.status)).map((s) => (
             <option key={s} value={s}>
               {humanise(s)}
             </option>
@@ -303,6 +305,15 @@ function EnquiriesView() {
       ),
     },
   ];
+
+  if (outOfScope) {
+    return (
+      <RequireAdmin>
+        <PageHeader title="Hall enquiries" breadcrumbs={[{ label: "Enquiries" }]} />
+        <OutOfScopeState business="hall" what="hall enquiries" />
+      </RequireAdmin>
+    );
+  }
 
   return (
     <RequireAdmin>
@@ -423,13 +434,13 @@ function EnquiriesView() {
             label: "Mark approved",
             icon: <ThumbsUp size={14} />,
             separated: true,
-            disabled: e.status === "approved",
+            disabled: !nextEnquiryStatuses(e.status).includes("approved"),
             onClick: () => void updateStatus(e, "approved"),
           },
           {
             label: "Confirm and hold the date",
             icon: <CheckCircle2 size={14} />,
-            disabled: e.status === "confirmed",
+            disabled: !nextEnquiryStatuses(e.status).includes("confirmed"),
             onClick: () => void updateStatus(e, "confirmed"),
           },
           {
@@ -437,7 +448,7 @@ function EnquiriesView() {
             icon: <XCircle size={14} />,
             danger: true,
             separated: true,
-            disabled: e.status === "declined",
+            disabled: !nextEnquiryStatuses(e.status).includes("declined"),
             onClick: () => void updateStatus(e, "declined"),
           },
         ]}
@@ -556,7 +567,7 @@ function EnquiriesView() {
 
             <DetailBlock title="Move this enquiry">
               <div className="flex flex-wrap gap-2 p-3.5">
-                {STATUS_OPTIONS.map((s) => (
+                {statusSelectOptions(selected.status, nextEnquiryStatuses(selected.status)).map((s) => (
                   <button
                     key={s}
                     disabled={s === selected.status || busyId === selected._id}

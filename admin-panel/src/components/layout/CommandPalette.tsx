@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { CornerDownLeft, Loader2, Search } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useBusiness } from "@/lib/businessContext";
+import { useAdminSession } from "@/lib/adminSession";
 import { useSummary } from "@/lib/summary";
 import { consoleApi } from "@/lib/console";
 import { buildNavSections } from "./navigation";
@@ -51,6 +52,8 @@ export default function CommandPalette({
 }) {
   const router = useRouter();
   const { business, hotels, restaurants } = useBusiness();
+  const { admin } = useAdminSession();
+  const role = admin?.role;
   const { bookings, reservations } = useSummary();
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
@@ -61,7 +64,7 @@ export default function CommandPalette({
   const searchId = useRef(0);
 
   const entries = useMemo<Entry[]>(() => {
-    const nav: Entry[] = buildNavSections(business)
+    const nav: Entry[] = buildNavSections(business, role)
       .flatMap((s) => s.items)
       .filter((i) => !i.disabled)
       .map((i) => ({ id: `nav-${i.href}`, label: i.label, group: "Navigate", href: i.href }));
@@ -100,7 +103,7 @@ export default function CommandPalette({
     }));
 
     return [...nav, ...properties, ...bookingEntries, ...reservationEntries];
-  }, [business, hotels, restaurants, bookings, reservations]);
+  }, [business, role, hotels, restaurants, bookings, reservations]);
 
   const runSearch = useCallback(async (term: string) => {
     const id = ++searchId.current;

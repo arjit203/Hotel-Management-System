@@ -7,6 +7,13 @@ export interface JwtPayload {
   id: string;
   role: string;
   actorType: ActorType;
+  /**
+   * Admin tokens only: the account's `tokenVersion` at sign time. Bumping the
+   * stored version (password reset, deactivation) revokes every token signed
+   * before it. Absent on tokens issued before this claim existed, which counts
+   * as 0 — the stored default — so the deploy logs nobody out.
+   */
+  tv?: number;
 }
 
 /**
@@ -26,7 +33,7 @@ export function signJwt(payload: JwtPayload): string {
     );
   }
 
-  return jwt.sign(payload, secret, { expiresIn } as SignOptions);
+  return jwt.sign(payload, secret, { expiresIn, algorithm: "HS256" } as SignOptions);
 }
 
 export function verifyJwt(token: string, actorType: ActorType): JwtPayload {
@@ -39,7 +46,9 @@ export function verifyJwt(token: string, actorType: ActorType): JwtPayload {
     );
   }
 
-  return jwt.verify(token, secret) as JwtPayload;
+  // Pin the algorithm: we only ever sign HS256, so never let the token's own
+  // header choose how it is verified.
+  return jwt.verify(token, secret, { algorithms: ["HS256"] }) as JwtPayload;
 }
 
 /**

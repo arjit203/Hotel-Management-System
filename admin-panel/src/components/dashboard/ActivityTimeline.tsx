@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Activity,
+  AlertTriangle,
   BedDouble,
   CreditCard,
   PartyPopper,
@@ -38,6 +39,7 @@ const ICON: Record<ActivityType, LucideIcon> = {
   payment_received: CreditCard,
   reservation_created: UtensilsCrossed,
   reservation_cancelled: XCircle,
+  refund_pending: AlertTriangle,
   enquiry_created: PartyPopper,
   review_submitted: Star,
   offer_published: Tag,

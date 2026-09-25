@@ -13,7 +13,8 @@ export async function generateMetadata(): Promise<Metadata> {
   const name = data?.hall.name ?? "our banquet hall";
 
   return {
-    title: `Catering & Dining — ${name}`,
+    alternates: { canonical: "/marriage-hall/catering" },
+    title: `Catering & Dining — Marriage Hall`,
     description: `Vegetarian and non-vegetarian menus, desserts, live counters and beverages at ${name}, with buffet, seated, VIP and family dining arrangements. Menus built with you.`,
   };
 }

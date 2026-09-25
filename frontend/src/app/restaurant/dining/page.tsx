@@ -1,5 +1,4 @@
 import { Metadata } from "next";
-import { notFound } from "next/navigation";
 import { getTheRestaurant } from "@/lib/restaurant";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";

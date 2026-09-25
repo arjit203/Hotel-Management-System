@@ -4,40 +4,46 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CircleAlert, X } from "lucide-react";
 import { api } from "@/lib/api";
+import { getUserToken } from "@/lib/userAuth";
 
 /**
  * Withdraws an enquiry from the status page.
  *
- * The API proves ownership by matching the email the enquiry was made with —
- * the reference alone is shareable, so it is never treated as authorisation.
- * That email is already on screen (this page was reached with the reference),
- * so it is sent rather than asked for again; a stranger who guessed the
- * reference still cannot act, because the confirmation happens server-side
- * against the stored record.
+ * The API proves ownership by matching the email the enquiry was made with, or
+ * the signed-in account that made it — the reference alone is shareable, so it
+ * is never treated as authorisation. The page only shows a masked address, so
+ * the guest types their email here (as on the restaurant's cancel button), and
+ * a signed-in guest's token is sent alongside it.
  *
  * Deliberately understated: a family who is mid-conversation should not have a
  * prominent red button inviting them to cancel.
  */
-export default function CancelEnquiryButton({
-  reference,
-  guestEmail,
-}: {
-  reference: string;
-  guestEmail: string;
-}) {
+export default function CancelEnquiryButton({ reference }: { reference: string }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [guestEmail, setGuestEmail] = useState("");
 
   async function handleCancel() {
+    const token = getUserToken();
+    const email = guestEmail.trim();
+    if (!email && !token) {
+      setError("Please enter the email address you used for this enquiry.");
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
-    const res = await api.put(`/hall-enquiries/reference/${reference}/cancel`, {
-      guestEmail,
-      cancellationReason: "Withdrawn by the guest from the enquiry page.",
-    });
+    const res = await api.put(
+      `/hall-enquiries/reference/${encodeURIComponent(reference)}/cancel`,
+      {
+        guestEmail: email || undefined,
+        cancellationReason: "Withdrawn by the guest from the enquiry page.",
+      },
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+    );
 
     setSubmitting(false);
 
@@ -68,6 +74,17 @@ export default function CancelEnquiryButton({
         Withdraw this enquiry? Nothing was charged, and you can always send a new one. If you just
         want to change the date, calling us is quicker.
       </p>
+
+      <label className="field mt-4 block text-left">
+        <span className="field-label">Email used for this enquiry</span>
+        <input
+          type="email"
+          value={guestEmail}
+          onChange={(e) => setGuestEmail(e.target.value)}
+          autoComplete="email"
+          className="field-line"
+        />
+      </label>
 
       {error && (
         <p className="mt-3 flex items-start gap-2 text-sm font-light text-red-700">

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ogDefaults } from "@/lib/seo";
 import Link from "next/link";
 import { ArrowRight, CalendarHeart } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
@@ -12,11 +13,13 @@ export async function generateMetadata(): Promise<Metadata> {
   const name = data?.hall.name ?? "Our banquet hall";
 
   return {
-    title: `Gallery — ${name}`,
+    alternates: { canonical: "/marriage-hall/gallery" },
+    title: `Gallery — Marriage Hall`,
     description: `Weddings, receptions, engagements, haldi, mehendi and sangeet photographed at ${name}. See the venue dressed for every kind of celebration.`,
     openGraph: {
+      ...(await ogDefaults()),
       title: `Gallery — ${name}`,
-      images: data?.gallery.slice(0, 1).map((g) => g.imageUrl) ?? [],
+      ...(data?.gallery?.[0]?.imageUrl ? { images: [data.gallery[0].imageUrl] } : {}),
     },
   };
 }

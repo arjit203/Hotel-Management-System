@@ -17,8 +17,8 @@ import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { adminApi, formatApiError, publicGet } from "@/lib/api";
 import { useBusiness } from "@/lib/businessContext";
 import { slugify } from "@/lib/format";
+import { PUBLIC_SITE_URL } from "@/lib/siteUrl";
 
-const PUBLIC_SITE_URL = process.env.NEXT_PUBLIC_FRONTEND_URL || "http://localhost:3000";
 
 interface Hall {
   _id: string;

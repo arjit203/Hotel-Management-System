@@ -81,7 +81,11 @@ export default function Modal({
           </button>
         </div>
 
-        <div className="max-h-[calc(100vh-16rem)] overflow-y-auto px-5 py-5">{children}</div>
+        {/* dvh so mobile browser chrome is accounted for; a smaller offset below
+            `sm` because the p-4 overlay and header/footer leave room for it. */}
+        <div className="max-h-[calc(100dvh-11rem)] overflow-y-auto px-5 py-5 sm:max-h-[calc(100dvh-16rem)]">
+          {children}
+        </div>
 
         {footer && <div className="card-footer rounded-b-xl">{footer}</div>}
       </div>

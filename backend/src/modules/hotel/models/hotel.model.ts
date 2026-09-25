@@ -38,7 +38,7 @@ const hotelSchema = new Schema<IHotel>(
   {
     branchId: { type: Schema.Types.ObjectId, ref: "Branch", required: true, index: true },
     name: { type: String, required: true, trim: true },
-    slug: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
+    slug: { type: String, required: true, unique: true, lowercase: true, trim: true },
     description: { type: String, required: true },
     starRating: { type: Number, min: 1, max: 5, default: 3 },
     checkInTime: { type: String, default: "14:00" },

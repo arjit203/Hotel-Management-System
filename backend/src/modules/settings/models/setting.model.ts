@@ -88,8 +88,7 @@ const settingSchema = new Schema<ISetting>(
       type: String,
       enum: SETTING_CATEGORIES,
       required: true,
-      unique: true,
-      index: true,
+      unique: true, // unique builds the index; no separate `index: true`
     },
     values: { type: Schema.Types.Mixed, default: {} },
     secrets: { type: Map, of: String, default: {}, select: false },

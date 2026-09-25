@@ -334,7 +334,7 @@ export default function ImageUploader({
                 </span>
               )}
 
-              <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-ink-900/70 px-1 py-1 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+              <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-ink-900/70 px-1 py-1 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:flex-wrap [@media(hover:none)]:opacity-100">
                 {!single && (
                   <>
                     <button
@@ -342,7 +342,7 @@ export default function ImageUploader({
                       onClick={() => move(index, -1)}
                       disabled={index === 0}
                       aria-label="Move image earlier"
-                      className="rounded p-1 text-white hover:bg-white/20 disabled:opacity-30"
+                      className="rounded p-1 text-white hover:bg-white/20 disabled:opacity-30 inline-flex items-center justify-center [@media(hover:none)]:min-h-9 [@media(hover:none)]:min-w-9"
                     >
                       <ArrowLeft size={13} />
                     </button>
@@ -351,7 +351,7 @@ export default function ImageUploader({
                       onClick={() => move(index, 1)}
                       disabled={index === value.length - 1}
                       aria-label="Move image later"
-                      className="rounded p-1 text-white hover:bg-white/20 disabled:opacity-30"
+                      className="rounded p-1 text-white hover:bg-white/20 disabled:opacity-30 inline-flex items-center justify-center [@media(hover:none)]:min-h-9 [@media(hover:none)]:min-w-9"
                     >
                       <ArrowRight size={13} />
                     </button>
@@ -360,7 +360,7 @@ export default function ImageUploader({
                       onClick={() => makeCover(index)}
                       disabled={index === 0}
                       aria-label="Make cover image"
-                      className="rounded p-1 text-white hover:bg-white/20 disabled:opacity-30"
+                      className="rounded p-1 text-white hover:bg-white/20 disabled:opacity-30 inline-flex items-center justify-center [@media(hover:none)]:min-h-9 [@media(hover:none)]:min-w-9"
                     >
                       <Star size={13} />
                     </button>
@@ -370,7 +370,7 @@ export default function ImageUploader({
                   type="button"
                   onClick={() => removeAt(index)}
                   aria-label="Remove image"
-                  className="rounded p-1 text-white hover:bg-danger-600"
+                  className="rounded p-1 text-white hover:bg-danger-600 inline-flex items-center justify-center [@media(hover:none)]:min-h-9 [@media(hover:none)]:min-w-9"
                 >
                   <Trash2 size={13} />
                 </button>

@@ -1,9 +1,10 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { adminApi, publicGet } from "./api";
+import { adminApi, publicGet, type ApiResponse } from "./api";
 import { useAdminSession } from "./adminSession";
 import { useBusiness } from "./businessContext";
+import { canAccessBusiness } from "./roles";
 import { isToday } from "./format";
 
 /**
@@ -11,7 +12,10 @@ import { isToday } from "./format";
  * at once: the Dashboard tiles, the top-bar notification tray and the Analytics
  * page. Loading it once here avoids each of those hitting the same endpoints.
  *
- * Everything comes from existing admin GET routes that `staff` can also read:
+ * Everything comes from existing admin GET routes, each guarded by its
+ * vertical's manager role (plus super_admin). Only the verticals inside the
+ * signed-in admin's scope are fetched — a hall_manager never asks for hotel
+ * bookings, rather than asking and swallowing the 403:
  *   GET /admin/hotels/bookings
  *   GET /admin/restaurants/reservations
  *   GET /admin/halls/enquiries/list
@@ -21,6 +25,11 @@ import { isToday } from "./format";
  *
  * There is no aggregate/stats endpoint in the backend and this redesign does
  * not add one, so every figure below is computed client-side from these lists.
+ *
+ * Caveat: called without `?page=`, the reservation and enquiry lists are capped
+ * at 200 rows server-side (the response stays a plain array). Totals derived
+ * from them here — and on the Analytics page — therefore count at most the
+ * 200 most recent records per vertical.
  */
 
 export interface HotelBookingSummary {
@@ -173,8 +182,12 @@ export function useSummary() {
 const REVENUE_STATUSES = new Set(["confirmed", "checked_in", "checked_out", "completed"]);
 
 export function SummaryProvider({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, ready: sessionReady } = useAdminSession();
+  const { admin, isAuthenticated, ready: sessionReady } = useAdminSession();
   const { hotels, restaurants, halls, loading: propertiesLoading } = useBusiness();
+  const role = admin?.role;
+  const canHotel = canAccessBusiness(role, "hotel");
+  const canRestaurant = canAccessBusiness(role, "restaurant");
+  const canHall = canAccessBusiness(role, "hall");
 
   const [bookings, setBookings] = useState<HotelBookingSummary[]>([]);
   const [reservations, setReservations] = useState<ReservationSummary[]>([]);
@@ -207,12 +220,16 @@ export function SummaryProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       setError(null);
 
-      const hotelIdList = hotelIds ? hotelIds.split(",") : [];
-      const restaurantIdList = restaurantIds ? restaurantIds.split(",") : [];
-      const hotelSlugList = hotelSlugs ? hotelSlugs.split(",") : [];
-      const restaurantSlugList = restaurantSlugs ? restaurantSlugs.split(",") : [];
-      const hallIdList = hallIds ? hallIds.split(",") : [];
-      const hallSlugList = hallSlugs ? hallSlugs.split(",") : [];
+      // Out-of-scope verticals contribute empty lists and skip the network.
+      const hotelIdList = canHotel && hotelIds ? hotelIds.split(",") : [];
+      const restaurantIdList = canRestaurant && restaurantIds ? restaurantIds.split(",") : [];
+      const hotelSlugList = canHotel && hotelSlugs ? hotelSlugs.split(",") : [];
+      const restaurantSlugList =
+        canRestaurant && restaurantSlugs ? restaurantSlugs.split(",") : [];
+      const hallIdList = canHall && hallIds ? hallIds.split(",") : [];
+      const hallSlugList = canHall && hallSlugs ? hallSlugs.split(",") : [];
+      const skipped = <T,>(): Promise<ApiResponse<T[]>> =>
+        Promise.resolve({ success: true, data: [] });
 
       const [
         bookingsRes,
@@ -225,9 +242,15 @@ export function SummaryProvider({ children }: { children: React.ReactNode }) {
         restaurantAggregates,
         hallAggregates,
       ] = await Promise.all([
-          adminApi.get<HotelBookingSummary[]>("/admin/hotels/bookings"),
-          adminApi.get<ReservationSummary[]>("/admin/restaurants/reservations"),
-          adminApi.get<HallEnquirySummary[]>("/admin/halls/enquiries/list"),
+          canHotel
+            ? adminApi.get<HotelBookingSummary[]>("/admin/hotels/bookings")
+            : skipped<HotelBookingSummary>(),
+          canRestaurant
+            ? adminApi.get<ReservationSummary[]>("/admin/restaurants/reservations")
+            : skipped<ReservationSummary>(),
+          canHall
+            ? adminApi.get<HallEnquirySummary[]>("/admin/halls/enquiries/list")
+            : skipped<HallEnquirySummary>(),
           Promise.all(
             hotelIdList.map((id) =>
               adminApi
@@ -273,11 +296,14 @@ export function SummaryProvider({ children }: { children: React.ReactNode }) {
 
       if (cancelled) return;
 
-      // A staff-role admin is allowed to read all four of these, so a failure
-      // here is a real problem (API down / token expired), not a permission
-      // nuance we should swallow silently.
-      if (!bookingsRes.success && !reservationsRes.success && !enquiriesRes.success) {
-        setError(bookingsRes.message || "Could not load operational data.");
+      // Only in-scope lists were requested, so if every one of them failed it
+      // is a real problem (API down / token expired), not a permission nuance.
+      const inScope: { success: boolean; message?: string }[] = [];
+      if (canHotel) inScope.push(bookingsRes);
+      if (canRestaurant) inScope.push(reservationsRes);
+      if (canHall) inScope.push(enquiriesRes);
+      if (inScope.length > 0 && inScope.every((r) => !r.success)) {
+        setError(inScope[0].message || "Could not load operational data.");
       }
 
       setBookings(bookingsRes.success ? bookingsRes.data || [] : []);
@@ -326,6 +352,9 @@ export function SummaryProvider({ children }: { children: React.ReactNode }) {
     restaurantSlugs,
     hallIds,
     hallSlugs,
+    canHotel,
+    canRestaurant,
+    canHall,
     propertiesLoading,
     reloadToken,
     isAuthenticated,

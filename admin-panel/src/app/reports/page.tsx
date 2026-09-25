@@ -262,7 +262,8 @@ export default function ReportsPage() {
         <div className="mt-6 space-y-1.5 text-xs text-ink-500">
           <p>
             <strong className="font-medium text-ink-600">Revenue</strong> counts money actually
-            received — verified advance payments only. Amounts settled at the property are not
+            received — verified advance payments only. The export also has a Refunded column and a
+            Net received column (received minus refunded). Amounts settled at the property are not
             visible to this system, so the booking value is shown beside it rather than added in.
           </p>
           <p>

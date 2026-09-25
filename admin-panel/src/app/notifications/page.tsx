@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  AlertTriangle,
   Bell,
   BedDouble,
   CheckCheck,
@@ -39,6 +40,7 @@ const ICON: Record<ActivityType, LucideIcon> = {
   payment_received: CreditCard,
   reservation_created: UtensilsCrossed,
   reservation_cancelled: XCircle,
+  refund_pending: AlertTriangle,
   enquiry_created: PartyPopper,
   review_submitted: Star,
   offer_published: Star,
@@ -64,6 +66,11 @@ export default function NotificationsPage() {
     useNotifications();
   const [filter, setFilter] = useState<Filter>("all");
   const [moduleFilter, setModuleFilter] = useState<ActivityModule | "all">("all");
+
+  // The provider polls only the unread count; load the full list on arrival.
+  useEffect(() => {
+    void reload();
+  }, [reload]);
 
   // Only offer module chips for verticals that actually appear — a hall
   // manager should not be shown a "Hotel" filter that can never match.

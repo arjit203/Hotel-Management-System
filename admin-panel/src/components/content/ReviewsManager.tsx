@@ -259,7 +259,7 @@ export default function ReviewsManager({
                               type="button"
                               onClick={() => void handleRemoveImage(review, url)}
                               aria-label="Remove photo"
-                              className="absolute right-1 top-1 rounded bg-ink-900/70 p-0.5 text-white opacity-0 transition-opacity hover:bg-danger-600 group-focus-within:opacity-100 group-hover:opacity-100"
+                              className="absolute right-1 top-1 inline-flex items-center justify-center rounded bg-ink-900/70 p-0.5 text-white opacity-0 transition-opacity hover:bg-danger-600 group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:min-h-9 [@media(hover:none)]:min-w-9 [@media(hover:none)]:opacity-100"
                             >
                               <X size={12} />
                             </button>

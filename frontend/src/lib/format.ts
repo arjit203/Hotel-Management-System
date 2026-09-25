@@ -63,12 +63,32 @@ export function nightsBetween(checkIn: string | Date, checkOut: string | Date): 
   return Math.max(1, Math.round(ms / 86_400_000));
 }
 
-/** `"today"` in `YYYY-MM-DD`, for `min` on date inputs. */
+/** The property's timezone — "today" means today in Satna, wherever the guest is. */
+const PROPERTY_TIMEZONE = "Asia/Kolkata";
+
+/**
+ * `"today"` in `YYYY-MM-DD`, for `min` on date inputs.
+ *
+ * Computed in IST, not UTC: `toISOString()` is UTC, so between 00:00 and 05:30
+ * IST it returned *yesterday* and the date picker allowed a past date.
+ * `en-CA` formats as `YYYY-MM-DD`.
+ */
 export function todayISO(): string {
-  return new Date().toISOString().split("T")[0];
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: PROPERTY_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 }
 
 /** First initial for monogram avatars. Falls back to "G" for guests. */
 export function initial(name?: string): string {
   return (name || "G").trim().charAt(0).toUpperCase() || "G";
+}
+
+/** Today's weekday (0 = Sunday, JS convention) in the property's timezone. */
+export function todayDayOfWeek(): number {
+  const [y, m, d] = todayISO().split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 }

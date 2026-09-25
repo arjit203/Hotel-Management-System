@@ -8,13 +8,14 @@ import {
   ArrowRight,
   CalendarHeart,
   Check,
-  CircleAlert,
   PartyPopper,
   Sparkles,
   UserRound,
 } from "lucide-react";
 import { EASE_LUXE } from "@/components/motion/variants";
 import { api } from "@/lib/api";
+import { getUserToken } from "@/lib/userAuth";
+import Alert from "@/components/ui/Alert";
 import type { HallPackage, HallShowcaseEntry } from "@/lib/hall";
 import AvailabilityCalendar from "./AvailabilityCalendar";
 
@@ -159,21 +160,28 @@ export default function EnquiryForm({
     setSubmitting(true);
     setError(null);
 
-    const res = await api.post<{ enquiryReference: string }>("/hall-enquiries", {
-      hallId,
-      eventDate: form.eventDate,
-      alternateDate: form.alternateDate || undefined,
-      eventType: form.eventType,
-      guestCount: Number(form.guestCount),
-      packageId: form.packageId || undefined,
-      decorationThemeId: form.decorationThemeId || undefined,
-      cateringPreference: form.cateringPreference || undefined,
-      budgetRange: form.budgetRange || undefined,
-      guestName: form.guestName.trim(),
-      guestEmail: form.guestEmail.trim(),
-      guestPhone: form.guestPhone.trim(),
-      specialRequirements: form.specialRequirements.trim() || undefined,
-    });
+    // Optional: a signed-in guest's enquiry is linked to their account (and
+    // appears under My Bookings). Guests without an account are never blocked.
+    const token = getUserToken();
+    const res = await api.post<{ enquiryReference: string }>(
+      "/hall-enquiries",
+      {
+        hallId,
+        eventDate: form.eventDate,
+        alternateDate: form.alternateDate || undefined,
+        eventType: form.eventType,
+        guestCount: Number(form.guestCount),
+        packageId: form.packageId || undefined,
+        decorationThemeId: form.decorationThemeId || undefined,
+        cateringPreference: form.cateringPreference || undefined,
+        budgetRange: form.budgetRange || undefined,
+        guestName: form.guestName.trim(),
+        guestEmail: form.guestEmail.trim(),
+        guestPhone: form.guestPhone.trim(),
+        specialRequirements: form.specialRequirements.trim() || undefined,
+      },
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+    );
 
     setSubmitting(false);
 
@@ -362,7 +370,7 @@ export default function EnquiryForm({
                                     transition-all duration-400 ease-luxe ${
                                       form.eventType === type
                                         ? "border-gold bg-gold text-ink shadow-gold"
-                                        : "border-ink/12 text-warm-500 hover:border-gold/50 hover:text-ink"
+                                        : "border-ink/[0.12] text-warm-500 hover:border-gold/50 hover:text-ink"
                                     }`}
                       >
                         {type}
@@ -546,15 +554,9 @@ export default function EnquiryForm({
         </AnimatePresence>
 
         {error && (
-          <motion.p
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            role="alert"
-            className="mt-6 flex items-start gap-2 rounded-luxe border border-red-200 bg-red-50 px-4 py-3 text-sm font-light text-red-800"
-          >
-            <CircleAlert size={15} className="mt-0.5 shrink-0" />
-            {error}
-          </motion.p>
+          <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="mt-6">
+            <Alert>{error}</Alert>
+          </motion.div>
         )}
 
         {/* ── Navigation ── */}

@@ -3,7 +3,11 @@ import * as hallController from "./hall.controller";
 import { authenticate, optionalAuthenticate, requireRole } from "../../middlewares/auth.middleware";
 import { auditLogger } from "../../middlewares/audit.middleware";
 import { uploadImage } from "../../middlewares/upload.middleware";
-import { publicFormLimiter, publicUploadLimiter } from "../../middlewares/rateLimit.middleware";
+import {
+  publicFormLimiter,
+  publicUploadLimiter,
+  publicLookupLimiter,
+} from "../../middlewares/rateLimit.middleware";
 
 /**
  * Marriage Hall routes.
@@ -71,7 +75,13 @@ publicEnquiryRouter.post(
   hallController.createEnquiry
 );
 publicEnquiryRouter.get("/me", authenticate("user"), hallController.getMyEnquiries);
-publicEnquiryRouter.get("/reference/:reference", hallController.getEnquiryByReference);
+publicEnquiryRouter.get(
+  "/reference/:reference",
+  publicLookupLimiter,
+  // Optional: the owner's token unlocks unmasked contact details.
+  optionalAuthenticate("user"),
+  hallController.getEnquiryByReference
+);
 publicEnquiryRouter.put(
   "/reference/:reference/cancel",
   publicFormLimiter,

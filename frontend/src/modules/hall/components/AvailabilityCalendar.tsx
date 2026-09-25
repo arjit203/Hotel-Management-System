@@ -126,7 +126,7 @@ export default function AvailabilityCalendar({
           onClick={() => step(-1)}
           disabled={atEarliestMonth}
           aria-label="Previous month"
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-ink/12
+          className="flex h-10 w-10 items-center justify-center rounded-full border border-ink/[0.12]
                      text-ink transition-all duration-400 ease-luxe
                      hover:border-gold hover:text-gold disabled:pointer-events-none disabled:opacity-30"
         >
@@ -146,7 +146,7 @@ export default function AvailabilityCalendar({
         <button
           onClick={() => step(1)}
           aria-label="Next month"
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-ink/12
+          className="flex h-10 w-10 items-center justify-center rounded-full border border-ink/[0.12]
                      text-ink transition-all duration-400 ease-luxe hover:border-gold hover:text-gold"
         >
           <ChevronRight size={17} strokeWidth={1.5} />
@@ -197,7 +197,7 @@ export default function AvailabilityCalendar({
                 aria-label={`${dayNumber} ${monthLabel(year, month)} — ${
                   isPast ? "past" : tooSoon ? "too soon to book" : status
                 }`}
-                aria-pressed={isSelected}
+                aria-selected={isSelected}
                 className={`relative aspect-square rounded-lg border text-sm font-light
                             transition-all duration-300 ease-luxe
                             ${

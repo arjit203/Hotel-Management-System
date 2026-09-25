@@ -1,6 +1,8 @@
 import crypto from "crypto";
-import { HallEnquiry, HallEnquiryStatus } from "./models/hallEnquiry.model";
+import { isValidObjectId } from "mongoose";
+import { HallEnquiry, HallEnquiryStatus, IHallEnquiry } from "./models/hallEnquiry.model";
 import { HallAvailability } from "./models/hallAvailability.model";
+import { getStoredSettingValue } from "../settings/settings.service";
 import {
   getHallById,
   getPackageById,
@@ -48,7 +50,61 @@ function generateEnquiryReference(): string {
   return `7VH-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
 }
 
+/** Admin-saved override first, then `.env`. */
+async function adminNotificationEmail(): Promise<string | undefined> {
+  const stored = await getStoredSettingValue("email", "adminNotificationEmail");
+  return (typeof stored === "string" && stored.trim()) || process.env.ADMIN_NOTIFICATION_EMAIL;
+}
+
+/** `rahul@gmail.com` → `ra***@gm***.com`. */
+function maskEmail(email: string): string {
+  const [local = "", domain = ""] = String(email || "").split("@");
+  const dot = domain.lastIndexOf(".");
+  const host = dot > 0 ? domain.slice(0, dot) : domain;
+  const tld = dot > 0 ? domain.slice(dot) : "";
+  return `${local.slice(0, 2)}***@${host.slice(0, 2)}***${tld}`;
+}
+
+/** Keeps only the last 3 digits: `+91 98765 43210` → `*********210`. */
+function maskPhone(phone: string): string {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (digits.length <= 3) return "***";
+  return `${"*".repeat(digits.length - 3)}${digits.slice(-3)}`;
+}
+
+/**
+ * What the public reference lookup returns.
+ *
+ * The reference travels in emails and gets forwarded around the family, so it
+ * is not proof of identity. Unless the request carries the owning user's token,
+ * contact details are masked and `userId` / admin-only fields are dropped. Field
+ * names are unchanged so the tracking page renders the same.
+ */
+export function toPublicEnquiry(enquiry: IHallEnquiry, actorId?: string) {
+  const obj = enquiry.toObject() as Record<string, unknown>;
+  delete obj.adminNotes;
+  delete obj.__v;
+
+  const isOwner =
+    Boolean(actorId) && Boolean(enquiry.userId) && String(enquiry.userId) === String(actorId);
+  if (isOwner) return obj;
+
+  delete obj.userId;
+  delete obj.respondedAt;
+  obj.guestEmail = maskEmail(enquiry.guestEmail);
+  obj.guestPhone = maskPhone(enquiry.guestPhone);
+  return obj;
+}
+
 export async function createEnquiry(input: CreateHallEnquiryInput, userId?: string) {
+  // Admin kill switch in Settings → Booking. Only an explicit `false` disables.
+  if ((await getStoredSettingValue("booking", "hallEnquiriesEnabled")) === false) {
+    throw new ApiError(
+      403,
+      "Online hall enquiries are currently unavailable. Please call us to discuss your event."
+    );
+  }
+
   const hall = await getHallById(input.hallId);
 
   const eventDate = startOfDayUTC(new Date(input.eventDate));
@@ -154,7 +210,7 @@ export async function createEnquiry(input: CreateHallEnquiryInput, userId?: stri
     html: buildHallEnquiryReceivedEmailHtml(details),
   }).catch(() => undefined);
 
-  const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL;
+  const adminEmail = await adminNotificationEmail();
   if (adminEmail) {
     void sendEmail({
       to: adminEmail,
@@ -178,13 +234,93 @@ export async function getMyEnquiries(userId: string) {
 }
 
 export async function listEnquiriesForAdmin(
-  filters: { hallId?: string; status?: string; date?: string } = {}
+  filters: { hallId?: string; status?: string; date?: string } = {},
+  paging: { skip: number; limit: number } = { skip: 0, limit: 200 }
 ) {
   const query: Record<string, unknown> = {};
-  if (filters.hallId) query.hallId = filters.hallId;
-  if (filters.status) query.status = filters.status;
-  if (filters.date) query.eventDate = startOfDayUTC(new Date(filters.date));
-  return HallEnquiry.find(query).sort({ createdAt: -1 });
+  if (filters.hallId) {
+    if (!isValidObjectId(filters.hallId)) return { items: [], total: 0 };
+    query.hallId = filters.hallId;
+  }
+  if (filters.status) query.status = String(filters.status);
+  if (filters.date) {
+    const d = new Date(filters.date);
+    if (Number.isNaN(d.getTime())) throw new ApiError(400, "Invalid date filter.");
+    query.eventDate = startOfDayUTC(d);
+  }
+  const [items, total] = await Promise.all([
+    HallEnquiry.find(query).sort({ createdAt: -1 }).skip(paging.skip).limit(paging.limit).lean(),
+    HallEnquiry.countDocuments(query),
+  ]);
+  return { items, total };
+}
+
+/**
+ * The enquiry lifecycle (see the model). `declined` and `cancelled` are
+ * terminal — a family that comes back sends a fresh enquiry, because the date
+ * may have gone to someone else in the meantime. `confirmed → approved` exists
+ * so an admin can undo a mistaken confirmation, which releases the date.
+ */
+const ALLOWED_TRANSITIONS: Record<HallEnquiryStatus, HallEnquiryStatus[]> = {
+  pending: ["reviewing", "approved", "declined", "cancelled"],
+  reviewing: ["approved", "declined", "cancelled"],
+  approved: ["confirmed", "declined", "cancelled"],
+  confirmed: ["approved", "cancelled"],
+  declined: [],
+  cancelled: [],
+};
+
+function isDuplicateKeyError(err: unknown): boolean {
+  return Boolean(err && typeof err === "object" && (err as { code?: number }).code === 11000);
+}
+
+/**
+ * Takes the date on the calendar for this enquiry, atomically.
+ *
+ * The unique `{hallId, date}` index on HallAvailability is the lock: the filter
+ * only matches a row that is free to take (tentative / available) or already
+ * this enquiry's own. If the day holds a staff block or another booking, the
+ * filter misses, the upsert tries to insert a second row for the same day, and
+ * MongoDB refuses it with E11000 — which becomes a 409. Two admins confirming
+ * two families for one date therefore can't both succeed.
+ */
+async function claimDateForEnquiry(enquiry: IHallEnquiry) {
+  try {
+    await HallAvailability.findOneAndUpdate(
+      {
+        hallId: enquiry.hallId,
+        date: enquiry.eventDate,
+        $or: [{ status: { $nin: ["blocked", "booked"] } }, { enquiryId: enquiry._id }],
+      },
+      {
+        $set: {
+          hallId: enquiry.hallId,
+          date: enquiry.eventDate,
+          status: "booked",
+          reason: `${enquiry.eventType} — ${enquiry.guestName} (${enquiry.enquiryReference})`,
+          enquiryId: enquiry._id,
+        },
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+  } catch (err) {
+    if (isDuplicateKeyError(err)) {
+      throw new ApiError(
+        409,
+        "That date is already blocked or booked on the hall calendar. Clear it first, or offer the family another date."
+      );
+    }
+    throw err;
+  }
+}
+
+/** Frees the calendar row only if this enquiry created it — never a staff block. */
+async function releaseDateForEnquiry(enquiry: IHallEnquiry) {
+  await HallAvailability.findOneAndDelete({
+    hallId: enquiry.hallId,
+    date: enquiry.eventDate,
+    enquiryId: enquiry._id,
+  });
 }
 
 /**
@@ -201,37 +337,76 @@ export async function updateEnquiryStatus(
   status: HallEnquiryStatus,
   adminNotes?: string
 ) {
-  const enquiry = await HallEnquiry.findById(enquiryId);
-  if (!enquiry) throw new ApiError(404, "Enquiry not found.");
+  if (!isValidObjectId(enquiryId)) throw new ApiError(404, "Enquiry not found.");
+  const existing = await HallEnquiry.findById(enquiryId);
+  if (!existing) throw new ApiError(404, "Enquiry not found.");
 
-  const previousStatus = enquiry.status;
+  const previousStatus = existing.status;
 
-  enquiry.status = status;
-  if (adminNotes !== undefined) enquiry.adminNotes = adminNotes;
-  enquiry.respondedAt = new Date();
-  if (status === "cancelled" || status === "declined") enquiry.cancelledAt = new Date();
-  await enquiry.save();
+  // Same status = a notes-only save from the admin panel. No side effects, no email.
+  if (status === previousStatus) {
+    if (adminNotes === undefined) return existing;
+    const updated = await HallEnquiry.findOneAndUpdate(
+      { _id: existing._id },
+      { adminNotes },
+      { new: true }
+    );
+    if (!updated) throw new ApiError(404, "Enquiry not found.");
+    return updated;
+  }
 
-  if (status === "confirmed" && previousStatus !== "confirmed") {
-    await HallAvailability.findOneAndUpdate(
-      { hallId: enquiry.hallId, date: enquiry.eventDate },
-      {
-        hallId: enquiry.hallId,
-        date: enquiry.eventDate,
-        status: "booked",
-        reason: `${enquiry.eventType} — ${enquiry.guestName} (${enquiry.enquiryReference})`,
-        enquiryId: enquiry._id,
-      },
-      { upsert: true, setDefaultsOnInsert: true }
+  if (!ALLOWED_TRANSITIONS[previousStatus]?.includes(status)) {
+    throw new ApiError(
+      409,
+      ALLOWED_TRANSITIONS[previousStatus]?.length === 0
+        ? `This enquiry has been ${previousStatus} and can't be reopened. Ask the family to send a new enquiry.`
+        : `An enquiry that is ${previousStatus} can't be moved to ${status}.`
     );
   }
 
-  if (previousStatus === "confirmed" && status !== "confirmed") {
-    await HallAvailability.findOneAndDelete({
-      hallId: enquiry.hallId,
-      date: enquiry.eventDate,
-      enquiryId: enquiry._id,
+  if (status === "confirmed") {
+    if (existing.eventDate < startOfDayUTC(new Date())) {
+      throw new ApiError(400, "That event date has already passed, so it can't be confirmed.");
+    }
+
+    const clash = await HallEnquiry.exists({
+      _id: { $ne: existing._id },
+      hallId: existing.hallId,
+      eventDate: existing.eventDate,
+      status: "confirmed",
     });
+    if (clash) {
+      throw new ApiError(
+        409,
+        "Another enquiry is already confirmed for this hall on that date. Un-confirm it first, or offer this family another date."
+      );
+    }
+
+    // Take the date before flipping the status, so a failed claim changes nothing.
+    await claimDateForEnquiry(existing);
+  }
+
+  // Conditional on the status we validated against, so two admins acting at
+  // once can't both apply a transition from the same starting point.
+  const enquiry = await HallEnquiry.findOneAndUpdate(
+    { _id: existing._id, status: previousStatus },
+    {
+      status,
+      respondedAt: new Date(),
+      ...(adminNotes !== undefined ? { adminNotes } : {}),
+      ...(status === "cancelled" || status === "declined" ? { cancelledAt: new Date() } : {}),
+    },
+    { new: true }
+  );
+
+  if (!enquiry) {
+    // Lost a race: undo the calendar claim made above, then report it.
+    if (status === "confirmed") await releaseDateForEnquiry(existing);
+    throw new ApiError(409, "This enquiry was just updated by someone else. Please refresh and try again.");
+  }
+
+  if (previousStatus === "confirmed") {
+    await releaseDateForEnquiry(enquiry);
   }
 
   // Only tell the guest about outcomes that mean something to them. There is no

@@ -155,11 +155,13 @@ export const DATASETS: Record<DatasetKey, DatasetDefinition> = {
     module: "hotel",
     formats: ["csv", "xlsx", "pdf"],
     description:
-      "Money actually received, by day. Hotel only — the restaurant takes no online payment and the hall is unpriced online.",
+      "Money actually received, by day, less refunds actually sent. Hotel only — the restaurant takes no online payment and the hall is unpriced online.",
     columns: [
       { header: "Date", key: "date", width: 14 },
       { header: "Bookings paid", key: "count", width: 14, numeric: true },
       { header: "Advance received", key: "advance", width: 18, numeric: true },
+      { header: "Refunded", key: "refunded", width: 14, numeric: true },
+      { header: "Net received", key: "net", width: 16, numeric: true },
       { header: "Booking value", key: "total", width: 18, numeric: true },
     ],
   },
@@ -285,7 +287,7 @@ export async function collectRows(request: ExportRequest): Promise<Record<string
     case "enquiries": {
       const rows = await HallEnquiry.find(filter).sort({ createdAt: -1 }).limit(MAX_ROWS).lean();
       return (rows as any[]).map((e) => ({
-        reference: e.reference,
+        reference: e.enquiryReference,
         guest: e.guestName,
         email: e.guestEmail,
         phone: e.guestPhone ?? "",
@@ -307,30 +309,81 @@ export async function collectRows(request: ExportRequest): Promise<Record<string
        * balance is settled at the property and is not visible to this system,
        * which is why "Booking value" sits next to it as a separate column
        * rather than being added in.
+       *
+       * Dated by when the money moved, not `updatedAt`: any later edit (a
+       * cancellation, an admin note) bumps updatedAt and would move the income
+       * to the wrong day. Payments use `paymentTime` (fallback createdAt for
+       * rows that predate it); refunds use `refundedAt` (fallback cancelledAt)
+       * and are only counted once actually sent — `refunded` status or a
+       * processed refund. A `refund_pending` booking is money still held, so it
+       * stays in "Advance received" until someone pays it back.
        */
-      const match: Record<string, unknown> = { paymentStatus: "paid" };
-      if (range) match.updatedAt = range;
+      const inRange = (field: string) => (range ? [{ $match: { [field]: range } }] : []);
 
-      const rows = await HotelBooking.aggregate([
-        { $match: match },
-        {
-          $group: {
-            _id: { $dateToString: { format: "%Y-%m-%d", date: "$updatedAt" } },
-            count: { $sum: 1 },
-            advance: { $sum: "$advancePaid" },
-            total: { $sum: "$totalAmount" },
+      const [payments, refunds] = await Promise.all([
+        HotelBooking.aggregate([
+          { $match: { paymentStatus: "paid" } },
+          { $addFields: { paidAt: { $ifNull: ["$paymentTime", "$createdAt"] } } },
+          ...inRange("paidAt"),
+          {
+            $group: {
+              _id: { $dateToString: { format: "%Y-%m-%d", date: "$paidAt" } },
+              count: { $sum: 1 },
+              advance: { $sum: "$advancePaid" },
+              total: { $sum: "$totalAmount" },
+            },
           },
-        },
-        { $sort: { _id: -1 } },
-        { $limit: MAX_ROWS },
+        ]),
+        HotelBooking.aggregate([
+          {
+            $match: {
+              refundAmount: { $gt: 0 },
+              $or: [{ status: "refunded" }, { refundStatus: "processed" }],
+            },
+          },
+          {
+            $addFields: {
+              refundAt: { $ifNull: ["$refundedAt", { $ifNull: ["$cancelledAt", "$updatedAt"] }] },
+            },
+          },
+          ...inRange("refundAt"),
+          {
+            $group: {
+              _id: { $dateToString: { format: "%Y-%m-%d", date: "$refundAt" } },
+              refunded: { $sum: "$refundAmount" },
+            },
+          },
+        ]),
       ]);
 
-      return rows.map((r: any) => ({
-        date: r._id,
-        count: r.count,
-        advance: r.advance ?? 0,
-        total: r.total ?? 0,
-      }));
+      const byDay = new Map<string, { count: number; advance: number; total: number; refunded: number }>();
+      const day = (key: string) => {
+        let entry = byDay.get(key);
+        if (!entry) {
+          entry = { count: 0, advance: 0, total: 0, refunded: 0 };
+          byDay.set(key, entry);
+        }
+        return entry;
+      };
+      for (const p of payments as any[]) {
+        const entry = day(p._id);
+        entry.count = p.count ?? 0;
+        entry.advance = p.advance ?? 0;
+        entry.total = p.total ?? 0;
+      }
+      for (const r of refunds as any[]) day(r._id).refunded = r.refunded ?? 0;
+
+      return [...byDay.entries()]
+        .sort(([a], [b]) => (a < b ? 1 : a > b ? -1 : 0))
+        .slice(0, MAX_ROWS)
+        .map(([date, v]) => ({
+          date,
+          count: v.count,
+          advance: v.advance,
+          refunded: v.refunded,
+          net: v.advance - v.refunded,
+          total: v.total,
+        }));
     }
 
     default:

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ogDefaults } from "@/lib/seo";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -27,7 +28,8 @@ export async function generateMetadata(): Promise<Metadata> {
   const data = await getTheHall();
   if (!data) {
     return {
-      title: "Marriage Hall — 7 Vachan",
+      title: "Marriage Hall",
+      alternates: { canonical: "/marriage-hall" },
       description: "A banquet hall and open-air lawn for weddings and celebrations.",
     };
   }
@@ -35,14 +37,15 @@ export async function generateMetadata(): Promise<Metadata> {
   const { hall } = data;
   return {
     title: hall.metaTitle || `${hall.name} — Wedding & Banquet Venue`,
+    alternates: { canonical: "/marriage-hall" },
     description:
       hall.metaDescription ||
       `${hall.name}: ${hall.tagline || hall.description.slice(0, 140)}`,
     openGraph: {
+      ...(await ogDefaults()),
       title: hall.metaTitle || hall.name,
       description: hall.metaDescription || hall.tagline || hall.description.slice(0, 160),
-      images: hall.heroImages.slice(0, 1),
-      type: "website",
+      ...(hall.heroImages?.length ? { images: hall.heroImages.slice(0, 1) } : {}),
     },
   };
 }

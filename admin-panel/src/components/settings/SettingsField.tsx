@@ -1,13 +1,12 @@
 "use client";
 
 import { useRef, useState } from "react";
-import Image from "next/image";
 import { Eye, EyeOff, KeyRound, Loader2, Plus, Trash2, Upload, X } from "lucide-react";
 import { TextInput, TextArea, Select, Toggle } from "@/components/ui/Field";
 import Button from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 import { CLEAR_SECRET, uploadSettingsImage } from "@/lib/settingsApi";
-import { VALUE_POINT_ICONS, type FieldSpec } from "./schema";
+import { NOT_YET_ACTIVE, VALUE_POINT_ICONS, type FieldSpec } from "./schema";
 
 /**
  * Renders one settings field from its spec.
@@ -26,7 +25,14 @@ interface Props {
   onError: (message: string) => void;
 }
 
-export default function SettingsField({ spec, value, secretHint, onChange, onError }: Props) {
+export default function SettingsField({ spec: rawSpec, value, secretHint, onChange, onError }: Props) {
+  // Not-yet-wired keys get the note appended to their ordinary hint. Secrets
+  // add it themselves, because their hint has a built-in fallback text.
+  const spec: FieldSpec =
+    rawSpec.inactive && rawSpec.type !== "secret"
+      ? { ...rawSpec, hint: rawSpec.hint ? `${rawSpec.hint} ${NOT_YET_ACTIVE}` : NOT_YET_ACTIVE }
+      : rawSpec;
+
   switch (spec.type) {
     case "toggle":
       return (
@@ -333,6 +339,7 @@ function SecretField({
           (saved
             ? "Encrypted and cannot be read back. Type a new value to replace it."
             : "Encrypted before it is stored. Blank means the server keeps using its .env value.")}
+        {spec.inactive && ` ${NOT_YET_ACTIVE}`}
       </span>
     </div>
   );

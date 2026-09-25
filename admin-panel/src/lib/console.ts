@@ -18,6 +18,8 @@ export type ActivityType =
   | "payment_received"
   | "reservation_created"
   | "reservation_cancelled"
+  /** A cancelled booking whose gateway refund failed — needs manual follow-up. */
+  | "refund_pending"
   | "enquiry_created"
   | "review_submitted"
   | "offer_published";

@@ -83,7 +83,7 @@ const restaurantSchema = new Schema<IRestaurant>(
   {
     branchId: { type: Schema.Types.ObjectId, ref: "Branch", required: true, index: true },
     name: { type: String, required: true, trim: true },
-    slug: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
+    slug: { type: String, required: true, unique: true, lowercase: true, trim: true },
     description: { type: String, required: true },
     cuisineTypes: { type: [String], default: [] },
     serviceHours: { type: [serviceHoursSchema], default: [] },

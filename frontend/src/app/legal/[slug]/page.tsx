@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import Reveal from "@/components/motion/Reveal";
-import { getSettings, str } from "@/lib/settings";
+import { getSettings, str, LEGAL_PAGES, type LegalPageDef } from "@/lib/settings";
 
 /**
  * Legal pages, written in Settings → Legal.
@@ -17,28 +17,9 @@ import { getSettings, str } from "@/lib/settings";
  * made. 404 is the honest answer, and the footer only links to pages that exist.
  */
 
-const PAGES: Record<string, { key: string; title: string; blurb: string }> = {
-  privacy: {
-    key: "privacyPolicy",
-    title: "Privacy Policy",
-    blurb: "What we collect when you book or enquire, and what we do with it.",
-  },
-  terms: {
-    key: "termsAndConditions",
-    title: "Terms & Conditions",
-    blurb: "The terms you agree to when you stay, dine or book with us.",
-  },
-  cancellation: {
-    key: "cancellationPolicy",
-    title: "Cancellation Policy",
-    blurb: "How to cancel, and what happens when you do.",
-  },
-  refund: {
-    key: "refundPolicy",
-    title: "Refund Policy",
-    blurb: "When a refund applies and how long it takes to reach you.",
-  },
-};
+const PAGES: Record<string, LegalPageDef> = Object.fromEntries(
+  LEGAL_PAGES.map((page) => [page.slug, page])
+);
 
 export async function generateStaticParams() {
   return Object.keys(PAGES).map((slug) => ({ slug }));
@@ -53,12 +34,13 @@ export async function generateMetadata({
   if (!page) return { title: "Not found" };
 
   const settings = await getSettings();
-  const siteName = str(settings, "general", "siteName", "7 Vachan");
   const published = str(settings, "legal", page.key).trim().length > 0;
 
   return {
-    title: `${page.title} · ${siteName}`,
+    // The layout template already appends the site name.
+    title: page.title,
     description: page.blurb,
+    alternates: { canonical: `/legal/${page.slug}` },
     // An unpublished page should not be indexed even if someone links to it.
     robots: published ? undefined : { index: false, follow: false },
   };
@@ -76,14 +58,14 @@ export default async function LegalPage({ params }: { params: { slug: string } }
 
   return (
     <main className="section-tight container-luxe max-w-3xl pb-24 pt-28 sm:pt-32">
-      <Breadcrumbs items={[{ label: "Legal" }, { label: page.title }]} />
+      <Breadcrumbs items={[{ label: "Home", href: "/" }, { label: page.title }]} />
 
       <Reveal duration={0.6}>
         <p className="section-eyebrow">Legal</p>
         <h1 className="section-title mt-2">{page.title}</h1>
         <p className="mt-3 text-base font-light leading-relaxed text-ink/65">{page.blurb}</p>
         {lastReviewed && (
-          <p className="mt-1 text-sm text-ink/50">Last reviewed {lastReviewed}</p>
+          <p className="mt-1 text-sm text-ink/60">Last reviewed {lastReviewed}</p>
         )}
       </Reveal>
 

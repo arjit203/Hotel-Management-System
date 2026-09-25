@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { todayDayOfWeek } from "./format";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5100/api/v1";
 
@@ -142,7 +143,7 @@ export function formatTimeSlot(value: string): string {
 
 /** Today's opening line, e.g. "Open today 12:00 PM – 11:00 PM" or "Closed today". */
 export function todaysHours(serviceHours: ServiceHoursData[]): string | null {
-  const today = serviceHours.find((h) => h.dayOfWeek === new Date().getDay());
+  const today = serviceHours.find((h) => h.dayOfWeek === todayDayOfWeek());
   if (!today) return null;
   if (today.isClosed) return "Closed today";
   return `Open today ${formatTimeSlot(today.openTime)} – ${formatTimeSlot(today.closeTime)}`;

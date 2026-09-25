@@ -1,12 +1,20 @@
 import crypto from "crypto";
-import { TableReservation } from "./models/tableReservation.model";
+import { isValidObjectId } from "mongoose";
+import {
+  TableReservation,
+  ITableReservation,
+  ReservationStatus,
+} from "./models/tableReservation.model";
 import {
   getRestaurantById,
   getDiningAreaById,
   getAvailableTables,
   tablesNeededFor,
   startOfDayUTC,
+  isSlotInPast,
+  nowInIST,
 } from "./restaurant.service";
+import { getStoredSettingValue } from "../settings/settings.service";
 import { ApiError } from "../../utils/apiError.util";
 import {
   sendEmail,
@@ -34,7 +42,56 @@ function generateReservationReference(): string {
   return `7VR-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
 }
 
+/** Admin-saved override first, then `.env`. */
+async function adminNotificationEmail(): Promise<string | undefined> {
+  const stored = await getStoredSettingValue("email", "adminNotificationEmail");
+  return (typeof stored === "string" && stored.trim()) || process.env.ADMIN_NOTIFICATION_EMAIL;
+}
+
+/** `rahul@gmail.com` → `ra***@gm***.com`. */
+export function maskEmail(email: string): string {
+  const [local = "", domain = ""] = String(email || "").split("@");
+  const dot = domain.lastIndexOf(".");
+  const host = dot > 0 ? domain.slice(0, dot) : domain;
+  const tld = dot > 0 ? domain.slice(dot) : "";
+  return `${local.slice(0, 2)}***@${host.slice(0, 2)}***${tld}`;
+}
+
+/** Keeps only the last 3 digits: `+91 98765 43210` → `*********210`. */
+export function maskPhone(phone: string): string {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (digits.length <= 3) return "***";
+  return `${"*".repeat(digits.length - 3)}${digits.slice(-3)}`;
+}
+
+/**
+ * What the public reference lookup returns.
+ *
+ * The reference is printed on emails and shared with family, so it is not proof
+ * of identity. Unless the request carries the owning user's token, contact
+ * details come back masked and `userId` is dropped. Field names are unchanged so
+ * the confirmation page renders the same.
+ */
+export function toPublicReservation(reservation: ITableReservation, actorId?: string) {
+  const obj = reservation.toObject() as Record<string, unknown>;
+  const isOwner =
+    Boolean(actorId) && Boolean(reservation.userId) && String(reservation.userId) === String(actorId);
+  if (isOwner) return obj;
+
+  delete obj.userId;
+  delete obj.__v;
+  obj.guestEmail = maskEmail(reservation.guestEmail);
+  obj.guestPhone = maskPhone(reservation.guestPhone);
+  return obj;
+}
+
 export async function createReservation(input: CreateReservationInput, userId?: string) {
+  // Admin kill switch in Settings → Booking. Only an explicit `false` disables;
+  // an unset value keeps reservations open.
+  if ((await getStoredSettingValue("booking", "restaurantEnabled")) === false) {
+    throw new ApiError(403, "Online table reservations are currently unavailable. Please call us.");
+  }
+
   const restaurant = await getRestaurantById(input.restaurantId);
   const area = await getDiningAreaById(input.diningAreaId);
 
@@ -51,9 +108,16 @@ export async function createReservation(input: CreateReservationInput, userId?: 
     );
   }
 
+  // "Today" and "now" are the restaurant's (IST), not the server's.
   const day = startOfDayUTC(new Date(input.reservationDate));
-  if (day < startOfDayUTC(new Date())) {
+  if (day < nowInIST().today) {
     throw new ApiError(400, "Reservations cannot be made for a past date.");
+  }
+  if (isSlotInPast(day, input.timeSlot)) {
+    throw new ApiError(
+      400,
+      `The ${input.timeSlot} sitting today has already started. Please choose a later sitting.`
+    );
   }
 
   // The restaurant may be closed that weekday.
@@ -73,7 +137,12 @@ export async function createReservation(input: CreateReservationInput, userId?: 
   }
 
   const tablesNeeded = tablesNeededFor(input.partySize, area.maxPartySize);
-  const available = await getAvailableTables(input.diningAreaId, day, input.timeSlot);
+  const available = await getAvailableTables(
+    input.diningAreaId,
+    day,
+    input.timeSlot,
+    restaurant.reservationDurationMinutes
+  );
 
   if (available < tablesNeeded) {
     throw new ApiError(
@@ -107,7 +176,9 @@ export async function createReservation(input: CreateReservationInput, userId?: 
     occasion: input.occasion,
   });
 
-  await sendEmail({
+  // Fire-and-forget: a slow or failing mail server must not fail or delay a
+  // reservation that has already been saved.
+  void sendEmail({
     to: reservation.guestEmail,
     subject: `Table Confirmed — ${restaurant.name} (${reservation.reservationReference})`,
     html: buildReservationConfirmationEmailHtml({
@@ -121,7 +192,7 @@ export async function createReservation(input: CreateReservationInput, userId?: 
       restaurantAddress: restaurant.address,
       restaurantPhone: restaurant.contactPhone,
     }),
-  });
+  }).catch(() => undefined);
 
   return reservation;
 }
@@ -137,25 +208,98 @@ export async function getReservationsForUser(userId: string) {
 }
 
 export async function listReservationsForAdmin(
-  filters: { restaurantId?: string; status?: string; date?: string } = {}
+  filters: { restaurantId?: string; status?: string; date?: string } = {},
+  paging: { skip: number; limit: number } = { skip: 0, limit: 200 }
 ) {
   const query: Record<string, unknown> = {};
-  if (filters.restaurantId) query.restaurantId = filters.restaurantId;
-  if (filters.status) query.status = filters.status;
-  if (filters.date) query.reservationDate = startOfDayUTC(new Date(filters.date));
-  return TableReservation.find(query).sort({ reservationDate: -1, timeSlot: 1 });
+  if (filters.restaurantId) {
+    if (!isValidObjectId(filters.restaurantId)) return { items: [], total: 0 };
+    query.restaurantId = filters.restaurantId;
+  }
+  if (filters.status) query.status = String(filters.status);
+  if (filters.date) {
+    const d = new Date(filters.date);
+    if (Number.isNaN(d.getTime())) throw new ApiError(400, "Invalid date filter.");
+    query.reservationDate = startOfDayUTC(d);
+  }
+  const [items, total] = await Promise.all([
+    TableReservation.find(query)
+      .sort({ reservationDate: -1, timeSlot: 1 })
+      .skip(paging.skip)
+      .limit(paging.limit)
+      .lean(),
+    TableReservation.countDocuments(query),
+  ]);
+  return { items, total };
 }
 
-export async function updateReservationStatus(reservationId: string, status: string) {
-  const allowed = ["confirmed", "seated", "completed", "cancelled", "no_show"];
-  if (!allowed.includes(status)) throw new ApiError(400, "Invalid reservation status.");
+const ACTIVE_STATUSES: ReservationStatus[] = ["confirmed", "seated"];
 
-  const reservation = await TableReservation.findByIdAndUpdate(
-    reservationId,
-    { status, ...(status === "cancelled" ? { cancelledAt: new Date() } : {}) },
+/**
+ * The reservation lifecycle. A reservation is created `confirmed` (there is no
+ * pending state — see the model), and every other status is terminal.
+ * Cancelled / no-show / completed records are never reactivated: the table may
+ * already have gone to someone else, so the guest re-books instead.
+ */
+const ALLOWED_TRANSITIONS: Record<ReservationStatus, ReservationStatus[]> = {
+  confirmed: ["seated", "no_show", "cancelled", "completed"],
+  seated: ["completed"],
+  completed: [],
+  cancelled: [],
+  no_show: [],
+};
+
+export async function updateReservationStatus(reservationId: string, status: string) {
+  if (!(status in ALLOWED_TRANSITIONS)) throw new ApiError(400, "Invalid reservation status.");
+  const next = status as ReservationStatus;
+
+  if (!isValidObjectId(reservationId)) throw new ApiError(404, "Reservation not found.");
+  const current = await TableReservation.findById(reservationId);
+  if (!current) throw new ApiError(404, "Reservation not found.");
+
+  // Re-sending the current status is a no-op, so a double click or a bulk
+  // action that includes already-updated rows doesn't error.
+  if (current.status === next) return current;
+
+  if (!ALLOWED_TRANSITIONS[current.status].includes(next)) {
+    const terminal = ALLOWED_TRANSITIONS[current.status].length === 0;
+    throw new ApiError(
+      409,
+      terminal
+        ? `This reservation is already ${current.status.replace("_", "-")} and can't be changed. Please create a new reservation instead.`
+        : `A ${current.status} reservation can't be moved to ${next.replace("_", "-")}.`
+    );
+  }
+
+  // Moving back into an active state would take tables again, so capacity must
+  // still be there. (No transition in the map above does this today; the check
+  // keeps the rule true if one is ever added.)
+  if (!ACTIVE_STATUSES.includes(current.status) && ACTIVE_STATUSES.includes(next)) {
+    const restaurant = await getRestaurantById(String(current.restaurantId));
+    const available = await getAvailableTables(
+      String(current.diningAreaId),
+      current.reservationDate,
+      current.timeSlot,
+      restaurant.reservationDurationMinutes
+    );
+    if (available < current.tablesReserved) {
+      throw new ApiError(
+        409,
+        `Not enough free tables at ${current.timeSlot} to reinstate this reservation.`
+      );
+    }
+  }
+
+  // Conditional on the status we validated against, so two admins acting at
+  // once can't both apply a transition from the same starting point.
+  const reservation = await TableReservation.findOneAndUpdate(
+    { _id: current._id, status: current.status },
+    { status: next, ...(next === "cancelled" ? { cancelledAt: new Date() } : {}) },
     { new: true }
   );
-  if (!reservation) throw new ApiError(404, "Reservation not found.");
+  if (!reservation) {
+    throw new ApiError(409, "This reservation was just updated by someone else. Please refresh and try again.");
+  }
   return reservation;
 }
 
@@ -190,7 +334,7 @@ export async function cancelReservation(
     throw new ApiError(403, "You are not authorised to cancel this reservation.");
   }
 
-  if (startOfDayUTC(new Date(reservation.reservationDate)) < startOfDayUTC(new Date())) {
+  if (startOfDayUTC(new Date(reservation.reservationDate)) < nowInIST().today) {
     throw new ApiError(400, "Only upcoming reservations can be cancelled.");
   }
 
@@ -201,7 +345,7 @@ export async function cancelReservation(
 
   const restaurant = await getRestaurantById(String(reservation.restaurantId));
 
-  await sendEmail({
+  void sendEmail({
     to: reservation.guestEmail,
     subject: `Reservation Cancelled — ${restaurant.name} (${reservation.reservationReference})`,
     html: buildReservationCancellationEmailHtml({
@@ -211,14 +355,14 @@ export async function cancelReservation(
       date: reservation.reservationDate.toDateString(),
       timeSlot: reservation.timeSlot,
     }),
-  });
+  }).catch(() => undefined);
 
   // Admin notification reuses the same sendEmail utility and the same
-  // ADMIN_NOTIFICATION_EMAIL variable the Hotel module already uses — no new
-  // email infrastructure, no new env var.
-  const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL;
+  // ADMIN_NOTIFICATION_EMAIL variable the Hotel module already uses (an address
+  // saved in Settings → Email wins over it) — no new email infrastructure.
+  const adminEmail = await adminNotificationEmail();
   if (adminEmail) {
-    await sendEmail({
+    void sendEmail({
       to: adminEmail,
       subject: `[Cancellation] ${restaurant.name} — ${reservation.reservationReference}`,
       html: buildReservationCancellationEmailHtml({
@@ -231,7 +375,7 @@ export async function cancelReservation(
         guestEmail: reservation.guestEmail,
         partySize: reservation.partySize,
       }),
-    });
+    }).catch(() => undefined);
   } else {
     console.log(
       `📋 [Admin notification — ADMIN_NOTIFICATION_EMAIL not set] Reservation ${reservation.reservationReference} at ${restaurant.name} (${reservation.partySize} guests, ${reservation.timeSlot}) was cancelled by ${reservation.guestEmail}.`

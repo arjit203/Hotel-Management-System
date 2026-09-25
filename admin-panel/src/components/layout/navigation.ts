@@ -16,6 +16,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { BusinessKey } from "@/lib/businessContext";
+import { isSuperAdmin } from "@/lib/roles";
 
 export interface NavItem {
   label: string;
@@ -47,9 +48,10 @@ export interface NavSection {
  * points at whichever matches the selected business so the primary action is
  * one click away.
  */
-export function buildNavSections(business: BusinessKey): NavSection[] {
+export function buildNavSections(business: BusinessKey, role?: string | null): NavSection[] {
   const isRestaurant = business === "restaurant";
   const isHall = business === "hall";
+  const superAdmin = isSuperAdmin(role);
 
   return [
     {
@@ -104,13 +106,16 @@ export function buildNavSections(business: BusinessKey): NavSection[] {
       items: [
         { label: "Analytics", href: "/analytics", icon: BarChart3 },
         { label: "Reports", href: "/reports", icon: FileSpreadsheet },
-        { label: "Users", href: "/users", icon: UsersRound },
-        // Super Admin only. Left visible for everyone because the page itself
-        // explains the restriction — a menu item that silently vanishes reads
-        // as a bug, and hiding it would not be a security control anyway since
-        // the API is what refuses the request.
-        { label: "Audit logs", href: "/audit-logs", icon: ScrollText },
-        { label: "Settings", href: "/settings", icon: Settings },
+        // Super Admin only. Hidden for other roles to keep their menu tidy —
+        // this is not a security control: the API refuses the requests, and
+        // the pages still explain the restriction if opened directly.
+        ...(superAdmin
+          ? [
+              { label: "Users", href: "/users", icon: UsersRound },
+              { label: "Audit logs", href: "/audit-logs", icon: ScrollText },
+              { label: "Settings", href: "/settings", icon: Settings },
+            ]
+          : []),
       ],
     },
   ];

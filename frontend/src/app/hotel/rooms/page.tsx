@@ -1,5 +1,4 @@
 import { Metadata } from "next";
-import { notFound } from "next/navigation";
 import { getTheHotel } from "@/lib/hotel";
 import RoomSearch from "@/modules/hotel/components/RoomSearch";
 import PageHeader from "@/components/PageHeader";

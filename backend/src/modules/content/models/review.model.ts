@@ -33,6 +33,10 @@ const reviewSchema = new Schema<IReview>(
 
 // Reused by every vertical (hotel/hall/restaurant) via reviewableType/reviewableId —
 // per FOLDER_STRUCTURE.md / RULES.md scalability requirement: shared logic lives once.
-reviewSchema.index({ reviewableType: 1, reviewableId: 1, isApproved: 1 });
+// Extends the former { reviewableType, reviewableId, isApproved } index with
+// createdAt so "approved reviews for X, newest first" (every detail page) is
+// served by the index alone, sort included. Its prefix still covers every
+// query the old index did, so the old one is redundant.
+reviewSchema.index({ reviewableType: 1, reviewableId: 1, isApproved: 1, createdAt: -1 });
 
 export const Review = model<IReview>("Review", reviewSchema);

@@ -7,11 +7,10 @@ import EnquiryForm from "@/modules/hall/components/EnquiryForm";
 import HallEmpty from "@/modules/hall/components/HallEmpty";
 
 export const metadata: Metadata = {
-  title: "Check Your Date — 7 Vachan Banquets",
+  title: "Check Your Date",
   description:
     "See which dates are open, then send us an enquiry. No payment and no obligation — we call you to talk it through before anything is confirmed.",
-  // The calendar is live data; there is nothing durable here to index deeply.
-  robots: { index: true, follow: true },
+  alternates: { canonical: "/marriage-hall/availability" },
 };
 
 /**

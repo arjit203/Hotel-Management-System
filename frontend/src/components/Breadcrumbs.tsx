@@ -1,11 +1,10 @@
 import Link from "next/link";
+import { getSiteUrl, jsonLdString } from "@/lib/seo";
 
 export interface Crumb {
   label: string;
   href?: string; // omit for the current (last) page
 }
-
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
 /**
  * Breadcrumbs — structured data first, chrome second.
@@ -23,7 +22,8 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
  * orientation. Normally you don't call this directly at all — pass `crumbs` to
  * <PageHeader>, which emits the schema for you.
  */
-export default function Breadcrumbs({ items, visual = false }: { items: Crumb[]; visual?: boolean }) {
+export default async function Breadcrumbs({ items, visual = false }: { items: Crumb[]; visual?: boolean }) {
+  const site = await getSiteUrl();
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
@@ -31,12 +31,12 @@ export default function Breadcrumbs({ items, visual = false }: { items: Crumb[];
       "@type": "ListItem",
       position: i + 1,
       name: item.label,
-      item: item.href ? `${SITE_URL}${item.href}` : undefined,
+      item: item.href ? `${site}${item.href}` : undefined,
     })),
   };
 
   const schema = (
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(jsonLd) }} />
   );
 
   if (!visual) return schema;

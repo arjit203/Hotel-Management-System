@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
-import type { DatasetDefinition, ExportColumn } from "./export.service";
+import type { DatasetDefinition } from "./export.service";
 
 /**
  * Turns any dataset into CSV, Excel or PDF.

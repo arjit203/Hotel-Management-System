@@ -43,6 +43,33 @@ function loadRazorpayScript(): Promise<boolean> {
   });
 }
 
+interface RazorpayOrder {
+  id: string;
+  amount: number;
+  currency: string;
+  keyId?: string; // public key id sent by the API; env var is the fallback
+}
+
+// A booking already created on the server and the order it can be paid with.
+// Kept so "try again" reopens Checkout for the SAME booking instead of POSTing
+// a second one (which would also hold a second set of rooms).
+interface PendingPayment {
+  bookingReference: string;
+  paymentExpiresAt?: string;
+  createdAtMs: number;
+  order: RazorpayOrder;
+  inputKey: string; // what the booking was created from — a changed cart means a new booking
+}
+
+// Server holds a pending booking's rooms for 30 minutes; reuse the order only
+// comfortably inside that, otherwise ask for a fresh one via retry-payment.
+const HOLD_MS = 30 * 60 * 1000;
+const STALE_MARGIN_MS = 2 * 60 * 1000;
+function isStale(p: PendingPayment): boolean {
+  const expires = p.paymentExpiresAt ? new Date(p.paymentExpiresAt).getTime() : p.createdAtMs + HOLD_MS;
+  return Date.now() > expires - STALE_MARGIN_MS;
+}
+
 // One line in the multi-room "cart" (Feature 4, Phase 3.6).
 interface CartLine {
   roomId: string;
@@ -64,6 +91,7 @@ export default function BookingForm({ hotelId, room, allRooms }: BookingFormProp
   ]);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pendingPayment, setPendingPayment] = useState<PendingPayment | null>(null);
 
   const nights =
     checkInDate && checkOutDate
@@ -142,32 +170,70 @@ export default function BookingForm({ hotelId, room, allRooms }: BookingFormProp
     setError(null);
 
     const token = getUserToken();
-    const res = await api.post<{
-      booking: { bookingReference: string };
-      razorpayOrder: { id: string; amount: number; currency: string };
-    }>(
-      "/hotel-bookings",
-      {
-        hotelId,
-        rooms: cart.map((l) => ({ roomId: l.roomId, numRooms: l.numRooms })),
-        checkInDate,
-        checkOutDate,
-        numGuests,
-        guestName,
-        guestEmail,
-        guestPhone,
-        specialRequest: specialRequest || undefined,
-      },
-      { headers: token ? { Authorization: `Bearer ${token}` } : {} }
-    );
+    const authHeaders: RequestInit = { headers: token ? { Authorization: `Bearer ${token}` } : {} };
+    const bookingInput = {
+      hotelId,
+      rooms: cart.map((l) => ({ roomId: l.roomId, numRooms: l.numRooms })),
+      checkInDate,
+      checkOutDate,
+      numGuests,
+      guestName,
+      guestEmail,
+      guestPhone,
+      specialRequest: specialRequest || undefined,
+    };
+    const inputKey = JSON.stringify(bookingInput);
 
-    if (!res.success || !res.data) {
-      setIsSubmitting(false);
-      setError(res.message || "Booking failed. Please try again.");
-      return;
+    let payment = pendingPayment && pendingPayment.inputKey === inputKey ? pendingPayment : null;
+
+    if (payment && isStale(payment)) {
+      // Same booking, fresh order (the server re-checks availability first).
+      const retryRes = await api.post<{
+        booking: { bookingReference: string; paymentExpiresAt?: string };
+        razorpayOrder: RazorpayOrder;
+      }>(
+        `/hotel-bookings/${encodeURIComponent(payment.bookingReference)}/retry-payment`,
+        { guestEmail },
+        authHeaders
+      );
+      if (!retryRes.success || !retryRes.data) {
+        setIsSubmitting(false);
+        setPendingPayment(null); // next attempt starts a new booking
+        setError(retryRes.message || "We couldn't restart the payment. Please try again.");
+        return;
+      }
+      payment = {
+        ...payment,
+        paymentExpiresAt: retryRes.data.booking.paymentExpiresAt,
+        createdAtMs: Date.now(),
+        order: retryRes.data.razorpayOrder,
+      };
+      setPendingPayment(payment);
     }
 
-    const { booking, razorpayOrder } = res.data;
+    if (!payment) {
+      const res = await api.post<{
+        booking: { bookingReference: string; paymentExpiresAt?: string };
+        razorpayOrder: RazorpayOrder;
+      }>("/hotel-bookings", bookingInput, authHeaders);
+
+      if (!res.success || !res.data) {
+        setIsSubmitting(false);
+        setError(res.message || "Booking failed. Please try again.");
+        return;
+      }
+      payment = {
+        bookingReference: res.data.booking.bookingReference,
+        paymentExpiresAt: res.data.booking.paymentExpiresAt,
+        createdAtMs: Date.now(),
+        order: res.data.razorpayOrder,
+        inputKey,
+      };
+      setPendingPayment(payment);
+    }
+
+    const booking = { bookingReference: payment.bookingReference };
+    const razorpayOrder = payment.order;
 
     // Feature 1: launch Razorpay Checkout for the advance amount. The
     // booking already exists as 'pending' at this point — Checkout only
@@ -181,7 +247,7 @@ export default function BookingForm({ hotelId, room, allRooms }: BookingFormProp
     const Razorpay = (window as any).Razorpay;
 
     const rzp = new Razorpay({
-      key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+      key: razorpayOrder.keyId ?? process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
       config_id: process.env.NEXT_PUBLIC_RAZORPAY_CONFIG_ID,
       amount: razorpayOrder.amount,
       currency: razorpayOrder.currency,
@@ -196,19 +262,18 @@ export default function BookingForm({ hotelId, room, allRooms }: BookingFormProp
       }) {
         const verifyRes = await api.post("/hotel-bookings/verify-payment", response);
         setIsSubmitting(false);
+        setPendingPayment(null);
+        // Either way the guest lands on their booking: confirmed if verify
+        // succeeded, otherwise it shows as pending while support sorts it out.
+        // Staying on this form would invite a second payment.
         if (!verifyRes.success) {
-          setError(
-            verifyRes.message ||
-              "Payment succeeded but verification failed. Please contact support with your booking reference: " +
-                booking.bookingReference
-          );
-          return;
+          console.error("Payment verification failed:", verifyRes.message);
         }
-        router.push(`/hotel/booking/confirmation/${booking.bookingReference}`);
+        router.push(`/hotel/booking/confirmation/${encodeURIComponent(booking.bookingReference)}`);
       },
       modal: {
         // Payment widget closed without completing — booking stays 'pending'
-        // (no retry-payment flow exists yet; noted as a follow-up suggestion).
+        // and the next "Confirm & Pay" reopens Checkout for this same booking.
         ondismiss: function () {
           setIsSubmitting(false);
           setError(
@@ -216,6 +281,13 @@ export default function BookingForm({ hotelId, room, allRooms }: BookingFormProp
           );
         },
       },
+    });
+    // Fires when an attempt is declined; Checkout stays open so the guest can
+    // try another method, and ondismiss still runs if they close it.
+    rzp.on("payment.failed", function () {
+      setError(
+        "That payment didn't go through. You can try again or choose a different payment method."
+      );
     });
     rzp.open();
   }
@@ -485,7 +557,7 @@ export default function BookingForm({ hotelId, room, allRooms }: BookingFormProp
               <h4 className="card-title mb-6">Review your stay</h4>
 
               <div className="rounded-luxe border border-ink/[0.08] bg-cream/70 p-6">
-                <div className="grid grid-cols-3 gap-4 border-b border-ink/[0.08] pb-5">
+                <div className="grid grid-cols-2 gap-4 border-b border-ink/[0.08] pb-5 sm:grid-cols-3">
                   {[
                     // T00:00 parses as local midnight — a bare "YYYY-MM-DD" is
                     // UTC and would show the previous day west of Greenwich.

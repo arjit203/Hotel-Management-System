@@ -1,5 +1,5 @@
 import { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { ogDefaults } from "@/lib/seo";
 import Link from "next/link";
 import { ArrowRight, Clock, MapPin, Phone, UtensilsCrossed } from "lucide-react";
 import { getTheRestaurant, todaysHours } from "@/lib/restaurant";
@@ -7,7 +7,6 @@ import RestaurantSchema from "@/components/RestaurantSchema";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import Reveal from "@/components/motion/Reveal";
 import TextReveal from "@/components/motion/TextReveal";
-import { cldImage, IMAGE_WIDTHS } from "@/lib/imageUrl";
 
 // ── Shared sections, reused verbatim from the Hotel module's architecture ──
 import Hero from "@/components/sections/Hero";
@@ -35,7 +34,11 @@ export async function generateMetadata(): Promise<Metadata> {
       r?.description?.slice(0, 155) ||
       "Dine at 7 Vachan — seasonal menus, private dining, and instant table reservation.",
     alternates: { canonical: "/restaurant" },
-    openGraph: { images: data?.gallery?.[0]?.imageUrl ? [data.gallery[0].imageUrl] : undefined },
+    openGraph: {
+      ...(await ogDefaults()),
+      title: r?.metaTitle || r?.name || "Restaurant",
+      ...(data?.gallery?.[0]?.imageUrl ? { images: [data.gallery[0].imageUrl] } : {}),
+    },
   };
 }
 

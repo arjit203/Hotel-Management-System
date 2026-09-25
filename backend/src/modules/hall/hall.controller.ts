@@ -3,7 +3,11 @@ import * as hallService from "./hall.service";
 import * as enquiryService from "./enquiry.service";
 import * as contentService from "../content/content.service";
 import { User } from "../auth/models/user.model";
-import { uploadImageBuffer, deleteImageByPublicId } from "../../utils/cloudinary.util";
+import {
+  uploadImageBuffer,
+  deleteImageByPublicId,
+  safeUploadFolder,
+} from "../../utils/cloudinary.util";
 import { ApiError } from "../../utils/apiError.util";
 import type { HallShowcaseType } from "./models/hallShowcase.model";
 import type { HallDateStatus } from "./models/hallAvailability.model";
@@ -41,6 +45,18 @@ function handleZodError(res: Response, error: any) {
     message: "Validation failed",
     errors: error.errors?.map((e: any) => ({ field: e.path.join("."), message: e.message })),
   });
+}
+
+/**
+ * Optional `?page=&limit=` for admin lists. Without `page` the response stays a
+ * bare array (capped at `limit`, default 200) so existing callers are unaffected.
+ */
+function parsePaging(query: Request["query"]) {
+  const paged = query.page !== undefined;
+  const page = Math.max(1, Math.floor(Number(query.page)) || 1);
+  const rawLimit = Math.floor(Number(query.limit)) || 200;
+  const limit = Math.min(500, Math.max(1, rawLimit));
+  return { paged, page, limit, skip: paged ? (page - 1) * limit : 0 };
 }
 
 // ================== PUBLIC: HALL ==================
@@ -240,7 +256,11 @@ export async function createEnquiry(req: Request, res: Response, next: NextFunct
 export async function getEnquiryByReference(req: Request, res: Response, next: NextFunction) {
   try {
     const enquiry = await enquiryService.getEnquiryByReference(req.params.reference);
-    res.status(200).json({ success: true, data: enquiry });
+    // Contact details are masked unless the owning user's token is present.
+    res.status(200).json({
+      success: true,
+      data: enquiryService.toPublicEnquiry(enquiry, req.actor?.id),
+    });
   } catch (err) {
     next(err);
   }
@@ -485,12 +505,22 @@ export async function adminListAvailability(req: Request, res: Response, next: N
 
 export async function adminListEnquiries(req: Request, res: Response, next: NextFunction) {
   try {
-    const enquiries = await enquiryService.listEnquiriesForAdmin({
-      hallId: req.query.hallId as string | undefined,
-      status: req.query.status as string | undefined,
-      date: req.query.date as string | undefined,
+    const paging = parsePaging(req.query);
+    const { items, total } = await enquiryService.listEnquiriesForAdmin(
+      {
+        hallId: req.query.hallId as string | undefined,
+        status: req.query.status as string | undefined,
+        date: req.query.date as string | undefined,
+      },
+      paging
+    );
+    res.status(200).json({
+      success: true,
+      data: items,
+      ...(paging.paged
+        ? { pagination: { page: paging.page, limit: paging.limit, total } }
+        : {}),
     });
-    res.status(200).json({ success: true, data: enquiries });
   } catch (err) {
     next(err);
   }
@@ -517,7 +547,7 @@ export async function adminUpdateEnquiryStatus(req: Request, res: Response, next
 export async function adminUploadImage(req: Request, res: Response, next: NextFunction) {
   try {
     if (!req.file) throw new ApiError(400, "No image file was provided.");
-    const folder = (req.query.folder as string) || "misc";
+    const folder = safeUploadFolder(req.query.folder);
     const result = await uploadImageBuffer(req.file.buffer, `7vachan/hall/${folder}`);
     res.status(201).json({ success: true, data: { url: result.url, publicId: result.publicId } });
   } catch (err) {
@@ -529,7 +559,7 @@ export async function adminDeleteImage(req: Request, res: Response, next: NextFu
   try {
     const publicId = (req.body?.publicId as string) || (req.query.publicId as string);
     if (!publicId) throw new ApiError(400, "publicId is required.");
-    await deleteImageByPublicId(publicId);
+    await deleteImageByPublicId(publicId, "7vachan/hall/");
     res.status(200).json({ success: true, message: "Image deleted." });
   } catch (err) {
     next(err);
@@ -560,7 +590,8 @@ export async function adminAddGalleryItem(req: Request, res: Response, next: Nex
 
 export async function adminDeleteGalleryItem(req: Request, res: Response, next: NextFunction) {
   try {
-    await contentService.deleteGalleryItem(req.params.itemId);
+    const item = await contentService.deleteGalleryItem("hall", req.params.itemId);
+    if (!item) throw new ApiError(404, "Gallery image not found.");
     res.status(200).json({ success: true, message: "Gallery image removed." });
   } catch (err) {
     next(err);
@@ -573,6 +604,7 @@ export async function adminCreateOffer(req: Request, res: Response, next: NextFu
     if (!title || !validFrom || !validTo) {
       throw new ApiError(400, "title, validFrom and validTo are required.");
     }
+    await hallService.getHallById(req.params.hallId);
     const offer = await contentService.createOffer({
       applicableTo: "hall",
       ownerId: req.params.hallId,
@@ -591,7 +623,7 @@ export async function adminCreateOffer(req: Request, res: Response, next: NextFu
 export async function adminUpdateOffer(req: Request, res: Response, next: NextFunction) {
   try {
     const { title, description, imageUrl, validFrom, validTo, isActive } = req.body || {};
-    const offer = await contentService.updateOffer(req.params.offerId, {
+    const offer = await contentService.updateOffer("hall", req.params.offerId, {
       ...(title !== undefined ? { title } : {}),
       ...(description !== undefined ? { description } : {}),
       ...(imageUrl !== undefined ? { imageUrl } : {}),
@@ -608,7 +640,8 @@ export async function adminUpdateOffer(req: Request, res: Response, next: NextFu
 
 export async function adminDeleteOffer(req: Request, res: Response, next: NextFunction) {
   try {
-    await contentService.deleteOffer(req.params.offerId);
+    const offer = await contentService.deleteOffer("hall", req.params.offerId);
+    if (!offer) throw new ApiError(404, "Offer not found.");
     res.status(200).json({ success: true, message: "Offer deleted." });
   } catch (err) {
     next(err);
@@ -619,6 +652,7 @@ export async function adminCreateFaq(req: Request, res: Response, next: NextFunc
   try {
     const { question, answer, displayOrder } = req.body || {};
     if (!question || !answer) throw new ApiError(400, "question and answer are required.");
+    await hallService.getHallById(req.params.hallId);
     const faq = await contentService.createFaq({
       applicableTo: "hall",
       ownerId: req.params.hallId,
@@ -634,7 +668,8 @@ export async function adminCreateFaq(req: Request, res: Response, next: NextFunc
 
 export async function adminDeleteFaq(req: Request, res: Response, next: NextFunction) {
   try {
-    await contentService.deleteFaq(req.params.faqId);
+    const faq = await contentService.deleteFaq("hall", req.params.faqId);
+    if (!faq) throw new ApiError(404, "FAQ not found.");
     res.status(200).json({ success: true, message: "FAQ deleted." });
   } catch (err) {
     next(err);
@@ -643,6 +678,7 @@ export async function adminDeleteFaq(req: Request, res: Response, next: NextFunc
 
 export async function adminListReviews(req: Request, res: Response, next: NextFunction) {
   try {
+    await hallService.getHallById(req.params.hallId);
     const reviews = await contentService.getAllReviewsForAdmin("hall", req.params.hallId);
     res.status(200).json({ success: true, data: reviews });
   } catch (err) {
@@ -652,7 +688,7 @@ export async function adminListReviews(req: Request, res: Response, next: NextFu
 
 export async function adminApproveReview(req: Request, res: Response, next: NextFunction) {
   try {
-    const review = await contentService.approveReview(req.params.reviewId);
+    const review = await contentService.approveReview("hall", req.params.reviewId);
     res.status(200).json({ success: true, message: "Review approved.", data: review });
   } catch (err) {
     next(err);
@@ -663,7 +699,7 @@ export async function adminReplyToReview(req: Request, res: Response, next: Next
   try {
     const { reply } = req.body || {};
     if (!reply) throw new ApiError(400, "reply is required.");
-    const review = await contentService.replyToReview(req.params.reviewId, reply);
+    const review = await contentService.replyToReview("hall", req.params.reviewId, reply);
     res.status(200).json({ success: true, message: "Reply published.", data: review });
   } catch (err) {
     next(err);
@@ -672,7 +708,7 @@ export async function adminReplyToReview(req: Request, res: Response, next: Next
 
 export async function adminDeleteReview(req: Request, res: Response, next: NextFunction) {
   try {
-    await contentService.deleteReview(req.params.reviewId);
+    await contentService.deleteReview("hall", req.params.reviewId);
     res.status(200).json({ success: true, message: "Review deleted." });
   } catch (err) {
     next(err);
@@ -683,7 +719,7 @@ export async function adminRemoveReviewImage(req: Request, res: Response, next: 
   try {
     const { imageUrl } = req.body || {};
     if (!imageUrl) throw new ApiError(400, "imageUrl is required.");
-    const review = await contentService.removeReviewImage(req.params.reviewId, imageUrl);
+    const review = await contentService.removeReviewImage("hall", req.params.reviewId, imageUrl);
     res.status(200).json({ success: true, message: "Photo removed.", data: review });
   } catch (err) {
     next(err);

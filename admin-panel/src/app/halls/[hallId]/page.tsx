@@ -14,7 +14,6 @@ import {
   Layers,
   MessageSquareQuote,
   Palette,
-  PartyPopper,
   Settings2,
   Star,
   Tag,
@@ -43,8 +42,8 @@ import CalendarPanel from "@/components/hall/CalendarPanel";
 import { adminApi, formatApiError, publicGet, uploadHallImage } from "@/lib/api";
 import { useBusiness } from "@/lib/businessContext";
 import { useSummary } from "@/lib/summary";
+import { PUBLIC_SITE_URL } from "@/lib/siteUrl";
 
-const PUBLIC_SITE_URL = process.env.NEXT_PUBLIC_FRONTEND_URL || "http://localhost:3000";
 const GALLERY_CATEGORIES = [
   "Wedding",
   "Reception",

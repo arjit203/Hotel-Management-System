@@ -153,7 +153,7 @@ export default function MediaGallery({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
             onClick={() => setExpanded(false)}
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/96 p-6 backdrop-blur-sm"
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/[0.96] p-6 backdrop-blur-sm"
             role="dialog"
             aria-modal="true"
             aria-label={`${label} photography`}

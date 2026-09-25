@@ -12,7 +12,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { getTheHotel } from "@/lib/hotel";
-import { getSettings, str, socialLinks, addressLine } from "@/lib/settings";
+import { getSettings, str, socialLinks, addressLine, publishedLegalPages } from "@/lib/settings";
 import NewsletterForm from "@/components/NewsletterForm";
 
 // Two columns now that there are two verticals — the footer must stay inside its
@@ -52,17 +52,6 @@ const SOCIAL_ICON: Record<string, LucideIcon> = {
 };
 
 /**
- * Legal pages appear only once their content exists in Settings → Legal.
- * An unpublished policy is left out rather than linked to an empty page.
- */
-const LEGAL_PAGES: { key: string; href: string; label: string }[] = [
-  { key: "privacyPolicy", href: "/legal/privacy", label: "Privacy" },
-  { key: "termsAndConditions", href: "/legal/terms", label: "Terms" },
-  { key: "cancellationPolicy", href: "/legal/cancellation", label: "Cancellation" },
-  { key: "refundPolicy", href: "/legal/refund", label: "Refund" },
-];
-
-/**
  * Compact footer.
  *
  * Rebuilt from a 5-column, ~700px-tall block (which included a full reservation
@@ -85,17 +74,18 @@ export default async function Footer() {
   const [data, settings] = await Promise.all([getTheHotel(), getSettings()]);
   const hotel = data?.hotel;
 
-  // Estate-level contact details from Settings, falling back to the hotel's own
-  // and finally to the placeholders the footer shipped with — so this renders
-  // identically on an install where nothing has been configured.
-  const phone =
-    str(settings, "contact", "phonePrimary") || hotel?.contactPhone || "+91 00000 00000";
-  const email = str(settings, "contact", "email") || hotel?.contactEmail || "stay@7vachan.com";
+  // Estate-level contact details from Settings, falling back to the hotel's own.
+  // There is deliberately no placeholder beyond that: "+91 00000 00000" and a
+  // made-up mailbox were live, clickable contact details on an unconfigured
+  // install. A missing value hides its item instead.
+  const phone = (str(settings, "contact", "phonePrimary") || hotel?.contactPhone || "").trim();
+  const email = (str(settings, "contact", "email") || hotel?.contactEmail || "").trim();
 
   const socials = socialLinks(settings);
-  const publishedLegal = LEGAL_PAGES.filter(
-    (page) => str(settings, "legal", page.key).trim().length > 0
-  );
+  const publishedLegal = publishedLegalPages(settings).map((page) => ({
+    href: `/legal/${page.slug}`,
+    label: page.label,
+  }));
 
   return (
     <footer className="relative overflow-hidden border-t border-cream/10 bg-ink text-cream/65">
@@ -123,24 +113,30 @@ export default async function Footer() {
                 {addressLine(settings) || hotel?.address || "Satna, Madhya Pradesh, India"}
               </span>
             </li>
-            <li className="flex flex-wrap items-center gap-x-5 gap-y-2">
-              {/* Settings win over the hotel document: the footer speaks for the
-                  whole estate, and the hotel's own number is one business's. */}
-              <a
-                href={`tel:${phone}`}
-                className="flex items-center gap-2.5 text-cream/60 transition-colors hover:text-gold"
-              >
-                <Phone size={14} className="shrink-0 text-gold" />
-                {phone}
-              </a>
-              <a
-                href={`mailto:${email}`}
-                className="flex items-center gap-2.5 text-cream/60 transition-colors hover:text-gold"
-              >
-                <Mail size={14} className="shrink-0 text-gold" />
-                {email}
-              </a>
-            </li>
+            {(phone || email) && (
+              <li className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                {/* Settings win over the hotel document: the footer speaks for the
+                    whole estate, and the hotel's own number is one business's. */}
+                {phone && (
+                  <a
+                    href={`tel:${phone.replace(/\s/g, "")}`}
+                    className="flex items-center gap-2.5 text-cream/60 transition-colors hover:text-gold"
+                  >
+                    <Phone size={14} className="shrink-0 text-gold" />
+                    {phone}
+                  </a>
+                )}
+                {email && (
+                  <a
+                    href={`mailto:${email}`}
+                    className="flex items-center gap-2.5 text-cream/60 transition-colors hover:text-gold"
+                  >
+                    <Mail size={14} className="shrink-0 text-gold" />
+                    {email}
+                  </a>
+                )}
+              </li>
+            )}
           </ul>
         </div>
 
@@ -201,7 +197,7 @@ export default async function Footer() {
 
       {/* ── Legal bar: one clean row ── */}
       <div className="relative border-t border-cream/10">
-        <div className="container-luxe flex flex-col items-center justify-between gap-2 py-5 text-xs font-light text-cream/40 sm:flex-row">
+        <div className="container-luxe flex flex-col items-center justify-between gap-2 py-5 text-xs font-light text-cream/60 sm:flex-row">
           <p>
             © {new Date().getFullYear()} {str(settings, "general", "siteName", "7 Vachan")}. All
             rights reserved.

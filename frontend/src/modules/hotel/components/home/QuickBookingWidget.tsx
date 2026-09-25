@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, useReducedMotion } from "framer-motion";
 import { Calendar, Users, Search, Minus, Plus } from "lucide-react";
 import { EASE_LUXE } from "@/components/motion/variants";
+import { todayISO } from "@/lib/format";
 
 /**
  * Floating availability panel that overlaps the hero.
@@ -23,7 +24,9 @@ export default function QuickBookingWidget() {
   const [guests, setGuests] = useState(2);
 
   // Block past dates in the picker itself, and keep check-out after check-in.
-  const today = new Date().toISOString().split("T")[0];
+  // Property-local (IST) date: the UTC date is still "yesterday" in India
+  // between 00:00 and 05:30.
+  const today = todayISO();
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -89,7 +92,9 @@ export default function QuickBookingWidget() {
                 onClick={() => setGuests((g) => Math.max(1, g - 1))}
                 disabled={guests <= 1}
                 aria-label="Decrease guests"
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-ink/15 text-ink/70
+                // The ::before overlay widens the tap target to 40px without
+                // changing the 32px circle that's drawn.
+                className="relative flex h-8 w-8 before:absolute before:-inset-1 before:content-[''] items-center justify-center rounded-full border border-ink/15 text-ink/70
                            transition-all duration-300 hover:border-gold hover:text-gold
                            disabled:cursor-not-allowed disabled:opacity-30"
               >
@@ -102,7 +107,7 @@ export default function QuickBookingWidget() {
                 type="button"
                 onClick={() => setGuests((g) => Math.min(20, g + 1))}
                 aria-label="Increase guests"
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-ink/15 text-ink/70
+                className="relative flex h-8 w-8 before:absolute before:-inset-1 before:content-[''] items-center justify-center rounded-full border border-ink/15 text-ink/70
                            transition-all duration-300 hover:border-gold hover:text-gold"
               >
                 <Plus size={12} />

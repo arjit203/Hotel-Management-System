@@ -122,7 +122,7 @@ export default function MenuBrowser({
         <button
           onClick={() => setShowFilters((v) => !v)}
           aria-expanded={showFilters}
-          className="inline-flex items-center gap-2 rounded-full border border-ink/12 px-5 py-2.5 text-xs uppercase tracking-luxe text-ink"
+          className="inline-flex items-center gap-2 rounded-full border border-ink/[0.12] px-5 py-2.5 text-xs uppercase tracking-luxe text-ink"
         >
           <SlidersHorizontal size={13} /> {showFilters ? "Hide" : "Filters"}
         </button>

@@ -13,7 +13,8 @@ export async function generateMetadata(): Promise<Metadata> {
   const name = data?.hall.name ?? "our banquet hall";
 
   return {
-    title: `Contact — ${name}`,
+    alternates: { canonical: "/marriage-hall/contact" },
+    title: `Contact — Marriage Hall`,
     description: `Visit or call ${name}. ${data?.hall.address ?? ""} Arrange a walkthrough of the hall, the lawn and the terrace.`,
   };
 }

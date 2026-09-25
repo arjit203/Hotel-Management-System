@@ -23,8 +23,19 @@ const ORDER: BusinessKey[] = ["hotel", "restaurant", "hall"];
  * not require a UI change.
  */
 export default function BusinessSelector({ collapsed = false }: { collapsed?: boolean }) {
-  const { business, setBusiness, hotels, restaurants, halls, activeProperty, setActivePropertyId, loading } =
-    useBusiness();
+  const {
+    business,
+    setBusiness,
+    availableBusinesses,
+    hotels,
+    restaurants,
+    halls,
+    activeProperty,
+    setActivePropertyId,
+    loading,
+  } = useBusiness();
+  // A `*_manager` sees only its own vertical; super_admin sees all three.
+  const businessOptions = ORDER.filter((key) => availableBusinesses.includes(key));
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -91,7 +102,7 @@ export default function BusinessSelector({ collapsed = false }: { collapsed?: bo
           <p className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-ink-400">
             Business
           </p>
-          {ORDER.map((key) => {
+          {businessOptions.map((key) => {
             const Icon = ICON[key];
             const isCurrent = key === business;
             return (

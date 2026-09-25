@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import { ogDefaults } from "@/lib/seo";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -37,9 +38,10 @@ export async function generateMetadata(): Promise<Metadata> {
     description: data.hotel.metaDescription || data.hotel.description.slice(0, 155),
     alternates: { canonical: "/hotel" },
     openGraph: {
+      ...(await ogDefaults()),
       title: data.hotel.metaTitle || data.hotel.name,
-      description: data.hotel.metaDescription || undefined,
-      images: data.gallery?.[0]?.imageUrl ? [data.gallery[0].imageUrl] : undefined,
+      ...(data.hotel.metaDescription ? { description: data.hotel.metaDescription } : {}),
+      ...(data.gallery?.[0]?.imageUrl ? { images: [data.gallery[0].imageUrl] } : {}),
     },
   };
 }
@@ -96,7 +98,7 @@ export default async function HotelPage() {
 
   return (
     <main>
-      <HotelSchema hotel={hotel} image={gallery[0]?.imageUrl} />
+      <HotelSchema hotel={hotel} image={gallery[0]?.imageUrl} reviewSummary={reviewSummary} />
 
       {/* Schema only — no visible trail. The hero already establishes place. */}
       <Breadcrumbs items={[{ label: "Home", href: "/" }, { label: hotel.name }]} />
@@ -301,7 +303,7 @@ export default async function HotelPage() {
         <Reveal>
           <div className="grid grid-cols-1 gap-px overflow-hidden rounded-luxe border border-ink/[0.07] bg-ink/[0.06] sm:grid-cols-3">
             <a
-              href={`tel:${hotel.contactPhone}`}
+              href={`tel:${hotel.contactPhone.replace(/\s/g, "")}`}
               className="group flex flex-col items-center gap-2 bg-white px-6 py-8 text-center transition-colors duration-500 hover:bg-cream"
             >
               <Phone size={16} strokeWidth={1.5} className="text-gold" />

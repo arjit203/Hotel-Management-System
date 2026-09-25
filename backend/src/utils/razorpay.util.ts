@@ -28,6 +28,23 @@ export interface RazorpayOrderResult {
   id: string;
   amount: number; // in paise
   currency: string;
+  // Public key id Checkout must be opened with. Public by design (it ships to
+  // every browser) — the key SECRET never leaves the server.
+  keyId?: string;
+}
+
+const GATEWAY_ERROR_MESSAGE = "Payment gateway error. Please try again.";
+
+// Logs what went wrong without dumping the SDK error object whole: Razorpay's
+// errors can carry the request config, which includes the basic-auth header.
+function logGatewayError(operation: string, err: unknown) {
+  const e = err as { statusCode?: number; error?: { code?: string; description?: string }; message?: string };
+  console.error(
+    `⚠️  Razorpay ${operation} failed:`,
+    e?.statusCode ?? "",
+    e?.error?.code ?? "",
+    e?.error?.description ?? e?.message ?? "unknown error"
+  );
 }
 
 export interface RazorpayRefundResult {
@@ -43,15 +60,26 @@ export async function createRazorpayOrder(
   receipt: string
 ): Promise<RazorpayOrderResult> {
   const instance = getRazorpayInstance();
-  const order = await instance.orders.create({
-    amount: Math.round(amountInRupees * 100),
-    currency: "INR",
-    receipt,
-    // Supports UPI, Cards, Net Banking, Wallets by default — Razorpay's
-    // Checkout widget offers all enabled payment methods on the account;
-    // nothing method-specific needs to be configured here.
-  });
-  return { id: order.id, amount: Number(order.amount), currency: order.currency };
+  let order;
+  try {
+    order = await instance.orders.create({
+      amount: Math.round(amountInRupees * 100),
+      currency: "INR",
+      receipt,
+      // Supports UPI, Cards, Net Banking, Wallets by default — Razorpay's
+      // Checkout widget offers all enabled payment methods on the account;
+      // nothing method-specific needs to be configured here.
+    });
+  } catch (err) {
+    logGatewayError("order create", err);
+    throw new ApiError(502, GATEWAY_ERROR_MESSAGE);
+  }
+  return {
+    id: order.id,
+    amount: Number(order.amount),
+    currency: order.currency,
+    keyId: process.env.RAZORPAY_KEY_ID,
+  };
 }
 
 // Verifies the signature Razorpay's Checkout returns after a successful
@@ -70,16 +98,30 @@ export function verifyRazorpaySignature(
     .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
     .update(`${orderId}|${paymentId}`)
     .digest("hex");
-  return expected === signature;
+  // Constant-time compare so the check can't be probed byte-by-byte through
+  // response timing. timingSafeEqual throws on unequal lengths, hence the guard.
+  if (typeof signature !== "string") return false;
+  const expectedBuf = Buffer.from(expected, "utf8");
+  const actualBuf = Buffer.from(signature, "utf8");
+  if (expectedBuf.length !== actualBuf.length) return false;
+  return crypto.timingSafeEqual(expectedBuf, actualBuf);
 }
 
 export async function createRazorpayRefund(
   paymentId: string,
-  amountInRupees: number
+  amountInRupees: number,
+  notes?: Record<string, string>
 ): Promise<RazorpayRefundResult> {
   const instance = getRazorpayInstance();
-  const refund = await instance.payments.refund(paymentId, {
-    amount: Math.round(amountInRupees * 100),
-  });
+  let refund;
+  try {
+    refund = await instance.payments.refund(paymentId, {
+      amount: Math.round(amountInRupees * 100),
+      ...(notes ? { notes } : {}),
+    });
+  } catch (err) {
+    logGatewayError("refund", err);
+    throw new ApiError(502, GATEWAY_ERROR_MESSAGE);
+  }
   return { id: refund.id, status: refund.status as string, amount: Number(refund.amount) };
 }

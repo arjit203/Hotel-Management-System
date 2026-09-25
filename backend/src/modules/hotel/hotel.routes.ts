@@ -3,7 +3,12 @@ import * as hotelController from "./hotel.controller";
 import { authenticate, optionalAuthenticate, requireRole } from "../../middlewares/auth.middleware";
 import { auditLogger } from "../../middlewares/audit.middleware";
 import { uploadImage } from "../../middlewares/upload.middleware";
-import { publicFormLimiter, publicUploadLimiter } from "../../middlewares/rateLimit.middleware";
+import {
+  publicFormLimiter,
+  publicUploadLimiter,
+  paymentVerifyLimiter,
+  publicLookupLimiter,
+} from "../../middlewares/rateLimit.middleware";
 
 // Admins allowed to manage hotel content — Super Admin (branchId=null) or the
 // Branch Admin for that property. Staff can view but not mutate (per typical
@@ -55,13 +60,29 @@ publicBookingRouter.post(
   optionalAuthenticate("user"),
   hotelController.createBooking
 );
-publicBookingRouter.post("/verify-payment", publicFormLimiter, hotelController.verifyPayment);
-publicBookingRouter.get("/reference/:reference", hotelController.getBookingByReference);
+// Own limiter: a guest who has paid must never be 429'd out of confirming
+// because the same IP also submitted forms.
+publicBookingRouter.post("/verify-payment", paymentVerifyLimiter, hotelController.verifyPayment);
+// optionalAuthenticate: the owning user sees the full booking; anyone else
+// holding the reference gets the masked public projection.
+publicBookingRouter.get(
+  "/reference/:reference",
+  publicLookupLimiter,
+  optionalAuthenticate("user"),
+  hotelController.getBookingByReference
+);
 publicBookingRouter.put(
   "/reference/:reference/cancel",
   publicFormLimiter,
   optionalAuthenticate("user"),
   hotelController.cancelBooking
+);
+// New order for a still-pending booking (Checkout dismissed / payment failed).
+publicBookingRouter.post(
+  "/:reference/retry-payment",
+  publicFormLimiter,
+  optionalAuthenticate("user"),
+  hotelController.retryPayment
 );
 publicBookingRouter.get("/me", authenticate("user"), hotelController.getMyBookings);
 

@@ -83,10 +83,10 @@ export async function listAdmins(filters: ListAdminsQuery = {}) {
     query.$or = [{ name: rx }, { email: rx }, { phone: rx }];
   }
 
-  const admins = await Admin.find(query).select(PUBLIC_FIELDS).sort({ createdAt: -1 });
+  const admins = await Admin.find(query).select(PUBLIC_FIELDS).sort({ createdAt: -1 }).lean();
 
   return admins.map((a) => ({
-    ...a.toObject(),
+    ...a,
     effectiveScope: effectiveScope(a),
     // Surfaced so the admin panel can flag accounts left on a role that no
     // longer exists (`branch_admin`, `staff`). They are refused everywhere by
@@ -185,7 +185,11 @@ export async function updateAdmin(id: string, updates: UpdateAdminInput, actingA
 
   admin.businessScope = resolveScope(nextRole);
 
-  await admin.save();
+  // validateModifiedOnly: on a legacy-role row (`staff`/`branch_admin`) a full
+  // save() re-validates `role` against the enum and 500s, which would make the
+  // one screen that can fix the row unable to. Re-roling it modifies `role`,
+  // so the new value IS validated.
+  await admin.save({ validateModifiedOnly: true });
   return getAdminById(id);
 }
 
@@ -199,8 +203,13 @@ export async function setAdminStatus(id: string, isActive: boolean, actingAdminI
 
   if (!isActive) await assertNotLastSuperAdmin(id, "deactivate it");
 
+  const wasActive = admin.isActive;
   admin.isActive = isActive;
-  await admin.save();
+  // Deactivation also revokes every outstanding token (see tokenVersion), so
+  // reactivating later doesn't bring old sessions back to life.
+  if (wasActive && !isActive) admin.tokenVersion = (admin.tokenVersion ?? 0) + 1;
+  // validateModifiedOnly so a Super Admin can deactivate a legacy-role row.
+  await admin.save({ validateModifiedOnly: true });
 
   return getAdminById(id);
 }
@@ -222,7 +231,9 @@ export async function resetAdminPasswordDirect(id: string, newPassword: string) 
   // email cannot be used to set a third password.
   admin.passwordResetToken = undefined;
   admin.passwordResetExpires = undefined;
-  await admin.save();
+  // New password ends every existing session for this account.
+  admin.tokenVersion = (admin.tokenVersion ?? 0) + 1;
+  await admin.save({ validateModifiedOnly: true });
 
   return { id, message: "Password updated." };
 }

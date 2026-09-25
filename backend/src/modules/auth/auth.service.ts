@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import { Model } from "mongoose";
 import { User, IUser } from "./models/user.model";
-import { Admin, IAdmin } from "./models/admin.model";
+import { Admin, IAdmin, isLegacyRole } from "./models/admin.model";
 import { signJwt, generateRawAndHashedToken, hashToken } from "../../utils/token.util";
 import {
   sendEmail,
@@ -11,6 +11,14 @@ import {
 import { SignupInput, LoginInput } from "./auth.validation";
 
 const SALT_ROUNDS = 10;
+
+/**
+ * A valid bcrypt hash of a random string nobody knows. When the account doesn't
+ * exist (or can't sign in) we still run one compare against this, so the
+ * response takes as long as a wrong password would and timing can't be used to
+ * discover which emails have accounts.
+ */
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync("7vachan-timing-equaliser-not-a-password", SALT_ROUNDS);
 
 class ApiError extends Error {
   statusCode: number;
@@ -99,11 +107,15 @@ export async function loginUser(input: LoginInput) {
 
 // ---------- ADMIN: LOGIN ----------
 // NOTE: No public admin signup endpoint — per RULES.md, admins are provisioned
-// internally (Super Admin creates Branch Admin/Staff accounts). This module only
-// implements login + password reset for admins.
+// internally (a Super Admin creates the manager accounts via /admin/users). This
+// module only implements login + password reset for admins.
 export async function loginAdmin(input: LoginInput) {
   const admin = await Admin.findOne({ email: input.email }).select("+passwordHash");
-  if (!admin || !admin.isActive) {
+
+  // A missing, deactivated or legacy-role (`staff`/`branch_admin`) account all
+  // get the same 401 as a wrong password, after the same bcrypt cost.
+  if (!admin || !admin.isActive || isLegacyRole(admin.role)) {
+    await bcrypt.compare(input.password, DUMMY_PASSWORD_HASH);
     throw new ApiError(401, "Invalid email or password.");
   }
 
@@ -112,10 +124,16 @@ export async function loginAdmin(input: LoginInput) {
     throw new ApiError(401, "Invalid email or password.");
   }
 
-  admin.lastLoginAt = new Date();
-  await admin.save();
+  // updateOne, not save(): save() re-validates the whole document, so any
+  // stale field on an old row would turn a correct login into a 500.
+  await Admin.updateOne({ _id: admin._id }, { $set: { lastLoginAt: new Date() } });
 
-  const token = signJwt({ id: String(admin._id), role: admin.role, actorType: "admin" });
+  const token = signJwt({
+    id: String(admin._id),
+    role: admin.role,
+    actorType: "admin",
+    tv: admin.tokenVersion ?? 0,
+  });
 
   return {
     token,
@@ -146,7 +164,9 @@ async function forgotPasswordGeneric<T extends IUser | IAdmin>(
 
   account.passwordResetToken = hashedToken;
   account.passwordResetExpires = new Date(Date.now() + expiryMinutes * 60 * 1000);
-  await account.save();
+  // validateModifiedOnly: a legacy-role admin row must not 500 here (and so
+  // reveal that the email exists) just because its `role` fails the enum.
+  await account.save({ validateModifiedOnly: true });
 
   const resetUrl = `${portalUrl}/reset-password/${rawToken}`;
   await sendEmail({
@@ -186,7 +206,14 @@ async function resetPasswordGeneric<T extends IUser | IAdmin>(
   account.passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
   account.passwordResetToken = undefined;
   account.passwordResetExpires = undefined;
-  await account.save();
+  // Admins: a password reset ends every existing session (see tokenVersion).
+  if (model === (Admin as unknown)) {
+    const admin = account as unknown as IAdmin;
+    admin.tokenVersion = (admin.tokenVersion ?? 0) + 1;
+  }
+  // Only the fields changed here are validated, so a legacy-role row (whose
+  // `role` no longer passes the enum) can still reset its password.
+  await account.save({ validateModifiedOnly: true });
 }
 
 export async function resetUserPassword(rawToken: string, newPassword: string) {

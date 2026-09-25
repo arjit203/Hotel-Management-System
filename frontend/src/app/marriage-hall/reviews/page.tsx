@@ -15,7 +15,8 @@ export async function generateMetadata(): Promise<Metadata> {
   const summary = data?.reviewSummary;
 
   return {
-    title: `Reviews — ${name}`,
+    alternates: { canonical: "/marriage-hall/reviews" },
+    title: `Reviews — Marriage Hall`,
     description:
       summary && summary.count > 0
         ? `${summary.average.toFixed(1)} out of 5 from ${summary.count} families who celebrated at ${name}.`

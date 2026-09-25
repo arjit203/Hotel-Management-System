@@ -250,7 +250,7 @@ export default function GalleryManager({
                   />
 
                   {!readOnly && (
-                    <span className="absolute left-1.5 top-1.5 rounded bg-white/90 p-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 data-[on=true]:opacity-100"
+                    <span className="absolute left-1.5 top-1.5 rounded bg-white/90 p-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 data-[on=true]:opacity-100 [@media(hover:none)]:p-2 [@media(hover:none)]:opacity-100"
                       data-on={isSelected}
                     >
                       <Checkbox
@@ -265,12 +265,12 @@ export default function GalleryManager({
                     {item.category}
                   </span>
 
-                  <div className="absolute inset-x-0 bottom-0 flex justify-center gap-1 bg-ink-900/70 py-1 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+                  <div className="absolute inset-x-0 bottom-0 flex justify-center gap-1 bg-ink-900/70 py-1 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100">
                     <button
                       type="button"
                       onClick={() => setPreview(item.imageUrl)}
                       aria-label="Preview image"
-                      className="rounded p-1 text-white hover:bg-white/20"
+                      className="rounded p-1 text-white hover:bg-white/20 inline-flex items-center justify-center [@media(hover:none)]:min-h-9 [@media(hover:none)]:min-w-9"
                     >
                       <ZoomIn size={14} />
                     </button>
@@ -279,7 +279,7 @@ export default function GalleryManager({
                         type="button"
                         onClick={() => void handleDelete(item)}
                         aria-label="Remove image"
-                        className="rounded p-1 text-white hover:bg-danger-600"
+                        className="rounded p-1 text-white hover:bg-danger-600 inline-flex items-center justify-center [@media(hover:none)]:min-h-9 [@media(hover:none)]:min-w-9"
                       >
                         <Trash2 size={14} />
                       </button>

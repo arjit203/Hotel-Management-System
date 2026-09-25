@@ -1,5 +1,6 @@
 import { Clock } from "lucide-react";
 import { WEEKDAYS, formatTimeSlot, type ServiceHoursData } from "@/lib/restaurant";
+import { todayDayOfWeek } from "@/lib/format";
 
 /**
  * Restaurant Timings — the weekly service schedule.
@@ -14,7 +15,8 @@ import { WEEKDAYS, formatTimeSlot, type ServiceHoursData } from "@/lib/restauran
 export default function TimingsTable({ serviceHours }: { serviceHours: ServiceHoursData[] }) {
   if (!serviceHours || serviceHours.length === 0) return null;
 
-  const today = new Date().getDay();
+  // The restaurant's weekday (Asia/Kolkata), not the server's.
+  const today = todayDayOfWeek();
 
   // Order Monday-first (the way an Indian restaurant lists its week), while the
   // stored dayOfWeek keeps JS's Sunday-first indexing.

@@ -40,7 +40,7 @@ export default function CancelReservationButton({
     setError("");
     const token = getUserToken();
     const res = await api.put(
-      `/table-reservations/reference/${reservationReference}/cancel`,
+      `/table-reservations/reference/${encodeURIComponent(reservationReference)}/cancel`,
       { guestEmail },
       { headers: token ? { Authorization: `Bearer ${token}` } : {} }
     );

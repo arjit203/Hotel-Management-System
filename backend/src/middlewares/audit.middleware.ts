@@ -177,11 +177,12 @@ function moduleFor(segments: string[]): AuditModule {
 }
 
 /** Best-effort client IP; honours a proxy header when one is present. */
+/**
+ * `req.ip` honours `app.set("trust proxy", TRUST_PROXY_HOPS)` in server.ts, so
+ * it reads X-Forwarded-For only as far as the configured proxies go. Reading
+ * the raw header here would let any client write any IP into the audit log.
+ */
 function clientIp(req: Request): string | undefined {
-  const forwarded = req.headers["x-forwarded-for"];
-  if (typeof forwarded === "string" && forwarded.length > 0) {
-    return forwarded.split(",")[0].trim();
-  }
   return req.ip || req.socket?.remoteAddress || undefined;
 }
 

@@ -4,6 +4,148 @@ Format: newest entries on top. Categories: Added / Changed / Fixed / Security / 
 
 ---
 
+## [2026-09-25 c] — Module 5: production readiness & cross-module integration
+
+Audit of all three apps (RBAC/IDOR, payments, booking flows, settings, SEO,
+security, performance, responsiveness, code quality), then targeted fixes. No
+module was rebuilt, no route removed, no dependency added. Marriage Hall stays
+enquiry/offline-confirmation; refunds were hardened, not extended.
+
+### Security
+- **Cross-business content access closed.** `content.service.ts` mutators now take
+  the router's vertical and filter on it, so a hotel manager can no longer
+  moderate, reply to or delete Marriage Hall / Restaurant reviews, gallery items,
+  FAQs or offers by id (ids are public). Offer updates are field-whitelisted
+  (closes mass assignment of `applicableTo` / `ownerId` / operators).
+- **Booking references are no longer enough to read guest data or cancel.** The
+  three public `/reference/:ref` lookups mask `guestEmail` / `guestPhone` and drop
+  payment/user ids unless the caller is the owning user, and are rate-limited
+  (`publicLookupLimiter`). `CancelEnquiryButton` now asks for the email instead of
+  sending the one read from the lookup.
+- **Unbounded date-range DoS fixed:** stays capped at 60 nights / 2 years ahead,
+  `rooms[]` at 10 lines.
+- Razorpay signature compare is constant-time; a bad signature no longer writes
+  `paymentStatus: failed`; `razorpaySignature` is never returned.
+- Admin Cloudinary deletes are restricted to the vertical's folder; upload
+  `?folder=` is sanitised.
+- CORS allowlist (`FRONTEND_URL`, `ADMIN_PANEL_URL`, `CORS_EXTRA_ORIGINS`);
+  `trust proxy` via `TRUST_PROXY_HOPS`; simple query parser (blocks `?x[$ne]=`
+  injection); 100 kb JSON limit; JWT secrets required in production.
+- Admin token revocation: `Admin.tokenVersion` + `tv` claim, bumped on password
+  reset and deactivation. HS256 pinned. Login runs bcrypt on unknown/inactive
+  accounts too (no timing enumeration). Retired-role accounts get a clean 403
+  instead of a 500. Separate user/admin auth limiters. Audit IP uses `req.ip`.
+- Email templates HTML-escape every interpolated value; production logs only
+  recipient + subject (full bodies contained reset/verify links); SMTP timeouts.
+- Upload middleware: 1 file / 10 fields, extension check, env read at request time
+  (`MAX_IMAGE_UPLOAD_MB` from `.env` was previously ignored).
+- JSON-LD script content is escaped (stored-XSS via admin-edited descriptions).
+
+### Fixed — payments & booking integrity
+- `verifyPayment` confirms with one atomic conditional update: no double
+  confirmation or duplicate emails under concurrent calls; idempotent for the same
+  payment id; unique sparse index on `razorpayPaymentId`.
+- Pending bookings hold rooms for 30 minutes (`paymentExpiresAt`) instead of
+  forever; a failed order creation cancels the booking; new
+  `POST /hotel-bookings/:reference/retry-payment` reuses the booking; Checkout uses
+  the backend's `razorpayOrder.keyId`; `payment.failed` handled; after payment the
+  guest always lands on the confirmation page.
+- Refund hardening: atomic cancel (one gateway call), `refundBooking()` single
+  entry point, refund id / status / time / error stored, Razorpay `pending` →
+  `refund_pending` (was recorded as `refunded`).
+- Admin status changes enforce allowed transitions in all three verticals
+  (no confirming unpaid bookings, no reactivating cancelled ones, no hand-set
+  refund states) with atomic updates.
+- Marriage Hall: two enquiries can no longer be confirmed for the same date;
+  confirming never overwrites a staff block; un-confirming only releases this
+  enquiry's own calendar row; opening a held date returns 409.
+- Restaurant: sitting duration is respected (overlapping reservations counted),
+  and already-started slots today (IST) can't be booked.
+- Hotel confirmation email no longer says "online payment coming soon"; it shows
+  advance paid and balance due. Emails are fire-and-forget so SMTP latency can't
+  fail or stall a booking.
+
+### Fixed — public site
+- Mobile menu and room photo viewer had **no background** (`bg-ink/97`, `/96` are
+  off Tailwind's scale and generated no CSS); ~20 `border-ink/12` / `bg-gold/12`
+  uses fixed the same way. Visuals now match the design.
+- A canonical URL without a scheme in Settings no longer takes down every page.
+- SEO: noindex on confirmation, My Bookings and verify-email pages; robots.txt
+  disallows every private path and honours `seo.robotsIndex`; no more duplicated
+  brand in titles; canonicals on all Marriage Hall and legal pages; one
+  `siteUrl()` helper (fallback `:3100`, was `:3000`); OG defaults merged into
+  pages with their own openGraph; sitemap includes published legal pages;
+  valid legal breadcrumb; HotelSchema `url`/`starRating`/`aggregateRating` fixed.
+- GA4 / GTM / Facebook Pixel injected from Settings → SEO when the id is valid.
+- My Bookings now shows hotel stays, table reservations and hall enquiries, and
+  an expired session shows a sign-in prompt instead of "No stays yet". Hall
+  enquiries from signed-in guests are now linked to their account.
+- Header spacer, hero scroll cue overlap, tap targets, IST "today" in date
+  pickers, fake footer contact fallbacks removed, RoomSearch error state,
+  contrast fixes. Added root `not-found.tsx` / `error.tsx`. Deleted two pages that
+  their redirects made unreachable.
+
+### Fixed — admin panel
+- Managers start in, and can only switch to, their own business; Users / Audit
+  logs / Settings hidden from non-Super-Admins; out-of-scope pages explain
+  themselves instead of showing an empty list; dashboard fetches only in-scope data.
+- Status menus offer only valid next statuses; server 409 messages are shown.
+- Notification bell polls `/notifications/count` only and loads the list on
+  open; hall enquiry references no longer show "undefined"; cancelled / refunded
+  bookings no longer appear as "Payment received"; new "Refund needs attention"
+  item; read items stay read after later edits.
+- Row-action menus no longer clipped by tables; notification tray fits phones;
+  image controls usable on touch; modal height on phones; no iOS zoom on inputs;
+  mobile sidebar closes on Escape.
+- Settings: 53 unwired keys labelled "Not yet active"; maintenance copy no longer
+  claims enforcement; advance % minimum 1; cancellation-window hint corrected.
+- A deactivated or retired account is signed out instead of seeing errors.
+
+### Changed
+- Settings → Booking (`hotelEnabled`, `hotelAdvancePercent`,
+  `cancellationFreeWindowHours`, `restaurantEnabled`, `hallEnquiriesEnabled`) and
+  Email (`adminNotificationEmail`) now take effect. Precedence: stored → env →
+  default. Settings saves validate `canonicalUrl` and `hotelAdvancePercent`.
+- `applyIntegrationEnv` restores the original `.env` value when an integration
+  setting is cleared (it previously kept the stale DB value until restart).
+- `features.newsletterSignup` / `features.onlineOrdering` defaults → `true` (they
+  contradicted what the site renders).
+- Admin list endpoints accept `?page=&limit=`; **without `page` they return at most
+  the newest 200 rows** (still a plain array).
+- Revenue export groups by payment time and adds Refunded / Net received columns.
+- Error responses: invalid id 400, duplicate 409, validation 400 with `errors[]`,
+  malformed JSON 400, too large 413 (previously several of these were 500).
+- `PORT` fallback 5000 → 5100.
+
+### Performance
+- Indexes added for the fields services actually query (bookings, reservations,
+  enquiries, reviews, offers, FAQs); redundant `index:true` on unique paths
+  removed. Review summary is a `$group` aggregate; public reviews capped at 50;
+  room search no longer re-reads each room; popularity aggregate matches before
+  unwinding; `.lean()` on large reads.
+
+### Known limitations (unchanged, deliberately deferred)
+- Availability check and booking creation are still not transactional (shared
+  Booking Engine). No Razorpay webhook / reconciliation job yet. LazyMotion and
+  `next/image` not adopted. No pagination UI. ~100 settings still not consumed.
+- **Mongo index note:** the old `reviewableType_1_reviewableId_1_isApproved_1`
+  review index is no longer declared and can be dropped by hand; the new unique
+  sparse index on `razorpayPaymentId` will fail to build if duplicate payment ids
+  already exist.
+
+### Verification
+- `npx tsc --noEmit` passes in backend, frontend and admin-panel. ESLint
+  (`next/core-web-vitals`, run with a temporary config — the repo has none) reports
+  0 errors, 0 warnings in both Next apps.
+- Live smoke tests against the dev servers: stay caps (400), invalid id (400),
+  operator injection (handled), admin routes without token (401), malformed JSON
+  (400), foreign-origin CORS (no header), public settings (no secrets / private
+  fields), key public pages, sitemap and robots (200 and correct content).
+- `next build` **not run** — the dev servers were using `.next`. No automated tests
+  exist; manual QA steps are in the Module 5 report.
+
+---
+
 ## [2026-09-25 b] — Larger site-wide type
 
 ### Changed (public site — presentation only)

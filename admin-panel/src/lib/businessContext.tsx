@@ -1,8 +1,9 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { publicGet } from "./api";
+import { BUSINESS_STORAGE_KEY, PROPERTY_STORAGE_KEY, publicGet } from "./api";
 import { useAdminSession } from "./adminSession";
+import { allowedBusinesses } from "./roles";
 
 /** Which vertical the admin is currently working in. All three are live. */
 export type BusinessKey = "hotel" | "restaurant" | "hall";
@@ -27,6 +28,11 @@ export interface BusinessProperty {
 interface BusinessContextValue {
   business: BusinessKey;
   setBusiness: (next: BusinessKey) => void;
+  /**
+   * Verticals the signed-in role may switch to: all three for super_admin,
+   * just its own for a `*_manager`. Presentation only — the API enforces it.
+   */
+  availableBusinesses: BusinessKey[];
 
   hotels: BusinessProperty[];
   restaurants: BusinessProperty[];
@@ -58,9 +64,6 @@ export function useBusiness() {
   return ctx;
 }
 
-const BUSINESS_STORAGE_KEY = "admin_active_business";
-const PROPERTY_STORAGE_KEY = "admin_active_property";
-
 export const BUSINESS_LABEL: Record<BusinessKey, string> = {
   hotel: "Hotel",
   restaurant: "Restaurant",
@@ -78,7 +81,9 @@ export const BUSINESS_LABEL: Record<BusinessKey, string> = {
  * involved.
  */
 export function BusinessProvider({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, ready: sessionReady } = useAdminSession();
+  const { admin, isAuthenticated, ready: sessionReady } = useAdminSession();
+  const role = admin?.role;
+  const availableBusinesses = useMemo(() => allowedBusinesses(role), [role]);
   const [business, setBusinessState] = useState<BusinessKey>("hotel");
   const [hotels, setHotels] = useState<BusinessProperty[]>([]);
   const [restaurants, setRestaurants] = useState<BusinessProperty[]>([]);
@@ -113,6 +118,10 @@ export function BusinessProvider({ children }: { children: React.ReactNode }) {
     // mounts there too, but there is nothing to show an unauthenticated user.
     if (!sessionReady) return;
     if (!isAuthenticated) {
+      // Signed out: forget the in-memory vertical too, so the next admin to
+      // sign in on this tab starts from their own scope, not the last one's.
+      setBusinessState("hotel");
+      setActiveIds({});
       setHotels([]);
       setRestaurants([]);
       setHalls([]);
@@ -149,10 +158,29 @@ export function BusinessProvider({ children }: { children: React.ReactNode }) {
     };
   }, [reloadToken, isAuthenticated, sessionReady]);
 
-  const setBusiness = useCallback((next: BusinessKey) => {
-    setBusinessState(next);
-    localStorage.setItem(BUSINESS_STORAGE_KEY, next);
-  }, []);
+  const setBusiness = useCallback(
+    (next: BusinessKey) => {
+      // A manager can't switch out of its own vertical; ignore the attempt
+      // rather than show a shell full of 403s.
+      if (availableBusinesses.length > 0 && !availableBusinesses.includes(next)) return;
+      setBusinessState(next);
+      localStorage.setItem(BUSINESS_STORAGE_KEY, next);
+    },
+    [availableBusinesses]
+  );
+
+  // Once the session is known, pin a `*_manager` to its own vertical. The
+  // default ("hotel") and a value restored from localStorage can both be wrong
+  // for, say, a hall_manager. super_admin keeps whatever it last chose.
+  useEffect(() => {
+    if (!sessionReady || !isAuthenticated) return;
+    if (availableBusinesses.length === 0) return;
+    if (!availableBusinesses.includes(business)) {
+      const own = availableBusinesses[0];
+      setBusinessState(own);
+      localStorage.setItem(BUSINESS_STORAGE_KEY, own);
+    }
+  }, [sessionReady, isAuthenticated, availableBusinesses, business]);
 
   const properties =
     business === "restaurant" ? restaurants : business === "hall" ? halls : hotels;
@@ -182,6 +210,7 @@ export function BusinessProvider({ children }: { children: React.ReactNode }) {
     () => ({
       business,
       setBusiness,
+      availableBusinesses,
       defaultBranchId,
       hotels,
       restaurants,
@@ -196,6 +225,7 @@ export function BusinessProvider({ children }: { children: React.ReactNode }) {
     [
       business,
       setBusiness,
+      availableBusinesses,
       defaultBranchId,
       hotels,
       restaurants,

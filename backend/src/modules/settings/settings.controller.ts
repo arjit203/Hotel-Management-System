@@ -1,7 +1,11 @@
 import { Request, Response, NextFunction } from "express";
 import * as settingsService from "./settings.service";
 import type { SettingCategory } from "./models/setting.model";
-import { settingsCategoryParamSchema, updateSettingsSchema } from "./settings.validation";
+import {
+  settingsCategoryParamSchema,
+  updateSettingsSchema,
+  validateCategoryPatch,
+} from "./settings.validation";
 
 /**
  * Settings controllers. Same shape as every other module: parse with Zod,
@@ -65,6 +69,11 @@ export async function updateSettingsCategory(req: Request, res: Response, next: 
 
     const body = updateSettingsSchema.safeParse(req.body);
     if (!body.success) return handleZodError(res, body.error);
+
+    const keyErrors = validateCategoryPatch(params.data.category, body.data as Record<string, unknown>);
+    if (keyErrors.length > 0) {
+      return res.status(400).json({ success: false, message: "Validation failed", errors: keyErrors });
+    }
 
     const data = await settingsService.updateCategory(
       params.data.category as SettingCategory,

@@ -21,6 +21,44 @@ export function clearToken() {
 }
 
 /**
+ * localStorage keys holding the admin's last-used vertical/property. Owned by
+ * `businessContext.tsx`; declared here so signing out can clear them without a
+ * circular import.
+ */
+export const BUSINESS_STORAGE_KEY = "admin_active_business";
+export const PROPERTY_STORAGE_KEY = "admin_active_property";
+
+/**
+ * Full sign-out on this device: token, cached identity and the remembered
+ * vertical/property — so the next person to sign in here doesn't inherit a
+ * vertical their role can't open.
+ */
+export function clearSession() {
+  if (typeof window === "undefined") return;
+  clearToken();
+  localStorage.removeItem("admin_info");
+  localStorage.removeItem(BUSINESS_STORAGE_KEY);
+  localStorage.removeItem(PROPERTY_STORAGE_KEY);
+}
+
+/**
+ * A 403 that means "this account can no longer use the panel at all" (as
+ * opposed to an ordinary "not your section" 403). Matched on the messages sent
+ * by the backend's `auth.middleware.ts` — "This account has been deactivated."
+ * and the retired-role refusal ("…role has been retired…").
+ */
+function isAccountRevoked(status: number, message: string | undefined): boolean {
+  if (status !== 403 || !message) return false;
+  return /\bdeactivated\b|\bretired\b/i.test(message);
+}
+
+function bounceToLogin() {
+  if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+    window.location.href = "/login";
+  }
+}
+
+/**
  * The admin identity cached at login.
  *
  * `id` matters for more than display: the Users screen needs it to mark "You"
@@ -74,11 +112,23 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<ApiR
     }
   }
 
+  let body: ApiResponse<T>;
   try {
-    return (await res.json()) as ApiResponse<T>;
+    body = (await res.json()) as ApiResponse<T>;
   } catch {
     return { success: false, message: `Unexpected response from the server (${res.status}).` };
   }
+
+  // A deactivated or retired-role account is refused on every request, so
+  // treat it like a dead session rather than leaving the admin on a shell
+  // where everything fails. Ordinary 403s ("Insufficient permissions.") are
+  // left to the page.
+  if (typeof window !== "undefined" && isAccountRevoked(res.status, body?.message)) {
+    clearSession();
+    bounceToLogin();
+  }
+
+  return body;
 }
 
 export const adminApi = {
@@ -157,10 +207,15 @@ async function uploadTo(
   // bounces to /login instead of silently failing.
   if (res.status === 401 && typeof window !== "undefined") {
     clearToken();
-    if (window.location.pathname !== "/login") window.location.href = "/login";
+    bounceToLogin();
   }
 
-  return (await res.json()) as ApiResponse<{ url: string; publicId: string }>;
+  const body = (await res.json()) as ApiResponse<{ url: string; publicId: string }>;
+  if (typeof window !== "undefined" && isAccountRevoked(res.status, body?.message)) {
+    clearSession();
+    bounceToLogin();
+  }
+  return body;
 }
 
 /**

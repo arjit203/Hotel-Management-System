@@ -3,7 +3,11 @@ import * as restaurantService from "./restaurant.service";
 import * as reservationService from "./reservation.service";
 import * as contentService from "../content/content.service";
 import { User } from "../auth/models/user.model";
-import { uploadImageBuffer, deleteImageByPublicId } from "../../utils/cloudinary.util";
+import {
+  uploadImageBuffer,
+  deleteImageByPublicId,
+  safeUploadFolder,
+} from "../../utils/cloudinary.util";
 import { ApiError } from "../../utils/apiError.util";
 import {
   createRestaurantSchema,
@@ -38,6 +42,18 @@ function handleZodError(res: Response, error: any) {
     message: "Validation failed",
     errors: error.errors?.map((e: any) => ({ field: e.path.join("."), message: e.message })),
   });
+}
+
+/**
+ * Optional `?page=&limit=` for admin lists. Without `page` the response stays a
+ * bare array (capped at `limit`, default 200) so existing callers are unaffected.
+ */
+function parsePaging(query: Request["query"]) {
+  const paged = query.page !== undefined;
+  const page = Math.max(1, Math.floor(Number(query.page)) || 1);
+  const rawLimit = Math.floor(Number(query.limit)) || 200;
+  const limit = Math.min(500, Math.max(1, rawLimit));
+  return { paged, page, limit, skip: paged ? (page - 1) * limit : 0 };
 }
 
 // ================== PUBLIC: RESTAURANT ==================
@@ -194,7 +210,13 @@ export async function checkTableAvailability(req: Request, res: Response, next: 
 
     res.status(200).json({
       success: true,
-      data: { availableTables, tablesNeeded, canReserve: availableTables >= tablesNeeded },
+      data: {
+        availableTables,
+        tablesNeeded,
+        canReserve:
+          availableTables >= tablesNeeded &&
+          !restaurantService.isSlotInPast(new Date(parsed.data.date), parsed.data.timeSlot),
+      },
     });
   } catch (err) {
     next(err);
@@ -242,7 +264,11 @@ export async function createReservation(req: Request, res: Response, next: NextF
 export async function getReservationByReference(req: Request, res: Response, next: NextFunction) {
   try {
     const reservation = await reservationService.getReservationByReference(req.params.reference);
-    res.status(200).json({ success: true, data: reservation });
+    // Contact details are masked unless the owning user's token is present.
+    res.status(200).json({
+      success: true,
+      data: reservationService.toPublicReservation(reservation, req.actor?.id),
+    });
   } catch (err) {
     next(err);
   }
@@ -512,12 +538,22 @@ export async function adminListTableAvailability(req: Request, res: Response, ne
 
 export async function adminListReservations(req: Request, res: Response, next: NextFunction) {
   try {
-    const reservations = await reservationService.listReservationsForAdmin({
-      restaurantId: req.query.restaurantId as string | undefined,
-      status: req.query.status as string | undefined,
-      date: req.query.date as string | undefined,
+    const paging = parsePaging(req.query);
+    const { items, total } = await reservationService.listReservationsForAdmin(
+      {
+        restaurantId: req.query.restaurantId as string | undefined,
+        status: req.query.status as string | undefined,
+        date: req.query.date as string | undefined,
+      },
+      paging
+    );
+    res.status(200).json({
+      success: true,
+      data: items,
+      ...(paging.paged
+        ? { pagination: { page: paging.page, limit: paging.limit, total } }
+        : {}),
     });
-    res.status(200).json({ success: true, data: reservations });
   } catch (err) {
     next(err);
   }
@@ -546,7 +582,7 @@ export async function adminUpdateReservationStatus(
 export async function adminUploadImage(req: Request, res: Response, next: NextFunction) {
   try {
     if (!req.file) throw new ApiError(400, "No image file was provided.");
-    const folder = (req.query.folder as string) || "misc";
+    const folder = safeUploadFolder(req.query.folder);
     const result = await uploadImageBuffer(req.file.buffer, `7vachan/restaurant/${folder}`);
     res.status(201).json({ success: true, data: { url: result.url, publicId: result.publicId } });
   } catch (err) {
@@ -558,7 +594,7 @@ export async function adminDeleteImage(req: Request, res: Response, next: NextFu
   try {
     const publicId = (req.body?.publicId as string) || (req.query.publicId as string);
     if (!publicId) throw new ApiError(400, "publicId is required.");
-    await deleteImageByPublicId(publicId);
+    await deleteImageByPublicId(publicId, "7vachan/restaurant/");
     res.status(200).json({ success: true, message: "Image deleted." });
   } catch (err) {
     next(err);
@@ -585,7 +621,8 @@ export async function adminAddGalleryItem(req: Request, res: Response, next: Nex
 
 export async function adminDeleteGalleryItem(req: Request, res: Response, next: NextFunction) {
   try {
-    await contentService.deleteGalleryItem(req.params.itemId);
+    const item = await contentService.deleteGalleryItem("restaurant", req.params.itemId);
+    if (!item) throw new ApiError(404, "Gallery item not found.");
     res.status(200).json({ success: true, message: "Gallery item deleted." });
   } catch (err) {
     next(err);
@@ -609,7 +646,8 @@ export async function adminCreateFaq(req: Request, res: Response, next: NextFunc
 
 export async function adminDeleteFaq(req: Request, res: Response, next: NextFunction) {
   try {
-    await contentService.deleteFaq(req.params.faqId);
+    const faq = await contentService.deleteFaq("restaurant", req.params.faqId);
+    if (!faq) throw new ApiError(404, "FAQ not found.");
     res.status(200).json({ success: true, message: "FAQ deleted." });
   } catch (err) {
     next(err);
@@ -640,7 +678,9 @@ export async function adminCreateOffer(req: Request, res: Response, next: NextFu
 
 export async function adminUpdateOffer(req: Request, res: Response, next: NextFunction) {
   try {
-    const offer = await contentService.updateOffer(req.params.offerId, req.body);
+    // The shared service whitelists the updatable fields, so the body is safe to pass.
+    const offer = await contentService.updateOffer("restaurant", req.params.offerId, req.body || {});
+    if (!offer) throw new ApiError(404, "Offer not found.");
     res.status(200).json({ success: true, data: offer });
   } catch (err) {
     next(err);
@@ -649,7 +689,8 @@ export async function adminUpdateOffer(req: Request, res: Response, next: NextFu
 
 export async function adminDeleteOffer(req: Request, res: Response, next: NextFunction) {
   try {
-    await contentService.deleteOffer(req.params.offerId);
+    const offer = await contentService.deleteOffer("restaurant", req.params.offerId);
+    if (!offer) throw new ApiError(404, "Offer not found.");
     res.status(200).json({ success: true, message: "Offer deleted." });
   } catch (err) {
     next(err);
@@ -671,7 +712,7 @@ export async function adminListReviews(req: Request, res: Response, next: NextFu
 
 export async function adminApproveReview(req: Request, res: Response, next: NextFunction) {
   try {
-    const review = await contentService.approveReview(req.params.reviewId);
+    const review = await contentService.approveReview("restaurant", req.params.reviewId);
     res.status(200).json({ success: true, data: review });
   } catch (err) {
     next(err);
@@ -680,7 +721,7 @@ export async function adminApproveReview(req: Request, res: Response, next: Next
 
 export async function adminReplyToReview(req: Request, res: Response, next: NextFunction) {
   try {
-    const review = await contentService.replyToReview(req.params.reviewId, req.body.reply);
+    const review = await contentService.replyToReview("restaurant", req.params.reviewId, req.body.reply);
     res.status(200).json({ success: true, data: review });
   } catch (err) {
     next(err);
@@ -689,7 +730,7 @@ export async function adminReplyToReview(req: Request, res: Response, next: Next
 
 export async function adminDeleteReview(req: Request, res: Response, next: NextFunction) {
   try {
-    await contentService.deleteReview(req.params.reviewId);
+    await contentService.deleteReview("restaurant", req.params.reviewId);
     res.status(200).json({ success: true, message: "Review deleted." });
   } catch (err) {
     next(err);

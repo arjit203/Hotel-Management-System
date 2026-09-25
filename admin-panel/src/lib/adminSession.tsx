@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { clearToken, getStoredAdmin } from "./api";
+import { clearSession, getStoredAdmin } from "./api";
 
 export interface StoredAdmin {
   /** Present for anyone who signed in after the Users module shipped. */
@@ -60,8 +60,7 @@ export function AdminSessionProvider({ children }: { children: React.ReactNode }
   }, [refresh]);
 
   const signOut = useCallback(() => {
-    clearToken();
-    localStorage.removeItem("admin_info");
+    clearSession();
     setAdmin(null);
   }, []);
 

@@ -81,7 +81,7 @@ export interface IHallEnquiry extends Document {
 
 const hallEnquirySchema = new Schema<IHallEnquiry>(
   {
-    enquiryReference: { type: String, required: true, unique: true, index: true },
+    enquiryReference: { type: String, required: true, unique: true },
 
     hallId: { type: Schema.Types.ObjectId, ref: "Hall", required: true, index: true },
     userId: { type: Schema.Types.ObjectId, ref: "User", default: null, index: true },
@@ -112,5 +112,11 @@ const hallEnquirySchema = new Schema<IHallEnquiry>(
   },
   { timestamps: true }
 );
+
+// Admin "recently changed" view; the date-conflict check run when confirming;
+// and "my enquiries" for a logged-in guest.
+hallEnquirySchema.index({ updatedAt: -1 });
+hallEnquirySchema.index({ hallId: 1, eventDate: 1, status: 1 });
+hallEnquirySchema.index({ userId: 1, createdAt: -1 });
 
 export const HallEnquiry = model<IHallEnquiry>("HallEnquiry", hallEnquirySchema);

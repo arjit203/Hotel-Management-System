@@ -1,5 +1,24 @@
 import { z } from "zod";
 
+// ---------- STAY LIMITS ----------
+// Every availability computation walks the stay night by night, so an
+// unbounded range (checkIn=1970, checkOut=2999) is a cheap DoS. These caps are
+// enforced here (400 via Zod) and again inside getAvailableCount for any
+// caller that bypasses the schemas.
+export const MAX_STAY_NIGHTS = 60;
+export const MAX_BOOKING_HORIZON_DAYS = 730; // check-in no more than ~2 years out
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/** Returns an error message when a stay breaks the caps, else null. */
+export function stayRangeError(checkIn: Date, checkOut: Date): string | null {
+  const nights = Math.round((checkOut.getTime() - checkIn.getTime()) / MS_PER_DAY);
+  if (nights > MAX_STAY_NIGHTS) return `A stay can be at most ${MAX_STAY_NIGHTS} nights.`;
+  if (checkIn.getTime() > Date.now() + MAX_BOOKING_HORIZON_DAYS * MS_PER_DAY) {
+    return "Check-in can be at most 2 years ahead.";
+  }
+  return null;
+}
+
 // ---------- HOTEL (admin) ----------
 export const createHotelSchema = z.object({
   branchId: z.string().min(1, "branchId is required"),
@@ -46,10 +65,15 @@ export const setAvailabilitySchema = z.object({
 });
 
 // ---------- AVAILABILITY CHECK (public) ----------
-export const availabilityQuerySchema = z.object({
-  checkIn: z.string().refine((v) => !isNaN(Date.parse(v)), "Invalid checkIn date"),
-  checkOut: z.string().refine((v) => !isNaN(Date.parse(v)), "Invalid checkOut date"),
-});
+export const availabilityQuerySchema = z
+  .object({
+    checkIn: z.string().refine((v) => !isNaN(Date.parse(v)), "Invalid checkIn date"),
+    checkOut: z.string().refine((v) => !isNaN(Date.parse(v)), "Invalid checkOut date"),
+  })
+  .superRefine((data, ctx) => {
+    const message = stayRangeError(new Date(data.checkIn), new Date(data.checkOut));
+    if (message) ctx.addIssue({ code: z.ZodIssueCode.custom, message, path: ["checkOut"] });
+  });
 
 // ---------- BOOKING (public/guest) ----------
 export const createBookingSchema = z
@@ -62,7 +86,8 @@ export const createBookingSchema = z
           numRooms: z.number().int().positive(),
         })
       )
-      .min(1, "At least one room must be selected."),
+      .min(1, "At least one room must be selected.")
+      .max(10, "At most 10 room types can be booked at once."),
     checkInDate: z.string().refine((v) => !isNaN(Date.parse(v)), "Invalid checkInDate"),
     checkOutDate: z.string().refine((v) => !isNaN(Date.parse(v)), "Invalid checkOutDate"),
     numGuests: z.number().int().positive(),
@@ -74,6 +99,10 @@ export const createBookingSchema = z
   .refine((data) => new Date(data.checkOutDate) > new Date(data.checkInDate), {
     message: "checkOutDate must be after checkInDate",
     path: ["checkOutDate"],
+  })
+  .superRefine((data, ctx) => {
+    const message = stayRangeError(new Date(data.checkInDate), new Date(data.checkOutDate));
+    if (message) ctx.addIssue({ code: z.ZodIssueCode.custom, message, path: ["checkOutDate"] });
   });
 
 // ---------- PAYMENT VERIFICATION (Feature 1, Phase 3.6) ----------
@@ -93,6 +122,40 @@ export const verifyPaymentSchema = z.object({
 export const cancelBookingSchema = z.object({
   guestEmail: z.string().email().optional(),
   cancellationReason: z.string().max(500).optional(),
+});
+
+// ---------- RETRY PAYMENT (public) ----------
+// Same ownership rule as cancellation: guestEmail, or a logged-in owner.
+export const retryPaymentSchema = z.object({
+  guestEmail: z.string().email().optional(),
+});
+
+// ---------- BOOKING STATUS (admin) ----------
+// Every value of the model enum is accepted by the schema; which moves are
+// actually legal from the booking's current status is decided in
+// booking.service.ts (ALLOWED_TRANSITIONS), so the message can say why.
+export const updateBookingStatusSchema = z.object({
+  status: z.enum([
+    "pending",
+    "confirmed",
+    "checked_in",
+    "checked_out",
+    "completed",
+    "cancelled",
+    "refund_pending",
+    "refunded",
+  ]),
+});
+
+// ---------- BOOKING LIST (admin) ----------
+// All optional. Without `page` the endpoint keeps returning a bare array.
+export const adminListBookingsQuerySchema = z.object({
+  hotelId: z.string().optional(),
+  status: z.string().optional(),
+  page: z.coerce.number().int().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(500).optional(),
+  from: z.string().refine((v) => !isNaN(Date.parse(v)), "Invalid from date").optional(),
+  to: z.string().refine((v) => !isNaN(Date.parse(v)), "Invalid to date").optional(),
 });
 
 // ---------- REVIEW (public, requires login — enforced in controller) ----------
@@ -128,4 +191,5 @@ export type SetAvailabilityInput = z.infer<typeof setAvailabilitySchema>;
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
 export type VerifyPaymentInput = z.infer<typeof verifyPaymentSchema>;
 export type CancelBookingInput = z.infer<typeof cancelBookingSchema>;
+export type UpdateBookingStatusInput = z.infer<typeof updateBookingStatusSchema>;
 export type CreateReviewInput = z.infer<typeof createReviewSchema>;
