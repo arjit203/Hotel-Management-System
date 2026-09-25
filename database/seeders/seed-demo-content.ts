@@ -1142,7 +1142,7 @@ run().catch((err) => {
   if (String(err.message).includes("/auth/admin/login")) {
     console.error(
       "\n   That is a login failure, not a data problem. Use the same email and\n" +
-        "   password you use for the admin panel at :3001. Note the login route is\n" +
+        "   password you use for the admin panel at :3101. Note the login route is\n" +
         "   rate-limited to 20 attempts per 15 minutes.\n"
     );
   }

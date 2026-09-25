@@ -20,8 +20,9 @@ function calculateNights(checkIn: Date, checkOut: Date): number {
 
 /**
  * Creates a Hotel booking. Per RULES.md, hotel room bookings are INSTANT
- * (unlike Marriage Hall, which requires admin approval) — so this directly
- * moves to 'confirmed' status once availability is verified, no approval step.
+ * (unlike Marriage Hall, which requires admin approval) — no approval step.
+ * The booking is created as 'pending' with a Razorpay order for the advance;
+ * it only becomes 'confirmed' in verifyPayment(), after signature verification.
  * Guest checkout is supported (userId is optional).
  *
  * Feature 4 (Phase 3.6): a single booking can contain multiple room

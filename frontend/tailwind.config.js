@@ -61,8 +61,8 @@ module.exports = {
         "display-xl": ["clamp(3.25rem, 2rem + 6vw, 6.5rem)", { lineHeight: "1", letterSpacing: "-0.025em" }],
       },
       letterSpacing: {
-        eyebrow: "0.32em",
-        luxe: "0.18em",
+        eyebrow: "0.22em",
+        luxe: "0.12em",
       },
       maxWidth: {
         content: "76rem", // shared page container width — consistent rhythm

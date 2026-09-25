@@ -52,3 +52,23 @@ Thumbs.db
 # Deployment
 .vercel
 .turbo
+
+# AI assistant config & personal notes — local only, never pushed.
+# (Already-tracked copies were removed from the index with `git rm --cached`.)
+.claude/
+CLAUDE.md
+**/CLAUDE.md
+CLAUDE.local.md
+AI_INSTRUCTIONS.md
+RULES.md
+.cursor/
+.cursorrules
+.github/copilot-instructions.md
+AGENTS.md
+
+# Personal learning / interview-prep notes
+learning/
+docs/learning/
+*LEARNING*.md
+*INTERVIEW*.md
+*REVISION*.md

@@ -132,7 +132,7 @@ export default async function HotelPage() {
                 <StarRating rating={hotel.starRating} size={17} />
               </div>
               <p className="lead mx-auto mt-6 max-w-prose">{hotel.description}</p>
-              <p className="mt-6 flex items-center justify-center gap-2 text-[11px] uppercase tracking-luxe text-warm-400">
+              <p className="mt-6 flex items-center justify-center gap-2 text-xs uppercase tracking-luxe text-warm-400">
                 <MapPin size={13} className="text-gold" />
                 {hotel.address}
               </p>
@@ -281,7 +281,7 @@ export default async function HotelPage() {
                 <blockquote className="font-display text-[1.5rem] font-light leading-relaxed text-cream sm:text-[1.875rem]">
                   &ldquo;{reviews[0].comment}&rdquo;
                 </blockquote>
-                <p className="mt-7 text-xs uppercase tracking-eyebrow text-cream/50">
+                <p className="mt-7 text-xs font-medium uppercase tracking-luxe text-cream/70">
                   {reviews[0].guestName || "A guest"}
                 </p>
               </Reveal>
@@ -305,7 +305,7 @@ export default async function HotelPage() {
               className="group flex flex-col items-center gap-2 bg-white px-6 py-8 text-center transition-colors duration-500 hover:bg-cream"
             >
               <Phone size={16} strokeWidth={1.5} className="text-gold" />
-              <span className="text-[9px] uppercase tracking-eyebrow text-warm-400">Call</span>
+              <span className="text-xs font-medium uppercase tracking-luxe text-warm-400">Call</span>
               <span className="text-sm font-light text-ink transition-colors group-hover:text-gold">
                 {hotel.contactPhone}
               </span>
@@ -315,14 +315,14 @@ export default async function HotelPage() {
               className="group flex flex-col items-center gap-2 bg-white px-6 py-8 text-center transition-colors duration-500 hover:bg-cream"
             >
               <Mail size={16} strokeWidth={1.5} className="text-gold" />
-              <span className="text-[9px] uppercase tracking-eyebrow text-warm-400">Email</span>
+              <span className="text-xs font-medium uppercase tracking-luxe text-warm-400">Email</span>
               <span className="break-all text-sm font-light text-ink transition-colors group-hover:text-gold">
                 {hotel.contactEmail}
               </span>
             </a>
             <div className="flex flex-col items-center gap-2 bg-white px-6 py-8 text-center">
               <Clock size={16} strokeWidth={1.5} className="text-gold" />
-              <span className="text-[9px] uppercase tracking-eyebrow text-warm-400">Reception</span>
+              <span className="text-xs font-medium uppercase tracking-luxe text-warm-400">Reception</span>
               <span className="text-sm font-light text-ink">Open 24 hours</span>
             </div>
           </div>

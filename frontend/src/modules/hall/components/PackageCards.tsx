@@ -78,7 +78,7 @@ export default function PackageCards({
                 />
 
                 {pkg.isFeatured && (
-                  <span className="absolute right-5 top-5 flex items-center gap-1.5 rounded-full bg-gold px-3 py-1.5 text-[10px] uppercase tracking-eyebrow text-ink shadow-gold">
+                  <span className="absolute right-5 top-5 flex items-center gap-1.5 rounded-full bg-gold px-3 py-1.5 text-xs font-medium uppercase tracking-luxe text-ink shadow-gold">
                     <Crown size={11} />
                     Most chosen
                   </span>
@@ -88,14 +88,14 @@ export default function PackageCards({
                   <div className="min-w-0">
                     <h3 className="font-display text-[2rem] leading-none text-cream">{pkg.name}</h3>
                     {pkg.tagline && (
-                      <p className="mt-2 text-[11px] uppercase tracking-eyebrow text-gold-light">
+                      <p className="mt-2 text-xs font-medium uppercase tracking-luxe text-gold-light">
                         {pkg.tagline}
                       </p>
                     )}
                   </div>
 
                   {guestRange && (
-                    <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-cream/25 bg-ink/40 px-3 py-1.5 text-[11px] font-light text-cream backdrop-blur-sm">
+                    <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-cream/25 bg-ink/40 px-3 py-1.5 text-xs font-light text-cream backdrop-blur-sm">
                       <Users size={11} />
                       {guestRange}
                     </span>

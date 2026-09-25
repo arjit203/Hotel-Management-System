@@ -75,7 +75,7 @@ export default function LoginForm() {
           <Check size={22} strokeWidth={1.5} className="text-gold-light" />
         </span>
         <p className="font-display text-xl text-cream">Check your inbox</p>
-        <p className="mt-3 text-sm font-light leading-relaxed text-cream/60">{notice}</p>
+        <p className="mt-3 text-base font-light leading-relaxed text-cream/75">{notice}</p>
         <button
           onClick={() => {
             setNotice("");
@@ -124,7 +124,7 @@ export default function LoginForm() {
                 />
 
                 <div className="flex items-center justify-between gap-4">
-                  <label className="flex cursor-pointer items-center gap-2.5 text-[0.8125rem] font-light text-cream/65">
+                  <label className="flex cursor-pointer items-center gap-2.5 text-[0.9375rem] font-light text-cream/80">
                     <span className="relative flex h-4 w-4 shrink-0 items-center justify-center">
                       <input
                         type="checkbox"
@@ -151,7 +151,7 @@ export default function LoginForm() {
                       setMode("forgot");
                       setError("");
                     }}
-                    className="text-[0.8125rem] font-light text-cream/70 underline-offset-4 transition-colors hover:text-gold-light hover:underline"
+                    className="text-[0.9375rem] font-normal text-cream/85 underline-offset-4 transition-colors hover:text-gold-light hover:underline"
                   >
                     Forgot Password?
                   </button>
@@ -162,7 +162,7 @@ export default function LoginForm() {
         </AnimatePresence>
 
         {mode === "forgot" && (
-          <p className="text-sm font-light leading-relaxed text-cream/60">
+          <p className="text-base font-light leading-relaxed text-cream/75">
             Enter your email and we&apos;ll send a link to reset your password.
           </p>
         )}
@@ -176,8 +176,8 @@ export default function LoginForm() {
         <button
           type="submit"
           disabled={submitting}
-          className="flex w-full items-center justify-center gap-2.5 rounded-xl bg-gold px-6 py-3.5
-                     text-[0.9375rem] font-medium text-ink shadow-gold
+          className="flex w-full items-center justify-center gap-2.5 rounded-xl bg-gold px-6 py-4
+                     text-base font-medium text-ink shadow-gold
                      transition-all duration-400 ease-luxe
                      hover:bg-gold-light active:scale-[0.99] disabled:opacity-60"
         >
@@ -197,7 +197,7 @@ export default function LoginForm() {
           <button
             type="button"
             onClick={() => setMode("login")}
-            className="mx-auto flex items-center gap-2 text-sm font-light text-cream/60 transition-colors hover:text-gold-light"
+            className="mx-auto flex items-center gap-2 text-[0.9375rem] font-light text-cream/75 transition-colors hover:text-gold-light"
           >
             <ArrowLeft size={14} /> Back to sign in
           </button>
@@ -210,7 +210,7 @@ export default function LoginForm() {
             <SocialPlaceholders />
           </div>
 
-          <p className="mt-8 text-center text-sm font-light text-cream/60">
+          <p className="mt-8 text-center text-[0.9375rem] font-light text-cream/75">
             Don&apos;t have an account?{" "}
             <Link
               href="/signup"

@@ -52,7 +52,7 @@ export default async function AuthShell({
             <span className="font-display text-3xl leading-none text-cream">
               7 <span className="text-gold-light">Vachan</span>
             </span>
-            <span className="mt-1.5 block text-[11px] uppercase tracking-eyebrow text-cream/45">
+            <span className="mt-1.5 block text-xs font-medium uppercase tracking-luxe text-cream/70">
               Hotel &amp; Stays
             </span>
           </Link>
@@ -70,7 +70,7 @@ export default async function AuthShell({
                 {title}
               </h1>
               {subtitle && (
-                <p className="mx-auto mt-3 max-w-xs text-sm font-light leading-relaxed text-cream/60">
+                <p className="mx-auto mt-3 max-w-xs text-base font-light leading-relaxed text-cream/75">
                   {subtitle}
                 </p>
               )}
@@ -85,7 +85,7 @@ export default async function AuthShell({
         <div className="mt-8 text-center">
           <Link
             href="/"
-            className="group inline-flex items-center gap-2 text-xs uppercase tracking-luxe text-cream/50 transition-colors hover:text-gold-light"
+            className="group inline-flex items-center gap-2 text-[0.9375rem] font-normal text-cream/75 transition-colors hover:text-gold-light"
           >
             <ArrowLeft
               size={13}

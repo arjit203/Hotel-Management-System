@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, BedDouble, PartyPopper, UtensilsCrossed } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import LuxeImage from "@/components/motion/LuxeImage";
 import Reveal from "@/components/motion/Reveal";
 import TextReveal from "@/components/motion/TextReveal";
@@ -14,12 +14,6 @@ export interface VerticalCard {
   image?: string;
   icon: "hotel" | "restaurant" | "hall";
 }
-
-const ICONS = {
-  hotel: BedDouble,
-  restaurant: UtensilsCrossed,
-  hall: PartyPopper,
-} as const;
 
 /**
  * "Three experiences, one address" — the estate overview on the home page.
@@ -59,8 +53,6 @@ export default function VerticalsPreview({ cards }: { cards: VerticalCard[] }) {
 
         <Stagger className="grid gap-5 md:grid-cols-3">
           {cards.map((card) => {
-            const Icon = ICONS[card.icon];
-
             return (
               <StaggerItem key={card.href}>
                 <Link
@@ -86,28 +78,24 @@ export default function VerticalsPreview({ cards }: { cards: VerticalCard[] }) {
                       on hover so the card lifts as a whole. */}
                   <span
                     aria-hidden="true"
-                    className="absolute inset-0 bg-gradient-to-t from-ink via-ink/45 to-transparent
+                    className="absolute inset-0 bg-gradient-to-t from-ink via-ink/60 to-transparent
                                opacity-90 transition-opacity duration-600 ease-luxe group-hover:opacity-100"
                   />
 
                   <div className="absolute inset-x-0 bottom-0 p-7 sm:p-8">
-                    <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-full border border-gold/40 text-gold-light">
-                      <Icon size={16} strokeWidth={1.5} />
-                    </span>
-
-                    <p className="text-[10px] uppercase tracking-eyebrow text-gold-light">
+                    <p className="text-[0.8125rem] font-medium uppercase tracking-luxe text-gold-light">
                       {card.label}
                     </p>
                     <h3 className="mt-1.5 font-display text-[1.75rem] leading-tight text-cream">
                       {card.title}
                     </h3>
-                    <p className="mt-2.5 text-[0.9375rem] font-light leading-relaxed text-cream/70">
+                    <p className="mt-2.5 text-base font-light leading-relaxed text-cream/85">
                       {card.description}
                     </p>
 
                     <span className="link-arrow mt-5 !text-gold-light">
                       {card.ctaLabel}
-                      <ArrowRight size={13} />
+                      <ArrowRight size={14} />
                     </span>
                   </div>
                 </Link>

@@ -60,7 +60,7 @@ export default async function RestaurantContactPage() {
                 <li className="flex items-start gap-4 py-5 first:pt-0">
                   <MapPin size={17} strokeWidth={1.5} className="mt-0.5 shrink-0 text-gold" />
                   <div>
-                    <p className="text-xs uppercase tracking-eyebrow text-warm-400">Address</p>
+                    <p className="text-xs font-medium uppercase tracking-luxe text-warm-400">Address</p>
                     <p className="mt-1.5 font-light text-ink/80">{restaurant.address}</p>
                   </div>
                 </li>
@@ -68,7 +68,7 @@ export default async function RestaurantContactPage() {
                   <a href={`tel:${restaurant.contactPhone}`} className="group flex items-start gap-4">
                     <Phone size={17} strokeWidth={1.5} className="mt-0.5 shrink-0 text-gold" />
                     <div>
-                      <p className="text-xs uppercase tracking-eyebrow text-warm-400">Telephone</p>
+                      <p className="text-xs font-medium uppercase tracking-luxe text-warm-400">Telephone</p>
                       <p className="mt-1.5 font-light text-ink/80 transition-colors group-hover:text-gold">
                         {restaurant.contactPhone}
                       </p>
@@ -79,7 +79,7 @@ export default async function RestaurantContactPage() {
                   <a href={`mailto:${restaurant.contactEmail}`} className="group flex items-start gap-4">
                     <Mail size={17} strokeWidth={1.5} className="mt-0.5 shrink-0 text-gold" />
                     <div>
-                      <p className="text-xs uppercase tracking-eyebrow text-warm-400">Email</p>
+                      <p className="text-xs font-medium uppercase tracking-luxe text-warm-400">Email</p>
                       <p className="mt-1.5 break-all font-light text-ink/80 transition-colors group-hover:text-gold">
                         {restaurant.contactEmail}
                       </p>

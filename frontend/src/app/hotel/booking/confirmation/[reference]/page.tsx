@@ -9,7 +9,7 @@ import StatusBadge from "@/components/ui/StatusBadge";
 import { getTheHotel } from "@/lib/hotel";
 import { money, formatDateLong as formatDate, nightsBetween } from "@/lib/format";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000/api/v1";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5100/api/v1";
 
 interface BookingData {
   bookingReference: string;
@@ -121,7 +121,7 @@ export default async function BookingConfirmationPage({
             <p className="font-display text-[1.75rem] leading-none text-ink">
               7 <span className="text-gold">Vachan</span>
             </p>
-            <p className="mt-1.5 text-[11px] uppercase tracking-eyebrow text-warm-400">
+            <p className="mt-1.5 text-xs font-medium uppercase tracking-luxe text-warm-400">
               Hotel &amp; Stays
             </p>
           </div>

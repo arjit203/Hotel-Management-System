@@ -71,7 +71,7 @@ export default async function AboutPage() {
             <Reveal>
               <div className="mb-7 flex items-center gap-3">
                 <StarRating rating={hotel.starRating} size={15} />
-                <span className="text-[10px] uppercase tracking-eyebrow text-warm-400">
+                <span className="text-xs font-medium uppercase tracking-luxe text-warm-400">
                   {hotel.starRating}-Star Hospitality
                 </span>
               </div>

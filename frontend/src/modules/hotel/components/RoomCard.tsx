@@ -77,6 +77,11 @@ export default function RoomCard({ room, priority = false }: { room: RoomSummary
                   alt=""
                   loading={priority && i === 0 ? "eager" : "lazy"}
                   decoding="async"
+                  // Catches an image that finished loading before hydration, when
+                  // onLoad has already fired with no handler attached.
+                  ref={(el) => {
+                    if (el?.complete && !loaded[i]) setLoaded((prev) => ({ ...prev, [i]: true }));
+                  }}
                   onLoad={() => setLoaded((prev) => ({ ...prev, [i]: true }))}
                   onError={() => setLoaded((prev) => ({ ...prev, [i]: true }))}
                   className={`absolute inset-0 h-full w-full object-cover transition-[opacity,transform] duration-900 ease-luxe will-change-transform ${
@@ -100,7 +105,7 @@ export default function RoomCard({ room, priority = false }: { room: RoomSummary
         />
 
         {/* Category chip */}
-        <span className="absolute left-5 top-5 rounded-full bg-cream/90 px-4 py-1.5 text-[10px] font-medium uppercase tracking-eyebrow text-ink backdrop-blur-sm">
+        <span className="absolute left-5 top-5 rounded-full bg-cream/90 px-4 py-1.5 text-xs font-medium uppercase tracking-luxe text-ink backdrop-blur-sm">
           {room.categoryName}
         </span>
 
@@ -135,17 +140,17 @@ export default function RoomCard({ room, priority = false }: { room: RoomSummary
           {room.description.length > 110 ? `${room.description.slice(0, 110).trimEnd()}…` : room.description}
         </p>
 
-        <p className="mt-5 flex items-center gap-2 text-xs uppercase tracking-luxe text-warm-500">
-          <Users size={13} className="text-gold" /> Up to {room.maxOccupancy} guests
+        <p className="mt-5 flex items-center gap-2 text-[0.9375rem] text-warm-600">
+          <Users size={16} strokeWidth={1.5} className="text-gold" /> Up to {room.maxOccupancy} guests
         </p>
 
         <div className="mt-6 flex items-end justify-between gap-4 border-t border-ink/[0.07] pt-6">
           <p className="leading-none">
-            <span className="mb-1.5 block text-[9px] uppercase tracking-eyebrow text-warm-400">From</span>
+            <span className="mb-1.5 block text-sm text-warm-500">From</span>
             <span className="price text-[1.75rem]">
               ₹<AnimatedNumber value={room.basePrice} />
             </span>
-            <span className="ml-1 text-xs font-light text-warm-500">/ night</span>
+            <span className="ml-1 text-sm font-light text-warm-500">/ night</span>
           </p>
 
           {/* Visual affordance only — the card-wide link above handles navigation. */}

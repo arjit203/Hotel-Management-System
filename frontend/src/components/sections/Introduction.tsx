@@ -60,7 +60,7 @@ export default function Introduction({
           <Reveal delay={0.18} distance={18}>
             <div className="mt-6 flex items-center gap-3">
               <StarRating rating={starRating} size={15} />
-              <span className="text-[10px] uppercase tracking-eyebrow text-warm-400">
+              <span className="text-xs font-medium uppercase tracking-luxe text-warm-400">
                 {ratingLabel}
               </span>
             </div>

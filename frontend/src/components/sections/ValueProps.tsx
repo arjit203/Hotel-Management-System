@@ -80,13 +80,19 @@ export default function ValueProps({
   points,
   eyebrow = "Our Promise",
   title = "Why guests return",
+  flushTop = false,
 }: {
   points: ValuePoint[];
   eyebrow?: string;
   title?: string;
+  /** Drop the top padding when this band follows another dark section, so the
+   *  two don't stack into one tall empty band of ink. */
+  flushTop?: boolean;
 }) {
   return (
-    <section className="section relative overflow-hidden bg-ink text-cream">
+    <section
+      className={`section relative overflow-hidden bg-ink text-cream ${flushTop ? "!pt-4 sm:!pt-6 lg:!pt-8" : ""}`}
+    >
       {/* Warm light bloom + a hairline grid of gold rules for depth. */}
       <div
         aria-hidden="true"
@@ -94,9 +100,9 @@ export default function ValueProps({
       />
 
       <div className="container-luxe relative">
-        <div className="mx-auto mb-16 max-w-2xl text-center sm:mb-20">
+        <div className="mx-auto mb-12 max-w-2xl text-center sm:mb-14">
           <Reveal duration={0.6}>
-            <p className="section-eyebrow flex justify-center">{eyebrow}</p>
+            <p className="section-eyebrow flex justify-center !text-gold-light">{eyebrow}</p>
           </Reveal>
           <TextReveal
             as="h2"
@@ -114,7 +120,7 @@ export default function ValueProps({
             <StaggerItem key={pointTitle}>
               {/* Hairline-divided cells: the 1px gaps come from the parent's
                   gap-px over a tinted background, so there are no double borders. */}
-              <div className="group h-full bg-ink px-8 py-12 text-center transition-colors duration-600 ease-luxe hover:bg-ink-light">
+              <div className="group h-full bg-ink px-7 py-10 text-center transition-colors duration-600 ease-luxe hover:bg-ink-light">
                 <span
                   className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full border border-gold/25
                              transition-all duration-600 ease-luxe group-hover:border-gold/60 group-hover:bg-gold/10"
@@ -125,8 +131,8 @@ export default function ValueProps({
                     className="text-gold transition-transform duration-600 ease-luxe group-hover:scale-110"
                   />
                 </span>
-                <h3 className="font-display text-xl font-medium text-cream">{pointTitle}</h3>
-                <p className="mt-3 text-sm font-light leading-relaxed text-cream/55">{desc}</p>
+                <h3 className="font-display text-[1.375rem] font-medium leading-snug text-cream">{pointTitle}</h3>
+                <p className="mt-3 text-[0.9375rem] font-light leading-relaxed text-cream/75">{desc}</p>
               </div>
             </StaggerItem>
           ))}

@@ -142,7 +142,7 @@ export default function Lightbox({
               <p className="mb-1.5 text-xs font-light text-cream/70">{current.caption}</p>
             )}
             {images.length > 1 && (
-              <p className="text-xs uppercase tracking-eyebrow text-cream/50">
+              <p className="text-xs font-medium uppercase tracking-luxe text-cream/70">
                 {(index as number) + 1} / {images.length}
               </p>
             )}

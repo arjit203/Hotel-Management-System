@@ -4,6 +4,150 @@ Format: newest entries on top. Categories: Added / Changed / Fixed / Security / 
 
 ---
 
+## [2026-09-25 b] — Larger site-wide type
+
+### Changed (public site — presentation only)
+- **Root font size raised** in `frontend/src/app/globals.css`: `html` 16px → 17px
+  (`106.25%`), and 18px (`112.5%`) at ≥1536px. All type, buttons, inputs and
+  rem-based spacing scale proportionally, so layout and design are unchanged —
+  just larger, like a browser zoom. No markup, component or logic changes.
+  See `DESIGN_SYSTEM.md` §3.
+
+### Added
+- Root `README.md`: what the platform is, architecture diagram, tech stack,
+  repo structure, request flow, hotel/restaurant/hall/admin flows, auth & RBAC,
+  API overview, setup and scripts, known limitations.
+
+### Fixed (documentation — brought in line with the code)
+- `API_DOCUMENTATION.md`: `POST /hotel-bookings` now documents the `rooms[]`
+  body and the `pending` + Razorpay-order response (it said single `roomId`,
+  created `confirmed`); added `POST /hotel-bookings/verify-payment` and
+  `PUT /hotel-bookings/reference/:reference/cancel`; hotel reviews are
+  guest-allowed (`optionalAuthenticate`), not login-only; `RULES.md §14`
+  reference corrected to §2.
+- `PROJECT_DOCUMENTATION.md`: Payments status "Not started" → partial (Hotel
+  advance + refunds live); removed the stale "Admin Panel UI not built",
+  "`/users` cannot create or edit admins" and "no `/api/v1/admin/halls`" notes;
+  admin API fallback port 5000 → 5100; `RULES.md §14` → §2. Added two known
+  limitations: Settings → Booking percent/window fields aren't read by
+  `booking.service.ts` (env still decides), and the browser Razorpay key is
+  build-time so it can drift from Settings → Integrations.
+- `SETUP_GUIDE.md`: stopped telling you to `cp backend/.env.example` (the file
+  doesn't exist); lists the minimum `backend/.env` keys instead, including
+  `PORT=5100`.
+- `CLAUDE.md` (local only): admin port 3101, real fonts, four audit exceptions,
+  per-model content owner field names, `ignoreDeprecations` removed.
+- `frontend/.env.example`: added the optional `NEXT_PUBLIC_RAZORPAY_CONFIG_ID`
+  that `BookingForm.tsx` reads.
+- `booking.service.ts`: comment above `createHotelBooking()` no longer claims it
+  confirms directly (comment only, no logic change).
+
+---
+
+## [2026-09-25] — Readability pass, password-reset pages, public-form rate limits
+
+A refinement pass on the public site, driven by a screenshot review, plus fixes
+from a full frontend/backend/admin wiring audit. No booking, payment,
+availability, reservation or enquiry logic changed; no API contract changed.
+
+### Changed (public site — presentation only)
+- **Tracking tokens reduced:** `tracking-eyebrow` 0.32em → 0.22em, `tracking-luxe`
+  0.18em → 0.12em; button tracking 0.14em → 0.08em (`tailwind.config.js`,
+  `globals.css`). Wide-tracked uppercase micro-labels were the main
+  "too small / over-styled" complaint.
+- **Type floor enforced:** every `text-[9px]` / `text-[10px]` / `text-[11px]`
+  (55 uses, 30 files) raised to `text-xs` (12px), closing the known deviation in
+  `DESIGN_SYSTEM.md` §3. Inline micro-labels moved from eyebrow to luxe tracking
+  with `font-medium`; faint `text-cream/45–55` labels raised to `/70`.
+- **Shared classes:** `.section-eyebrow` 12px → 13px and `gold` → `gold-dark`
+  (contrast on cream; dark sections already override to `gold-light`);
+  `.meta` 12px → 13px; `.field-label` 11px → 13px, `warm-600`; `.body-muted`
+  15px → 16px; `.nav-link` 15px light → 16px normal; `.link-arrow` 13px → 14px;
+  buttons 14px → 15px with `min-h-[3rem]`; `.field-line`/`.field` inputs 16px
+  normal weight.
+- **Home:** "Considered comforts" tiles are centred flex-wrap (two tiles no
+  longer sit left in a six-column grid); "Why 7 Vachan" drops its top padding
+  when it follows the dark estate band (`ValueProps` `flushTop`), removing a tall
+  empty band of ink; estate cards lose the icon circle, get a stronger scrim and
+  larger copy; offer cards lose the invisible `gold/10` 01/02/03 numerals (also
+  on `/hotel/offers` and `/restaurant/offers`) and get a readable category pill.
+- **Map card (`MapPlaceholder`):** removed the two inner rings that cut through
+  the address and buttons; "Get Directions" now opens Google Maps directions
+  (`/maps/dir/?api=1&destination=`) instead of duplicating the search link.
+- **Booking flow (`BookingForm`):** larger step labels, room names, prices,
+  steppers (32 → 36px) and summary text; the review step shows `Tue, 29 Sep 2026`
+  instead of raw `2026-09-29` (parsed as local midnight).
+- **Login/signup:** larger labels, 16px input text, password dots at 18px with
+  tracking, eye icon 17 → 20px, readable "Back to site" / "Or" / hint text.
+- **Header:** nav, My Bookings, Logout and dropdown items at 16px normal weight;
+  CTA at 14px. Room cards: "Up to N guests" / "From" / "/ night" in sentence
+  case at readable sizes. Hero booking bar inputs 14 → 16px.
+
+### Fixed
+- **Images stuck invisible behind a skeleton** (the two blank tiles in the home
+  gallery). `LuxeImage`, `RoomCard` and `MediaGallery` render `<img>` on the
+  server at `opacity-0`; if the image finished loading before hydration, `onLoad`
+  fired with no handler and the frame never revealed. Each now checks
+  `img.complete` on mount.
+- **Form controls inherited label tracking.** Tailwind preflight sets
+  `letter-spacing: inherit` on inputs, and inputs sit inside uppercase tracked
+  `<label>`s — hence "d d - m m - y y y y" in date fields. Reset on all controls.
+- **Password-reset links 404'd** for customers and admins: the backend emails
+  `…/reset-password/<token>` but neither app had that page. Added
+  `frontend/src/app/reset-password/[token]` (+ `components/auth/ResetPasswordForm.tsx`)
+  and `admin-panel/src/app/{forgot-password,reset-password/[token]}`, plus a
+  "Forgot password?" link on the admin login. Both call the existing
+  `/auth/{user,admin}/reset-password/:token` endpoints. The site header hides on
+  the reset page; `robots.ts` disallows it; admin notification polling skips both
+  pages so a 401 can't bounce them to `/login`.
+- **Stale port fallbacks:** in-code `API_BASE_URL` fallbacks `:5000` → `:5100`
+  (frontend and admin panel) and the enquiry-tracking email fallback
+  `:3000` → `:3100` (`enquiry.service.ts`). Only matters when env vars are unset.
+
+### Security
+- **Rate limits on public forms** (`AI_INSTRUCTIONS.md` §8), via new
+  `backend/src/middlewares/rateLimit.middleware.ts`: `publicFormLimiter`
+  (30 / 15 min / IP) on hotel booking create, `verify-payment`, all three
+  cancel routes, table reservation create, hall enquiry create and all three
+  review POSTs; `publicUploadLimiter` (20 / 15 min / IP) on the three
+  unauthenticated review-photo uploads. GET reference lookups are deliberately
+  not limited — see below.
+
+### Known issues found by the audit, not fixed here
+- `GET /{hotel-bookings,table-reservations}/reference/:ref` return the full
+  record (email, phone, payment fields) to anyone holding an 8-hex reference.
+  These can't be IP-limited because the confirmation pages call them server-side.
+- The admin sidebar isn't role-filtered: managers can open other verticals'
+  pages, which load (public reads) but 403 on save; 403s on operations lists
+  render as empty lists.
+- Admin lists read public endpoints, so soft-deleted records vanish from the
+  panel and can't be restored there.
+- `DELETE /:id` is registered before `DELETE /upload-image` in the three admin
+  routers (unused today).
+- `cors()` accepts any origin; ESLint is not configured in any workspace
+  (`next lint` launches its setup wizard).
+
+---
+
+## [2026-09-24] — Local dev ports moved off 3000/3001/5000
+
+### Changed
+- Dev/start ports: public site **3100** (was 3000), admin panel **3101** (was
+  3001), backend API **5100** (was 5000), so this project can run alongside
+  another local project that holds the old ports.
+- `frontend/package.json` / `admin-panel/package.json` `dev`/`start` scripts,
+  both `.env.example` files, `CLAUDE.md`, `docs/SETUP_GUIDE.md` and the dev base
+  URL in `docs/API_DOCUMENTATION.md` updated to match.
+- Local (untracked) env files need the same values: `backend/.env` `PORT=5100`,
+  `API_BASE_URL`, `FRONTEND_URL=http://localhost:3100`,
+  `ADMIN_PANEL_URL=http://localhost:3101`; `frontend/.env` and
+  `admin-panel/.env.local` pointing `NEXT_PUBLIC_API_BASE_URL` at `:5100`.
+- In-code fallbacks (`|| "http://localhost:5000/api/v1"`, `|| 3000`) are
+  unchanged — they apply only when the env var is unset, so the env files above
+  are what actually move the ports.
+
+---
+
 ## [2026-08-03 (g)] — Platform Settings CMS, Audit Logs, Activity Timeline, Notifications, Exports, Global Search
 
 Six admin-console modules, all additive. No booking, reservation or enquiry flow

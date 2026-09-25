@@ -204,7 +204,7 @@ export default function Hero({
           >
             <Play size={14} className="ml-0.5 fill-current" />
           </span>
-          <span className="text-[10px] uppercase tracking-eyebrow text-cream/55 transition-colors duration-400 group-hover:text-gold">
+          <span className="text-xs font-medium uppercase tracking-luxe text-cream/70 transition-colors duration-400 group-hover:text-gold">
             Watch
             <br />
             The Film
@@ -236,7 +236,7 @@ export default function Hero({
         transition={{ duration: 1, delay: 1.5 }}
         className="absolute bottom-10 left-1/2 z-10 -translate-x-1/2 sm:bottom-12"
       >
-        <span className="flex flex-col items-center gap-2 text-[9px] uppercase tracking-eyebrow text-cream/45">
+        <span className="flex flex-col items-center gap-2 text-xs font-medium uppercase tracking-luxe text-cream/70">
           Scroll
           <ArrowDown size={13} className="animate-scroll-hint text-gold" />
         </span>

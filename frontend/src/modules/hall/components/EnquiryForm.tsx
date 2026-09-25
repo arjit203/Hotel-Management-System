@@ -207,7 +207,7 @@ export default function EnquiryForm({
           We have received your enquiry and one of our event managers will call you shortly.
         </p>
 
-        <p className="mt-8 text-xs uppercase tracking-eyebrow text-warm-400">
+        <p className="mt-8 text-xs font-medium uppercase tracking-luxe text-warm-400">
           Your reference
         </p>
         <p className="price mt-2 text-2xl tracking-luxe">{reference}</p>

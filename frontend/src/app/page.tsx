@@ -313,6 +313,7 @@ export default async function HomePage() {
           still the fallback, so an unconfigured install reads as before. */}
       <ValueProps
         points={valuePoints}
+        flushTop={showVerticals}
         eyebrow={str(settings, "homepage", "valuePropsEyebrow", "Why 7 Vachan")}
         title={str(settings, "homepage", "valuePropsTitle", "Three businesses, one standard")}
       />

@@ -10,11 +10,23 @@
 
 @layer base {
   html {
+    /* Root size drives every rem-based size on the site (all type, buttons,
+       inputs, and the spacing around them), so raising it here scales the whole
+       UI proportionally — like a browser zoom — without touching any component.
+       17px by default; 18px from 1536px up, where the desktop nav has room.
+       Kept at 17px between xl (1280px) and 2xl because the full desktop header
+       only just fits at that width. */
+    font-size: 106.25%;
     scroll-behavior: smooth;
     /* Header is sticky/overlaying — offset in-page anchor jumps so headings
        don't land underneath it. */
     scroll-padding-top: 6rem;
     -webkit-tap-highlight-color: transparent;
+  }
+  @media (min-width: 1536px) {
+    html {
+      font-size: 112.5%;
+    }
   }
 
   body {
@@ -92,7 +104,7 @@
      for uppercase labels with wide tracking (which read a full step larger than
      their nominal size). Running text never goes below 15px. */
   .section-eyebrow {
-    @apply inline-flex items-center gap-3 text-gold text-xs tracking-eyebrow uppercase font-medium mb-5;
+    @apply inline-flex items-center gap-3 text-gold-dark text-[0.8125rem] tracking-eyebrow uppercase font-medium mb-5;
   }
   /* Hairline flourish before eyebrow text — a small luxury signature. */
   .section-eyebrow::before {
@@ -123,11 +135,11 @@
   }
   /* Supporting body copy inside cards and columns. 15px floor. */
   .body-muted {
-    @apply text-[0.9375rem] leading-[1.7] text-warm-500 font-light;
+    @apply text-base leading-[1.7] text-warm-500 font-light;
   }
   /* Uppercase micro-label. 12px is the floor, and only ever with wide tracking. */
   .meta {
-    @apply text-xs uppercase tracking-luxe text-warm-500;
+    @apply text-[0.8125rem] uppercase tracking-luxe text-warm-500;
   }
   /* Price figure — serif numerals read as "rate card", not "database field". */
   .price {
@@ -148,7 +160,7 @@
   .btn-gold,
   .btn-ghost-light {
     @apply relative inline-flex items-center justify-center gap-2.5 overflow-hidden rounded-full
-           px-8 py-4 text-sm font-medium uppercase tracking-[0.14em]
+           min-h-[3rem] px-8 py-3.5 text-[0.9375rem] font-medium uppercase tracking-[0.08em]
            transition-all duration-400 ease-luxe will-change-transform;
     /* Keeps the sheen's negative z-index inside the button: above the button's
        own background, below its label — without asking every caller to wrap raw
@@ -202,8 +214,8 @@
      Self-contained: it styles its own icon via a descendant selector, so callers
      don't need a `group` class (and `group` cannot be @apply'd anyway). */
   .link-arrow {
-    @apply inline-flex items-center gap-2 text-[0.8125rem] font-medium uppercase
-           tracking-luxe text-gold-dark transition-colors duration-300 hover:text-gold;
+    @apply inline-flex items-center gap-2 text-sm font-medium uppercase
+           tracking-[0.08em] text-gold-dark transition-colors duration-300 hover:text-gold;
   }
   .link-arrow svg {
     @apply transition-transform duration-400 ease-luxe;
@@ -217,7 +229,7 @@
      tracking on nine links made the bar read as a toolbar; sentence-case at
      15px reads as a hotel menu and is easier to scan. */
   .nav-link {
-    @apply relative text-[0.9375rem] font-light transition-colors duration-300;
+    @apply relative text-base font-normal transition-colors duration-300;
   }
   .nav-link::after {
     content: "";
@@ -290,25 +302,38 @@
      local `fieldClass` const in five components (BookingForm, ContactForm,
      ReviewForm, RoomSearch, RoomAvailabilityCheck). */
   .field-line {
-    @apply block w-full border-0 border-b border-ink/[0.12] bg-transparent py-2.5 text-base
-           font-light text-ink placeholder:text-warm-400 transition-colors duration-300
+    @apply block w-full border-0 border-b border-ink/[0.12] bg-transparent py-3 text-base
+           font-normal text-ink placeholder:text-warm-400 transition-colors duration-300
            focus:border-gold focus:outline-none focus:ring-0;
   }
   /* Compact variant for dense filter bars. */
   .field-line-sm {
-    @apply block w-full border-0 border-b border-ink/[0.12] bg-transparent py-2.5 text-sm
-           font-light text-ink placeholder:text-warm-400 transition-colors duration-300
+    @apply block w-full border-0 border-b border-ink/[0.12] bg-transparent py-2.5 text-[0.9375rem]
+           font-normal text-ink placeholder:text-warm-400 transition-colors duration-300
            focus:border-gold focus:outline-none focus:ring-0;
   }
   /* Boxed input — used where a control sits on a tinted panel and needs its own
      surface (the auth card's white fields use their own component). */
   .field {
-    @apply w-full bg-white rounded-xl border border-ink/10 px-4 py-3 text-sm text-ink
+    @apply w-full bg-white rounded-xl border border-ink/10 px-4 py-3 text-base text-ink
            placeholder:text-warm-400 transition-colors duration-300
            focus:border-gold focus:outline-none focus:ring-0;
   }
+  /* Tailwind's preflight sets `letter-spacing: inherit` on form controls, and
+     most inputs here sit inside their uppercase, wide-tracked <label> — so typed
+     text, placeholders and native date text ("d d - m m - y y y y") picked up the
+     label's tracking. Reset it on every control. */
+  .field-line,
+  .field-line-sm,
+  .field,
+  input,
+  textarea,
+  select {
+    letter-spacing: normal;
+    text-transform: none;
+  }
   .field-label {
-    @apply block text-[11px] font-medium uppercase tracking-luxe text-warm-500 mb-2;
+    @apply block text-[0.8125rem] font-medium uppercase tracking-luxe text-warm-600 mb-2;
   }
 }
 

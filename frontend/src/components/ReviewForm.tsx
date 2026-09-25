@@ -6,7 +6,7 @@ import Alert from "@/components/ui/Alert";
 import { getStoredUser, getUserToken, StoredUser } from "@/lib/userAuth";
 import { cldImage, IMAGE_WIDTHS } from "@/lib/imageUrl";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000/api/v1";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5100/api/v1";
 
 // Reviews are open to both logged-in customers and guests (explicit owner
 // decision) — the backend route uses optionalAuthenticate, so it accepts a

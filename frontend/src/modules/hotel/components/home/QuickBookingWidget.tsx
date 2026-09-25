@@ -53,35 +53,35 @@ export default function QuickBookingWidget() {
           {/* Check-in */}
           <label className="group cursor-pointer rounded-xl px-5 py-4 transition-colors duration-400 hover:bg-white/60 lg:border-r lg:border-ink/[0.08]">
             <span className="field-label flex items-center gap-2">
-              <Calendar size={12} className="text-gold" /> Arrival
+              <Calendar size={14} className="text-gold" /> Arrival
             </span>
             <input
               type="date"
               min={today}
               value={checkIn}
               onChange={(e) => setCheckIn(e.target.value)}
-              className="w-full cursor-pointer border-0 bg-transparent p-0 text-sm font-light text-ink focus:outline-none focus:ring-0"
+              className="w-full cursor-pointer border-0 bg-transparent p-0 text-base font-normal text-ink focus:outline-none focus:ring-0"
             />
           </label>
 
           {/* Check-out */}
           <label className="group cursor-pointer rounded-xl px-5 py-4 transition-colors duration-400 hover:bg-white/60 lg:border-r lg:border-ink/[0.08]">
             <span className="field-label flex items-center gap-2">
-              <Calendar size={12} className="text-gold" /> Departure
+              <Calendar size={14} className="text-gold" /> Departure
             </span>
             <input
               type="date"
               min={checkIn || today}
               value={checkOut}
               onChange={(e) => setCheckOut(e.target.value)}
-              className="w-full cursor-pointer border-0 bg-transparent p-0 text-sm font-light text-ink focus:outline-none focus:ring-0"
+              className="w-full cursor-pointer border-0 bg-transparent p-0 text-base font-normal text-ink focus:outline-none focus:ring-0"
             />
           </label>
 
           {/* Guests stepper */}
           <div className="rounded-xl px-5 py-4">
             <span className="field-label flex items-center gap-2">
-              <Users size={12} className="text-gold" /> Guests
+              <Users size={14} className="text-gold" /> Guests
             </span>
             <div className="flex items-center justify-between">
               <button
@@ -89,20 +89,20 @@ export default function QuickBookingWidget() {
                 onClick={() => setGuests((g) => Math.max(1, g - 1))}
                 disabled={guests <= 1}
                 aria-label="Decrease guests"
-                className="flex h-7 w-7 items-center justify-center rounded-full border border-ink/12 text-ink/60
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-ink/15 text-ink/70
                            transition-all duration-300 hover:border-gold hover:text-gold
                            disabled:cursor-not-allowed disabled:opacity-30"
               >
                 <Minus size={12} />
               </button>
-              <span className="px-3 text-sm font-light tabular-nums text-ink">
+              <span className="px-3 text-base font-normal tabular-nums text-ink">
                 {guests} {guests === 1 ? "Guest" : "Guests"}
               </span>
               <button
                 type="button"
                 onClick={() => setGuests((g) => Math.min(20, g + 1))}
                 aria-label="Increase guests"
-                className="flex h-7 w-7 items-center justify-center rounded-full border border-ink/12 text-ink/60
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-ink/15 text-ink/70
                            transition-all duration-300 hover:border-gold hover:text-gold"
               >
                 <Plus size={12} />

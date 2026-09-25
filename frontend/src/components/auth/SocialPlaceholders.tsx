@@ -20,7 +20,7 @@ export default function SocialPlaceholders() {
     <div>
       <div className="flex items-center gap-4">
         <span className="h-px flex-1 bg-cream/15" />
-        <span className="text-xs uppercase tracking-luxe text-cream/40">Or</span>
+        <span className="text-[0.8125rem] font-medium uppercase tracking-luxe text-cream/65">Or</span>
         <span className="h-px flex-1 bg-cream/15" />
       </div>
 
@@ -32,14 +32,14 @@ export default function SocialPlaceholders() {
             disabled
             title="Social sign-in is coming soon"
             className="cursor-not-allowed rounded-xl border border-cream/15 px-4 py-3
-                       text-[0.8125rem] font-light text-cream/40"
+                       text-[0.9375rem] font-light text-cream/55"
           >
             {name}
           </button>
         ))}
       </div>
 
-      <p className="mt-3 text-center text-xs font-light text-cream/35">Social sign-in coming soon</p>
+      <p className="mt-3 text-center text-sm font-light text-cream/65">Social sign-in coming soon</p>
     </div>
   );
 }

@@ -16,7 +16,7 @@ import PropertyUnavailable from "@/components/PropertyUnavailable";
 import { getTheHall } from "@/lib/hall";
 import CancelEnquiryButton from "@/modules/hall/components/CancelEnquiryButton";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000/api/v1";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5100/api/v1";
 
 interface Enquiry {
   _id: string;
@@ -207,7 +207,7 @@ export default async function EnquiryStatusPage({
                         {done ? <CheckCircle2 size={14} /> : i + 1}
                       </span>
                       <span
-                        className={`mt-2 block text-[10px] uppercase tracking-luxe ${
+                        className={`mt-2 block text-xs uppercase tracking-luxe ${
                           current ? "text-ink" : "text-warm-400"
                         }`}
                       >

@@ -51,23 +51,16 @@ export default function OffersPreview({
         </div>
 
         <Stagger className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 lg:gap-8">
-          {offers.slice(0, 3).map((offer, i) => (
+          {offers.slice(0, 3).map((offer) => (
             <StaggerItem key={offer._id} className="flex">
-              <article className="card-luxe card-hover group flex w-full flex-col overflow-hidden p-9">
-                {/* Oversized index numeral — an editorial cue that reads as
-                    curated rather than as a list of database rows. */}
-                <span
-                  aria-hidden="true"
-                  className="pointer-events-none absolute right-6 top-4 font-display text-7xl leading-none text-gold/10
-                             transition-all duration-700 ease-luxe group-hover:text-gold/20"
-                >
-                  {String(i + 1).padStart(2, "0")}
-                </span>
-
-                <span className="mb-6 h-px w-12 bg-gold transition-all duration-600 ease-luxe group-hover:w-20" />
+              {/* The oversized 01/02/03 numeral that used to sit here was removed
+                  in the readability pass: at gold/10 on white it was invisible
+                  and read as decoration for its own sake. */}
+              <article className="card-luxe card-hover group flex w-full flex-col overflow-hidden p-8 sm:p-9">
+                <span className="mb-5 h-px w-12 bg-gold transition-all duration-600 ease-luxe group-hover:w-20" />
 
                 {offer.badge && (
-                  <span className="relative mb-3 inline-block w-fit rounded-full border border-gold/25 px-3 py-1 text-[10px] uppercase tracking-eyebrow text-gold-dark">
+                  <span className="relative mb-4 inline-block w-fit rounded-full border border-gold/30 bg-gold/[0.06] px-3.5 py-1 text-[0.8125rem] font-medium uppercase tracking-luxe text-gold-dark">
                     {offer.badge}
                   </span>
                 )}
@@ -78,7 +71,7 @@ export default function OffersPreview({
 
                 {/* `group-hover` too, so the arrow also steps forward when the
                     whole offer card is hovered — not only the link itself. */}
-                <Link href={offer.href || reserveHref} className="link-arrow mt-8">
+                <Link href={offer.href || reserveHref} className="link-arrow mt-7">
                   {reserveLabel}
                   <ArrowRight size={14} className="group-hover:translate-x-1" />
                 </Link>

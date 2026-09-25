@@ -3,6 +3,7 @@ import * as hotelController from "./hotel.controller";
 import { authenticate, optionalAuthenticate, requireRole } from "../../middlewares/auth.middleware";
 import { auditLogger } from "../../middlewares/audit.middleware";
 import { uploadImage } from "../../middlewares/upload.middleware";
+import { publicFormLimiter, publicUploadLimiter } from "../../middlewares/rateLimit.middleware";
 
 // Admins allowed to manage hotel content — Super Admin (branchId=null) or the
 // Branch Admin for that property. Staff can view but not mutate (per typical
@@ -29,12 +30,14 @@ publicHotelRouter.get("/rooms/:roomId/availability", hotelController.checkRoomAv
 // review too), reuses the same uploadImage middleware as admin media routes.
 publicHotelRouter.post(
   "/reviews/upload-image",
+  publicUploadLimiter,
   uploadImage.single("image"),
   hotelController.uploadReviewImage
 );
 
 publicHotelRouter.post(
   "/:hotelId/reviews",
+  publicFormLimiter,
   optionalAuthenticate("user"),
   hotelController.createHotelReview
 );
@@ -48,13 +51,15 @@ export const publicBookingRouter = Router();
 // token is present, but never blocks the request, per RULES.md.
 publicBookingRouter.post(
   "/",
+  publicFormLimiter,
   optionalAuthenticate("user"),
   hotelController.createBooking
 );
-publicBookingRouter.post("/verify-payment", hotelController.verifyPayment);
+publicBookingRouter.post("/verify-payment", publicFormLimiter, hotelController.verifyPayment);
 publicBookingRouter.get("/reference/:reference", hotelController.getBookingByReference);
 publicBookingRouter.put(
   "/reference/:reference/cancel",
+  publicFormLimiter,
   optionalAuthenticate("user"),
   hotelController.cancelBooking
 );

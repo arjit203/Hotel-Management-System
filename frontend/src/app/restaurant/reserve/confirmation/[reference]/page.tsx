@@ -9,7 +9,7 @@ import Breadcrumbs from "@/components/Breadcrumbs";
 import { getTheRestaurant, formatTimeSlot } from "@/lib/restaurant";
 import { formatDateLong } from "@/lib/format";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000/api/v1";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5100/api/v1";
 
 interface ReservationData {
   reservationReference: string;
@@ -82,7 +82,7 @@ export default async function ReservationConfirmationPage({
             <p className="font-display text-[1.75rem] leading-none text-ink">
               7 <span className="text-gold">Vachan</span>
             </p>
-            <p className="mt-1.5 text-xs uppercase tracking-eyebrow text-warm-400">
+            <p className="mt-1.5 text-xs font-medium uppercase tracking-luxe text-warm-400">
               {restaurant?.name || "Restaurant"}
             </p>
           </div>

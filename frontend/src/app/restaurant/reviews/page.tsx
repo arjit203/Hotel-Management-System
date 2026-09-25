@@ -52,7 +52,7 @@ export default async function RestaurantReviewsPage() {
               <div className="mt-4">
                 <StarRating rating={reviewSummary.average} size={16} />
               </div>
-              <p className="mt-4 text-xs uppercase tracking-eyebrow text-warm-400">
+              <p className="mt-4 text-xs font-medium uppercase tracking-luxe text-warm-400">
                 {reviewSummary.count} {reviewSummary.count === 1 ? "Review" : "Reviews"}
               </p>
             </div>

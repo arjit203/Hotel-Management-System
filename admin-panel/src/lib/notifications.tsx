@@ -75,8 +75,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   }, []);
 
-  // The login page has no token yet; polling there just produces 401 redirects.
-  const enabled = pathname !== "/login";
+  // The login and password-reset pages have no token yet; polling there just
+  // produces 401 redirects (which would bounce a reset page back to /login).
+  const enabled =
+    pathname !== "/login" &&
+    pathname !== "/forgot-password" &&
+    !pathname.startsWith("/reset-password/");
 
   useEffect(() => {
     if (!enabled) return;

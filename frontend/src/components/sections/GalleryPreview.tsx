@@ -85,7 +85,7 @@ export default function GalleryPreview({
             />
             {/* Caption reveal on hover */}
             {img.title && (
-              <span className="pointer-events-none absolute inset-x-0 bottom-0 translate-y-2 bg-gradient-to-t from-ink/80 to-transparent p-4 text-left text-[11px] uppercase tracking-luxe text-cream opacity-0 transition-all duration-500 ease-luxe group-hover:translate-y-0 group-hover:opacity-100">
+              <span className="pointer-events-none absolute inset-x-0 bottom-0 translate-y-2 bg-gradient-to-t from-ink/80 to-transparent p-4 text-left text-xs uppercase tracking-luxe text-cream opacity-0 transition-all duration-500 ease-luxe group-hover:translate-y-0 group-hover:opacity-100">
                 {img.title}
               </span>
             )}

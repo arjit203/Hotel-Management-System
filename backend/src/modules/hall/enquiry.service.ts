@@ -38,7 +38,7 @@ import { CreateHallEnquiryInput } from "./hall.validation";
  * booked?" never requires a phone call.
  */
 function trackUrlFor(reference: string): string {
-  const base = (process.env.FRONTEND_URL || "http://localhost:3000").replace(/\/$/, "");
+  const base = (process.env.FRONTEND_URL || "http://localhost:3100").replace(/\/$/, "");
   return `${base}/marriage-hall/enquiry/${reference}`;
 }
 

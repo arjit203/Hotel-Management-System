@@ -71,7 +71,7 @@ export default function ReviewsList({ reviews }: { reviews: Review[] }) {
 
               <figcaption className="mt-7 flex items-center gap-3 border-t border-ink/[0.07] pt-5">
                 <Monogram name={r.guestName} />
-                <span className="text-[11px] font-medium uppercase tracking-luxe text-ink/70">
+                <span className="text-xs font-medium uppercase tracking-luxe text-ink/70">
                   {r.guestName || "Guest"}
                 </span>
               </figcaption>

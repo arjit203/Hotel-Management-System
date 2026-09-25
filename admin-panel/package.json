@@ -4,9 +4,9 @@
   "private": true,
   "description": "7 Vachan - Admin back-office panel",
   "scripts": {
-    "dev": "next dev -p 3001",
+    "dev": "next dev -p 3101",
     "build": "next build",
-    "start": "next start -p 3001",
+    "start": "next start -p 3101",
     "lint": "next lint",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "test": "jest"

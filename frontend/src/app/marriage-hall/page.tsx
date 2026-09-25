@@ -308,7 +308,7 @@ export default async function MarriageHallPage() {
                       className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-ink/90 via-ink/40 to-transparent"
                     />
                     <span className="absolute inset-x-0 bottom-0 p-7">
-                      <span className="block text-[10px] uppercase tracking-eyebrow text-gold-light">
+                      <span className="block text-xs font-medium uppercase tracking-luxe text-gold-light">
                         {theme.category}
                       </span>
                       <span className="mt-1.5 block font-display text-2xl text-cream">
@@ -436,7 +436,7 @@ export default async function MarriageHallPage() {
                 <blockquote className="font-display text-[1.5rem] font-light leading-relaxed text-cream sm:text-[1.875rem]">
                   &ldquo;{reviews[0].comment}&rdquo;
                 </blockquote>
-                <p className="mt-7 text-xs uppercase tracking-eyebrow text-cream/50">
+                <p className="mt-7 text-xs font-medium uppercase tracking-luxe text-cream/70">
                   {reviews[0].guestName || "A guest"}
                 </p>
               </Reveal>

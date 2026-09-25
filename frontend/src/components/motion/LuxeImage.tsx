@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cldImage, cldSrcSet, IMAGE_WIDTHS } from "@/lib/imageUrl";
 
 interface LuxeImageProps {
@@ -44,6 +44,16 @@ export default function LuxeImage({
   sizes = "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw",
 }: LuxeImageProps) {
   const [loaded, setLoaded] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  // The <img> is server-rendered, so the browser can finish loading it before
+  // React hydrates and attaches onLoad — the event then never reaches us, and
+  // the image stayed at opacity-0 behind a skeleton forever (seen on the home
+  // gallery). Catch that case on mount. `complete` is also true for a failed
+  // load, which should clear the skeleton too.
+  useEffect(() => {
+    if (imgRef.current?.complete) setLoaded(true);
+  }, [src]);
 
   return (
     <div className={`media ${wrapperClassName}`}>
@@ -51,6 +61,7 @@ export default function LuxeImage({
 
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
+        ref={imgRef}
         src={cldImage(src, { width })}
         srcSet={cldSrcSet(src, [Math.round(width / 2), width, width * 2])}
         sizes={sizes}

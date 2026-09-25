@@ -114,7 +114,7 @@ export async function downloadExport(
   format: string,
   range: { from?: string; to?: string } = {}
 ): Promise<{ ok: true } | { ok: false; message: string }> {
-  const base = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000/api/v1";
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5100/api/v1";
   const token = typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
 
   const params = new URLSearchParams();

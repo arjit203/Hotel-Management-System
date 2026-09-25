@@ -49,7 +49,7 @@ export default async function ContactPage() {
                 <li className="flex items-start gap-4 py-5 first:pt-0">
                   <MapPin size={17} strokeWidth={1.5} className="mt-0.5 shrink-0 text-gold" />
                   <div>
-                    <p className="text-[9px] uppercase tracking-eyebrow text-warm-400">Address</p>
+                    <p className="text-xs font-medium uppercase tracking-luxe text-warm-400">Address</p>
                     <p className="mt-1.5 font-light text-ink/80">{hotel.address}</p>
                   </div>
                 </li>
@@ -57,7 +57,7 @@ export default async function ContactPage() {
                   <a href={`tel:${hotel.contactPhone}`} className="group flex items-start gap-4">
                     <Phone size={17} strokeWidth={1.5} className="mt-0.5 shrink-0 text-gold" />
                     <div>
-                      <p className="text-[9px] uppercase tracking-eyebrow text-warm-400">Telephone</p>
+                      <p className="text-xs font-medium uppercase tracking-luxe text-warm-400">Telephone</p>
                       <p className="mt-1.5 font-light text-ink/80 transition-colors group-hover:text-gold">
                         {hotel.contactPhone}
                       </p>
@@ -68,7 +68,7 @@ export default async function ContactPage() {
                   <a href={`mailto:${hotel.contactEmail}`} className="group flex items-start gap-4">
                     <Mail size={17} strokeWidth={1.5} className="mt-0.5 shrink-0 text-gold" />
                     <div>
-                      <p className="text-[9px] uppercase tracking-eyebrow text-warm-400">Email</p>
+                      <p className="text-xs font-medium uppercase tracking-luxe text-warm-400">Email</p>
                       <p className="mt-1.5 break-all font-light text-ink/80 transition-colors group-hover:text-gold">
                         {hotel.contactEmail}
                       </p>
@@ -78,7 +78,7 @@ export default async function ContactPage() {
                 <li className="flex items-start gap-4 py-5">
                   <Clock size={17} strokeWidth={1.5} className="mt-0.5 shrink-0 text-gold" />
                   <div>
-                    <p className="text-[9px] uppercase tracking-eyebrow text-warm-400">Reception</p>
+                    <p className="text-xs font-medium uppercase tracking-luxe text-warm-400">Reception</p>
                     <p className="mt-1.5 font-light text-ink/80">Open 24 hours</p>
                   </div>
                 </li>

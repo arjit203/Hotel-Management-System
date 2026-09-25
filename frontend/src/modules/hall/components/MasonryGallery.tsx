@@ -165,7 +165,7 @@ export default function MasonryGallery({
                       {item.title}
                     </span>
                   )}
-                  <span className="block text-[11px] uppercase tracking-luxe text-cream/65">
+                  <span className="block text-xs uppercase tracking-luxe text-cream/65">
                     {item.category}
                   </span>
                 </span>

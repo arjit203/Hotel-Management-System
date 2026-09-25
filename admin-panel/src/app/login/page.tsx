@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Eye, EyeOff, Lock, Mail, ShieldCheck } from "lucide-react";
 import Button from "@/components/ui/Button";
@@ -113,6 +114,15 @@ export default function AdminLoginPage() {
               }
             />
 
+            <div className="flex justify-end">
+              <Link
+                href="/forgot-password"
+                className="text-sm font-medium text-brand-600 hover:text-brand-700 hover:underline"
+              >
+                Forgot password?
+              </Link>
+            </div>
+
             <Button
               type="submit"
               variant="primary"
@@ -127,8 +137,8 @@ export default function AdminLoginPage() {
 
           <p className="mt-6 flex items-start gap-2 text-xs text-ink-500">
             <ShieldCheck size={14} className="mt-px shrink-0" />
-            Repeated failed attempts are rate-limited. Ask a Super Admin if you need a password
-            reset.
+            Repeated failed attempts are rate-limited. If the reset email doesn&apos;t arrive, a
+            Super Admin can reset your password from Users.
           </p>
         </div>
       </div>

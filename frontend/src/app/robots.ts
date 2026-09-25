@@ -7,7 +7,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: "/",
-      disallow: ["/login", "/signup", "/my-bookings", "/verify-email", "/hotel/booking/confirmation"],
+      disallow: ["/login", "/signup", "/reset-password", "/my-bookings", "/verify-email", "/hotel/booking/confirmation"],
     },
     sitemap: `${SITE_URL}/sitemap.xml`,
   };

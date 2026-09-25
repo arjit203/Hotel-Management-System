@@ -1,9 +1,21 @@
 # API_DOCUMENTATION.md — 7 Vachan
 
-**Base URL (dev):** `http://localhost:5000/api/v1`
+**Base URL (dev):** `http://localhost:5100/api/v1`
 **Versioning:** Path-based (`/api/v1/...`). Breaking changes get a new version prefix, per `AI_INSTRUCTIONS.md`.
 **Auth header (protected routes):** `Authorization: Bearer <token>`
 **Response envelope:** `{ success: boolean, message?: string, data?: ..., errors?: [...] }`
+
+**Rate limits (per IP, `RateLimit-*` headers; 429 with the standard envelope when exceeded):**
+
+| Limiter | Limit | Endpoints |
+|---|---|---|
+| `authLimiter` (`auth.routes.ts`) | 20 / 15 min | Signup, login, forgot/reset password (user and admin) |
+| `publicFormLimiter` (`middlewares/rateLimit.middleware.ts`) | 30 / 15 min | `POST /hotel-bookings`, `POST /hotel-bookings/verify-payment`, `POST /table-reservations`, `POST /hall-enquiries`, the three `PUT …/reference/:reference/cancel`, and `POST /{hotels/:hotelId,restaurants/:restaurantId,halls/:hallId}/reviews` |
+| `publicUploadLimiter` (same file) | 20 / 15 min | `POST /{hotels,restaurants,halls}/reviews/upload-image` |
+
+GET reference lookups (`…/reference/:reference`) are **not** limited: the
+confirmation pages call them server-side from Next.js, so every visitor shares
+one IP there.
 
 ---
 
@@ -129,7 +141,7 @@ No auth. Returns `{ hotel, room }`.
 No auth. Returns `{ availableCount }` — minimum available units across every night in the range.
 
 ### `POST /api/v1/hotels/:hotelId/reviews`
-Protected (User JWT required — guests cannot post reviews). Body: `{ rating: 1-5, comment }`. Review is created with `isApproved: false` pending admin moderation.
+Public. `optionalAuthenticate('user')` — guests may review; a valid User JWT only supplies the account name. Rate-limited (`publicFormLimiter`). Body: `{ rating: 1-5, comment, ... }` (see `createReviewSchema`). Review is created with `isApproved: false` pending admin moderation.
 
 ## Hotel — Booking (Public, guest checkout supported)
 
@@ -137,10 +149,21 @@ Protected (User JWT required — guests cannot post reviews). Body: `{ rating: 1
 Public. `optionalAuthenticate('user')` — if a valid User JWT is sent, the booking is linked to that account; otherwise it's a guest booking (per RULES.md — login is never forced).
 **Body:**
 ```json
-{ "hotelId": "...", "roomId": "...", "checkInDate": "2026-08-01", "checkOutDate": "2026-08-05", "numGuests": 2, "numRooms": 1, "guestName": "...", "guestEmail": "...", "guestPhone": "...", "specialRequest": "optional" }
+{ "hotelId": "...", "rooms": [{ "roomId": "...", "numRooms": 2 }, { "roomId": "...", "numRooms": 1 }], "checkInDate": "2026-08-01", "checkOutDate": "2026-08-05", "numGuests": 2, "guestName": "...", "guestEmail": "...", "guestPhone": "...", "specialRequest": "optional" }
 ```
-Booking is created directly as `confirmed` (hotel bookings are instant per RULES.md — unlike Marriage Hall). Sends a confirmation email (dev-mode console log if SMTP unconfigured).
+`rooms[]` needs at least one entry — one booking can span several room categories under one `bookingReference`. Instant (no admin approval, unlike Marriage Hall), but **not yet confirmed**: the booking is created as `pending` together with a Razorpay order for the advance (`HOTEL_ADVANCE_PAYMENT_PERCENT`, default 20%). It becomes `confirmed` — and the confirmation email is sent — only in `POST /verify-payment` below.
+**201:** `{ success, message, data: { booking, razorpayOrder } }`
 **Errors:** `400` validation/date logic · `409` insufficient availability
+
+### `POST /api/v1/hotel-bookings/verify-payment`
+Public, rate-limited. Body: `{ razorpay_order_id, razorpay_payment_id, razorpay_signature }` from Razorpay Checkout. The server recomputes the HMAC-SHA256 signature with `RAZORPAY_KEY_SECRET`; only a match moves the booking to `confirmed` / `paymentStatus: paid` and sends the confirmation email. A client-reported success is never trusted.
+**200:** `{ success, message, data: booking }`
+**Errors:** `400` signature mismatch · `404` no booking for that order · `409` already processed (booking no longer `pending` — replay protection)
+
+### `PUT /api/v1/hotel-bookings/reference/:reference/cancel`
+Public, `optionalAuthenticate('user')`, rate-limited. Body: `{ guestEmail?, cancellationReason? }`. Ownership is proved by `guestEmail` matching the booking or a logged-in `userId` match — the reference alone is not enough. Within `CANCELLATION_FREE_WINDOW_HOURS` (default 24) of check-in a paid advance is refunded through Razorpay; if the gateway refund fails the status becomes `refund_pending` for manual follow-up instead of failing the cancellation.
+**200:** `{ success, message, data: booking }`
+**Errors:** `403` not the owner · `404` not found · `409` already cancelled / checked in / completed · `400` not a future booking
 
 ### `GET /api/v1/hotel-bookings/reference/:reference`
 Public. Looks up a booking by its human-friendly reference (e.g. `7V-8F3A9C21`) — used by the confirmation page.
@@ -399,7 +422,7 @@ Mounted at `/api/v1/halls`. No authentication required.
 ## Marriage Hall — Enquiries (Public, guest checkout supported)
 Mounted at `/api/v1/hall-enquiries`.
 
-> **These endpoints do not book anything.** Per `RULES.md` §14 a hall booking is approval-first: submitting an enquiry reserves no date and takes no payment. There is deliberately no amount, advance, Razorpay or invoice field anywhere in this group. The date is held only when an admin sets the enquiry to `confirmed`.
+> **These endpoints do not book anything.** Per `RULES.md` §2 a hall booking is approval-first: submitting an enquiry reserves no date and takes no payment. There is deliberately no amount, advance, Razorpay or invoice field anywhere in this group. The date is held only when an admin sets the enquiry to `confirmed`.
 
 | Method | Path | Purpose |
 |---|---|---|

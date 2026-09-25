@@ -52,7 +52,7 @@ export default function AuthField({
     <div>
       <label
         htmlFor={id}
-        className="mb-2 block text-[0.8125rem] font-light tracking-wide text-cream/75"
+        className="mb-2 block text-[0.9375rem] font-normal text-cream/85"
       >
         {label}
       </label>
@@ -67,8 +67,10 @@ export default function AuthField({
           minLength={minLength}
           autoComplete={autoComplete}
           placeholder={placeholder}
-          className={`w-full rounded-xl border border-transparent bg-white/95 px-4 py-3.5 text-[0.9375rem]
-                      font-light text-ink placeholder:text-warm-400
+          className={`w-full rounded-xl border border-transparent bg-white/95 px-4 py-3.5 text-base
+                      font-normal text-ink placeholder:text-warm-400
+                      [&[type=password]]:text-lg [&[type=password]]:tracking-[0.12em]
+                      [&[type=password]]:placeholder:text-base [&[type=password]]:placeholder:tracking-normal
                       transition-all duration-300 ease-luxe
                       focus:border-gold focus:bg-white focus:outline-none
                       focus:ring-2 focus:ring-gold/35 ${reveal ? "pr-12" : ""}`}
@@ -79,15 +81,15 @@ export default function AuthField({
             type="button"
             onClick={() => setShow((v) => !v)}
             aria-label={show ? "Hide password" : "Show password"}
-            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-warm-400
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-lg p-2 text-warm-500
                        transition-colors duration-300 hover:text-gold-dark"
           >
-            {show ? <EyeOff size={17} strokeWidth={1.5} /> : <Eye size={17} strokeWidth={1.5} />}
+            {show ? <EyeOff size={20} strokeWidth={1.75} /> : <Eye size={20} strokeWidth={1.75} />}
           </button>
         )}
       </div>
 
-      {hint && <p className="mt-2 text-xs font-light text-cream/45">{hint}</p>}
+      {hint && <p className="mt-2 text-sm font-light text-cream/70">{hint}</p>}
     </div>
   );
 }

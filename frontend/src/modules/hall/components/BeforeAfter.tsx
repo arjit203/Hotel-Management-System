@@ -86,14 +86,14 @@ export default function BeforeAfter({
       <span
         style={{ opacity: position > 12 ? 1 : 0 }}
         className="pointer-events-none absolute left-4 top-4 rounded-full bg-ink/60 px-3 py-1.5
-                   text-[10px] uppercase tracking-eyebrow text-cream backdrop-blur-sm transition-opacity duration-300"
+                   text-xs font-medium uppercase tracking-luxe text-cream backdrop-blur-sm transition-opacity duration-300"
       >
         {beforeLabel}
       </span>
       <span
         style={{ opacity: position < 88 ? 1 : 0 }}
         className="pointer-events-none absolute right-4 top-4 rounded-full bg-gold/85 px-3 py-1.5
-                   text-[10px] uppercase tracking-eyebrow text-ink backdrop-blur-sm transition-opacity duration-300"
+                   text-xs font-medium uppercase tracking-luxe text-ink backdrop-blur-sm transition-opacity duration-300"
       >
         {afterLabel}
       </span>

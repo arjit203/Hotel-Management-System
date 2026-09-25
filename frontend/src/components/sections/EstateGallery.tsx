@@ -125,7 +125,7 @@ export default function EstateGallery({
                   key={key}
                   onClick={() => setActiveModule(key)}
                   aria-pressed={isActive}
-                  className={`rounded-full border px-5 py-2.5 text-xs uppercase tracking-luxe
+                  className={`rounded-full border px-5 py-2.5 text-sm font-medium
                               transition-all duration-400 ease-luxe ${
                                 isActive
                                   ? "border-gold bg-gold text-ink shadow-gold"
@@ -178,7 +178,7 @@ export default function EstateGallery({
               />
 
               {/* Module tag, so a mixed grid stays legible. */}
-              <span className="absolute left-3 top-3 rounded-full bg-ink/55 px-2.5 py-1 text-[10px] uppercase tracking-eyebrow text-cream backdrop-blur-sm">
+              <span className="absolute left-3 top-3 rounded-full bg-ink/60 px-3 py-1 text-xs font-medium uppercase tracking-luxe text-cream backdrop-blur-sm">
                 {MODULE_LABEL[image.module]}
               </span>
 

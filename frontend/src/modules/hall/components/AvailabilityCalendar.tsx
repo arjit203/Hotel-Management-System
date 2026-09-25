@@ -165,7 +165,7 @@ export default function AvailabilityCalendar({
           {WEEKDAYS.map((day) => (
             <div
               key={day}
-              className="pb-2 text-center text-[10px] uppercase tracking-luxe text-warm-400"
+              className="pb-2 text-center text-xs uppercase tracking-luxe text-warm-400"
             >
               {/* Single letter on the narrowest screens so cells stay square. */}
               <span className="hidden sm:inline">{day}</span>

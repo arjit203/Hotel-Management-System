@@ -71,7 +71,7 @@ export default async function RoomDetailsPage({ params }: { params: { roomSlug: 
       <div className="container-luxe pb-24 pt-12 sm:pt-16">
         <Link
           href="/hotel/rooms"
-          className="group mb-10 inline-flex items-center gap-2 text-[10px] uppercase tracking-luxe text-warm-500 transition-colors hover:text-gold"
+          className="group mb-10 inline-flex items-center gap-2 text-xs uppercase tracking-luxe text-warm-500 transition-colors hover:text-gold"
         >
           <ArrowLeft
             size={13}
@@ -94,7 +94,7 @@ export default async function RoomDetailsPage({ params }: { params: { roomSlug: 
           <div className="lg:col-span-5">
             <div className="lg:sticky lg:top-32">
               <Reveal direction="left">
-                <p className="text-[10px] uppercase tracking-eyebrow text-gold">{room.categoryName}</p>
+                <p className="text-xs font-medium uppercase tracking-luxe text-gold">{room.categoryName}</p>
 
                 <TextReveal
                   as="h1"
@@ -105,7 +105,7 @@ export default async function RoomDetailsPage({ params }: { params: { roomSlug: 
 
                 <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
                   <StarRating rating={hotel.starRating} size={13} />
-                  <span className="text-[10px] uppercase tracking-luxe text-warm-400">{hotel.name}</span>
+                  <span className="text-xs uppercase tracking-luxe text-warm-400">{hotel.name}</span>
                 </div>
 
                 <div className="rule-fade my-7" />
@@ -118,7 +118,7 @@ export default async function RoomDetailsPage({ params }: { params: { roomSlug: 
 
                 {room.amenities?.length > 0 && (
                   <div className="mt-9">
-                    <p className="mb-4 text-[10px] uppercase tracking-eyebrow text-warm-400">
+                    <p className="mb-4 text-xs font-medium uppercase tracking-luxe text-warm-400">
                       In This Room
                     </p>
                     <div className="grid grid-cols-2 gap-x-5 gap-y-3.5">
@@ -138,7 +138,7 @@ export default async function RoomDetailsPage({ params }: { params: { roomSlug: 
                 <div className="mt-9 rounded-luxe border border-ink/[0.07] bg-white p-7 shadow-luxury">
                   <div className="flex items-end justify-between gap-4">
                     <p className="leading-none">
-                      <span className="mb-2 block text-[9px] uppercase tracking-eyebrow text-warm-400">
+                      <span className="mb-2 block text-xs font-medium uppercase tracking-luxe text-warm-400">
                         Rate From
                       </span>
                       <span className="price text-4xl">₹{room.basePrice.toLocaleString("en-IN")}</span>
@@ -151,7 +151,7 @@ export default async function RoomDetailsPage({ params }: { params: { roomSlug: 
                   >
                     Book This Room <ArrowRight size={14} className="btn-arrow" />
                   </Link>
-                  <p className="mt-4 text-center text-[10px] uppercase tracking-luxe text-warm-400">
+                  <p className="mt-4 text-center text-xs uppercase tracking-luxe text-warm-400">
                     Instant confirmation
                   </p>
                 </div>
@@ -185,7 +185,7 @@ export default async function RoomDetailsPage({ params }: { params: { roomSlug: 
                         &ldquo;{r.comment}&rdquo;
                       </p>
                     </blockquote>
-                    <figcaption className="mt-6 text-[11px] font-medium uppercase tracking-luxe text-ink/60">
+                    <figcaption className="mt-6 text-xs font-medium uppercase tracking-luxe text-ink/60">
                       {r.guestName || "Guest"}
                     </figcaption>
                   </figure>

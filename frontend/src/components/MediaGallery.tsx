@@ -52,7 +52,7 @@ export default function MediaGallery({
   if (images.length === 0) {
     return (
       <div className="flex aspect-[4/3] w-full items-center justify-center rounded-airy bg-gradient-to-br from-cream-dark to-cream-deep">
-        <p className="text-[10px] uppercase tracking-eyebrow text-warm-400">No photography yet</p>
+        <p className="text-xs font-medium uppercase tracking-luxe text-warm-400">No photography yet</p>
       </div>
     );
   }
@@ -70,6 +70,11 @@ export default function MediaGallery({
             animate={reduceMotion ? undefined : { opacity: 1, scale: 1 }}
             exit={reduceMotion ? undefined : { opacity: 0 }}
             transition={{ duration: 0.7, ease: EASE_LUXE }}
+            // Catches an image that finished loading before hydration.
+            ref={(el) => {
+              if (el?.complete && !loaded[activeImage])
+                setLoaded((p) => ({ ...p, [activeImage]: true }));
+            }}
             onLoad={() => setLoaded((p) => ({ ...p, [activeImage]: true }))}
             onError={() => setLoaded((p) => ({ ...p, [activeImage]: true }))}
             className="absolute inset-0 h-full w-full object-cover"
@@ -104,7 +109,7 @@ export default function MediaGallery({
               <ChevronRight size={18} strokeWidth={1.75} />
             </button>
 
-            <span className="absolute bottom-4 left-4 rounded-full bg-ink/45 px-3 py-1 text-[10px] tabular-nums tracking-luxe text-cream backdrop-blur-sm">
+            <span className="absolute bottom-4 left-4 rounded-full bg-ink/45 px-3 py-1 text-xs tabular-nums tracking-luxe text-cream backdrop-blur-sm">
               {activeImage + 1} / {images.length}
             </span>
           </>
@@ -198,7 +203,7 @@ export default function MediaGallery({
               </button>
             )}
 
-            <p className="absolute bottom-7 left-1/2 -translate-x-1/2 text-[11px] uppercase tracking-eyebrow text-cream/50">
+            <p className="absolute bottom-7 left-1/2 -translate-x-1/2 text-xs font-medium uppercase tracking-luxe text-cream/70">
               {activeImage + 1} / {images.length}
             </p>
           </motion.div>

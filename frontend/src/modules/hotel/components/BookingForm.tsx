@@ -9,7 +9,7 @@ import { RoomSummary } from "./RoomCard";
 import { getUserToken } from "@/lib/userAuth";
 import { EASE_LUXE } from "@/components/motion/variants";
 import Alert from "@/components/ui/Alert";
-import { todayISO } from "@/lib/format";
+import { formatDateLong, todayISO } from "@/lib/format";
 
 interface BookingFormProps {
   hotelId: string;
@@ -268,8 +268,8 @@ export default function BookingForm({ hotelId, room, allRooms }: BookingFormProp
                     {done ? <Check size={14} strokeWidth={2.5} /> : i + 1}
                   </span>
                   <span
-                    className={`hidden text-xs uppercase tracking-luxe transition-colors duration-400 sm:block ${
-                      active ? "text-ink" : "text-warm-400"
+                    className={`hidden text-[0.8125rem] font-medium transition-colors duration-400 sm:block ${
+                      active ? "text-ink" : "text-warm-500"
                     }`}
                   >
                     {s.label}
@@ -321,8 +321,8 @@ export default function BookingForm({ hotelId, room, allRooms }: BookingFormProp
                 {cart.map((line) => (
                   <li key={line.roomId} className="flex items-center gap-4 py-4">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-ink">{line.roomName}</p>
-                      <p className="text-sm font-light text-warm-500">
+                      <p className="truncate text-[1.0625rem] text-ink">{line.roomName}</p>
+                      <p className="text-[0.9375rem] font-light text-warm-500">
                         ₹{line.basePrice.toLocaleString("en-IN")} / night
                       </p>
                     </div>
@@ -335,16 +335,16 @@ export default function BookingForm({ hotelId, room, allRooms }: BookingFormProp
                         onClick={() => updateLineQty(line.roomId, line.numRooms - 1)}
                         disabled={line.numRooms <= 1}
                         aria-label={`Fewer ${line.roomName}`}
-                        className="flex h-8 w-8 items-center justify-center rounded-full border border-ink/12 text-warm-600 transition-colors hover:border-gold hover:text-gold disabled:opacity-30"
+                        className="flex h-9 w-9 items-center justify-center rounded-full border border-ink/15 text-lg text-warm-600 transition-colors hover:border-gold hover:text-gold disabled:opacity-30"
                       >
                         −
                       </button>
-                      <span className="w-8 text-center text-sm tabular-nums text-ink">{line.numRooms}</span>
+                      <span className="w-8 text-center text-base tabular-nums text-ink">{line.numRooms}</span>
                       <button
                         type="button"
                         onClick={() => updateLineQty(line.roomId, line.numRooms + 1)}
                         aria-label={`More ${line.roomName}`}
-                        className="flex h-8 w-8 items-center justify-center rounded-full border border-ink/12 text-warm-600 transition-colors hover:border-gold hover:text-gold"
+                        className="flex h-9 w-9 items-center justify-center rounded-full border border-ink/15 text-lg text-warm-600 transition-colors hover:border-gold hover:text-gold"
                       >
                         +
                       </button>
@@ -382,7 +382,7 @@ export default function BookingForm({ hotelId, room, allRooms }: BookingFormProp
                       },
                     ]);
                   }}
-                  className="mt-4 w-full cursor-pointer border-0 border-b border-dashed border-ink/20 bg-transparent py-2.5 text-sm font-light text-warm-600 transition-colors focus:border-gold focus:outline-none focus:ring-0"
+                  className="mt-4 w-full cursor-pointer border-0 border-b border-dashed border-ink/20 bg-transparent py-3 text-[0.9375rem] font-normal text-warm-600 transition-colors focus:border-gold focus:outline-none focus:ring-0"
                 >
                   <option value="">+ Add another room type…</option>
                   {availableToAdd.map((r) => (
@@ -407,7 +407,7 @@ export default function BookingForm({ hotelId, room, allRooms }: BookingFormProp
               {/* Live running total once dates are chosen — no surprises later. */}
               {nights > 0 && (
                 <div className="mt-7 flex items-baseline justify-between border-t border-ink/[0.08] pt-5">
-                  <span className="text-xs uppercase tracking-luxe text-warm-500">
+                  <span className="text-[0.9375rem] text-warm-600">
                     {nights} {nights === 1 ? "night" : "nights"}
                   </span>
                   <span className="price text-2xl">₹{totalAmount.toLocaleString("en-IN")}</span>
@@ -422,7 +422,7 @@ export default function BookingForm({ hotelId, room, allRooms }: BookingFormProp
 
           {step === "guest-details" && (
             <>
-              <p className="mb-7 flex items-center gap-2.5 rounded-xl border border-gold/30 bg-gold/[0.07] px-4 py-3 text-sm font-light text-gold-dark">
+              <p className="mb-7 flex items-center gap-2.5 rounded-xl border border-gold/30 bg-gold/[0.07] px-4 py-3 text-[0.9375rem] font-normal text-gold-dark">
                 <Check size={16} className="shrink-0" />
                 Rooms are available for your dates.
               </p>
@@ -487,13 +487,15 @@ export default function BookingForm({ hotelId, room, allRooms }: BookingFormProp
               <div className="rounded-luxe border border-ink/[0.08] bg-cream/70 p-6">
                 <div className="grid grid-cols-3 gap-4 border-b border-ink/[0.08] pb-5">
                   {[
-                    { label: "Arrival", value: checkInDate },
-                    { label: "Departure", value: checkOutDate },
+                    // T00:00 parses as local midnight — a bare "YYYY-MM-DD" is
+                    // UTC and would show the previous day west of Greenwich.
+                    { label: "Arrival", value: checkInDate && formatDateLong(`${checkInDate}T00:00:00`) },
+                    { label: "Departure", value: checkOutDate && formatDateLong(`${checkOutDate}T00:00:00`) },
                     { label: "Nights", value: String(nights) },
                   ].map((item) => (
                     <div key={item.label}>
                       <p className="text-xs uppercase tracking-luxe text-warm-500">{item.label}</p>
-                      <p className="mt-1.5 text-sm text-ink">{item.value}</p>
+                      <p className="mt-1.5 text-base text-ink">{item.value}</p>
                     </div>
                   ))}
                 </div>
@@ -501,17 +503,17 @@ export default function BookingForm({ hotelId, room, allRooms }: BookingFormProp
                 <ul className="divide-y divide-ink/[0.07] border-b border-ink/[0.08]">
                   {cart.map((line) => (
                     <li key={line.roomId} className="flex items-center justify-between gap-4 py-3.5">
-                      <span className="text-sm text-ink">
+                      <span className="text-base text-ink">
                         {line.numRooms} × {line.roomName}
                       </span>
-                      <span className="text-sm font-light tabular-nums text-warm-600">
+                      <span className="text-base font-normal tabular-nums text-warm-600">
                         ₹{(line.basePrice * nights * line.numRooms).toLocaleString("en-IN")}
                       </span>
                     </li>
                   ))}
                 </ul>
 
-                <div className="space-y-1.5 py-5 text-sm font-light text-warm-600">
+                <div className="space-y-1.5 py-5 text-[0.9375rem] font-light text-warm-600">
                   <p>
                     <span className="text-warm-500">Guests:</span> {numGuests}
                   </p>
@@ -524,10 +526,10 @@ export default function BookingForm({ hotelId, room, allRooms }: BookingFormProp
                 </div>
 
                 <div className="flex items-baseline justify-between border-t border-ink/[0.08] pt-5">
-                  <span className="text-xs uppercase tracking-luxe text-ink">Total</span>
+                  <span className="text-sm font-medium uppercase tracking-luxe text-ink">Total</span>
                   <span className="price text-3xl">₹{totalAmount.toLocaleString("en-IN")}</span>
                 </div>
-                <p className="mt-2 text-right text-xs font-light text-warm-500">
+                <p className="mt-2 text-right text-sm font-light text-warm-500">
                   Advance payable now · balance settled at the property
                 </p>
               </div>
@@ -557,7 +559,7 @@ export default function BookingForm({ hotelId, room, allRooms }: BookingFormProp
                 </button>
               </div>
 
-              <p className="mt-5 text-center text-xs font-light text-warm-500">
+              <p className="mt-5 text-center text-sm font-light text-warm-500">
                 Secured by Razorpay · You&apos;ll be asked to pay the advance only
               </p>
             </>

@@ -49,7 +49,7 @@ export default async function ReviewsPage() {
               <div className="mt-4">
                 <StarRating rating={reviewSummary.average} size={16} />
               </div>
-              <p className="mt-4 text-[10px] uppercase tracking-eyebrow text-warm-400">
+              <p className="mt-4 text-xs font-medium uppercase tracking-luxe text-warm-400">
                 {reviewSummary.count} {reviewSummary.count === 1 ? "Review" : "Reviews"}
               </p>
             </div>

@@ -43,7 +43,8 @@ export default function Header() {
   // design reference). A site header over that would break the effect and steal
   // the top of the composition, so it renders nothing at all — AuthShell
   // provides its own wordmark and a "Back to site" link.
-  const isAuthPage = pathname === "/login" || pathname === "/signup";
+  const isAuthPage =
+    pathname === "/login" || pathname === "/signup" || pathname.startsWith("/reset-password/");
 
   // Read from localStorage only after mount — avoids server/client markup
   // mismatch, since the server has no access to the browser's localStorage.
@@ -129,7 +130,7 @@ export default function Header() {
               7 <span className="text-gold">Vachan</span>
             </span>
             <span
-              className={`mt-1.5 block text-[11px] uppercase tracking-eyebrow transition-colors duration-500 ${
+              className={`mt-1.5 block text-xs uppercase tracking-eyebrow transition-colors duration-500 ${
                 transparent ? "text-cream/55" : "text-warm-400"
               }`}
             >
@@ -185,7 +186,7 @@ export default function Header() {
                   >
                     {link.label}
                     <ChevronDown
-                      size={13}
+                      size={14}
                       strokeWidth={1.75}
                       className={`transition-transform duration-400 ease-luxe ${isOpen ? "rotate-180" : ""}`}
                     />
@@ -207,7 +208,7 @@ export default function Header() {
                             // through invisible links.
                             tabIndex={isOpen ? 0 : -1}
                             onClick={() => setOpenMenu(null)}
-                            className={`block px-5 py-2.5 text-sm font-light transition-colors duration-300 hover:bg-gold/[0.08] hover:text-gold ${
+                            className={`block px-5 py-3 text-[0.9375rem] font-normal transition-colors duration-300 hover:bg-gold/[0.08] hover:text-gold ${
                               pathname === child.href ? "text-gold" : "text-ink/75"
                             }`}
                           >
@@ -230,7 +231,7 @@ export default function Header() {
           <div className="hidden items-center gap-7 xl:flex">
             <Link
               href="/my-bookings"
-              className={`flex items-center gap-2 text-[0.9375rem] font-light transition-colors duration-300 ${
+              className={`flex items-center gap-2 text-base font-normal transition-colors duration-300 ${
                 transparent ? "text-cream/80 hover:text-gold" : "text-ink/75 hover:text-gold"
               }`}
             >
@@ -240,7 +241,7 @@ export default function Header() {
             {user ? (
               <button
                 onClick={handleLogout}
-                className={`flex items-center gap-2 text-[0.9375rem] font-light transition-colors duration-300 ${
+                className={`flex items-center gap-2 text-base font-normal transition-colors duration-300 ${
                   transparent ? "text-cream/70 hover:text-gold" : "text-warm-500 hover:text-gold"
                 }`}
               >
@@ -249,7 +250,7 @@ export default function Header() {
             ) : (
               <Link
                 href="/login"
-                className={`flex items-center gap-2 text-[0.9375rem] font-light transition-colors duration-300 ${
+                className={`flex items-center gap-2 text-base font-normal transition-colors duration-300 ${
                   transparent ? "text-cream/80 hover:text-gold" : "text-ink/75 hover:text-gold"
                 }`}
               >
@@ -258,7 +259,7 @@ export default function Header() {
             )}
             <Link
               href="/hotel/booking"
-              className={`group !px-7 !py-3.5 !text-[0.8125rem] ${transparent ? "btn-gold" : "btn-primary"}`}
+              className={`group !min-h-0 !px-7 !py-3.5 !text-sm ${transparent ? "btn-gold" : "btn-primary"}`}
             >
               Book Now <ArrowRight size={14} className="btn-arrow" />
             </Link>
@@ -374,7 +375,7 @@ export default function Header() {
                     </Link>
                     <button
                       onClick={handleLogout}
-                      className="flex items-center gap-2 text-sm uppercase tracking-luxe text-cream/50"
+                      className="flex items-center gap-2 text-sm uppercase tracking-luxe text-cream/70"
                     >
                       <LogOut size={14} /> Logout
                     </button>

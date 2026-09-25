@@ -15,7 +15,7 @@ Unified booking + management platform for Hotel, Marriage Hall, and Restaurant u
 | Backend | Node.js + Express + TypeScript |
 | Database | MongoDB + Mongoose |
 | Auth | JWT (separate secrets for User/Admin), bcrypt password hashing |
-| Payments | Razorpay (planned, not yet built) |
+| Payments | Razorpay — Hotel advance payment + refunds (see §3) |
 | Email | Nodemailer (SMTP; logs to console in dev if SMTP unset) |
 | Media Storage | Cloudinary (image upload/transform/delete — added this session) |
 
@@ -29,7 +29,7 @@ Unified booking + management platform for Hotel, Marriage Hall, and Restaurant u
 | **Marriage Hall (venue, packages, showcases, availability calendar, approval-first enquiries)** | ✅ Complete — see §8. Seed not yet run in this environment |
 | **Restaurant (backend: menu, dining areas, table availability, instant reservations)** | ✅ Backend complete — public frontend complete |
 | Booking Engine (shared conflict/locking hardening) | ⬜ Not started — see Known Limitations below |
-| Payments | ⬜ Not started |
+| Payments | 🟡 Partial — Hotel advance payment (Razorpay order → signature verification) and refunds on cancellation are live in `utils/razorpay.util.ts` + `hotel/booking.service.ts`. Marriage Hall post-approval payment and a standalone Payments module are not built |
 | **Admin Console UI (Hotel + Restaurant + Marriage Hall, shared Admin Design System)** | ✅ Built — see §7. Awaiting a manual click-through of the write paths |
 
 ---
@@ -100,6 +100,16 @@ See `API_DOCUMENTATION.md`.
 - No refresh-token/logout-blacklist mechanism yet — JWT expiry alone governs session length for this phase (acceptable given no other modules yet depend on long-lived sessions).
 - No social login (Google/etc.) — not in current requirements.
 
+### Password reset pages (2026-09-25)
+The emailed link is `${FRONTEND_URL}/reset-password/<token>` for users and
+`${ADMIN_PANEL_URL}/reset-password/<token>` for admins. Both pages now exist:
+`frontend/src/app/reset-password/[token]` (form in
+`components/auth/ResetPasswordForm.tsx`) and
+`admin-panel/src/app/reset-password/[token]`. The admin panel also has
+`/forgot-password`, linked from its login page. Tokens expire after
+`RESET_TOKEN_EXPIRY_MINUTES` (default 30). If SMTP is unset, the email (and
+link) is logged to the backend console instead.
+
 ---
 
 ## 5. Module: Hotel
@@ -162,7 +172,9 @@ See `API_DOCUMENTATION.md`.
 
 ### Known Limitations (by design, not gaps)
 - **Booking race condition**: availability is checked immediately before booking creation but without a DB transaction/distributed lock. Under concurrent requests for the last available room, a double-booking is theoretically possible. Flagged explicitly as a hardening item for the future **Booking Engine** module (per `RULES.md`, that module is shared across Hotel/Hall/Restaurant) rather than solved ad hoc inside the Hotel module alone.
-- **Admin Panel frontend UI not built** — this task built the backend admin APIs (Hotel/Room/Availability/Offers/Gallery/FAQ/Booking management, all RBAC-protected) but not the corresponding `admin-panel` React pages/forms. The admin can currently only be exercised via API calls (e.g. Thunder Client/Postman) until the Admin Panel UI module is scoped and built.
+- ~~Admin Panel frontend UI not built~~ — superseded: the admin console now covers all Hotel management screens (§7).
+- **Booking Settings are not wired to the booking service.** Settings → Booking stores `hotelAdvancePercent` and `cancellationFreeWindowHours`, but `booking.service.ts` reads only `HOTEL_ADVANCE_PAYMENT_PERCENT` / `CANCELLATION_FREE_WINDOW_HOURS` from env. Editing those two fields in the admin panel does not change charges or refunds yet.
+- **Browser Razorpay key is build-time.** Checkout uses `NEXT_PUBLIC_RAZORPAY_KEY_ID` (and optional `NEXT_PUBLIC_RAZORPAY_CONFIG_ID`), inlined at `next build`. Changing the Key ID in Settings → Integrations updates only the backend, so the two must be kept in step manually.
 - **Real Google Maps embed not implemented** — `MapPlaceholder` component shows a link-out to Google Maps search rather than an embedded interactive map, pending `GOOGLE_MAPS_API_KEY` billing setup (env var already reserved).
 - **Restaurant online-ordering-style deferred features don't apply here** — Hotel has no Phase-2-deferred features; all 14 requested Hotel Module requirements are fully implemented now.
 
@@ -302,7 +314,8 @@ border and colour per page.
   only Hotel exposes `DELETE /reviews/:id/images`.
 - **The business selector is two-level** (vertical, then property) even though
   each vertical has one property today — matching the multi-tenant mandate.
-  Marriage Hall is rendered but locked; there is no `/api/v1/admin/halls`.
+  Marriage Hall is now a full vertical in the selector, backed by
+  `/api/v1/admin/halls` (see `API_DOCUMENTATION.md`).
 - **The console is `noindex`.** Opposite of the public site's SEO requirement,
   and deliberate: these pages sit behind auth.
 - **Authorization is never re-implemented client-side.** `RequireAdmin` and any
@@ -320,7 +333,7 @@ pages (forms are controlled React; the table is the in-house `DataTable`).
 |---|---|---|
 | `NEXT_PUBLIC_FRONTEND_URL` | Public site origin, used only for "View public page" links. Optional. | `http://localhost:3000` |
 
-Existing: `NEXT_PUBLIC_API_BASE_URL` (defaults to `http://localhost:5000/api/v1`).
+Existing: `NEXT_PUBLIC_API_BASE_URL` (in-code fallback `http://localhost:5100/api/v1`, `admin-panel/src/lib/api.ts`).
 
 ### Folder Locations
 - `admin-panel/src/app/` — routes (20). Hotel: `/hotels`, `/hotels/[hotelId]`,
@@ -355,8 +368,9 @@ it consumes.
 - **`/customers` is derived from bookings and reservations**, not from user
   records. No admin route lists users, and guest checkout means most customers
   never register.
-- **`/users` cannot create or edit admins.** No signup route, no admin-list
-  route — accounts are provisioned by the seeder.
+- **There is still no admin signup route.** The first Super Admin comes from
+  the seeder; every other account is created, edited, deactivated or reset by a
+  Super Admin from `/users`, backed by `/api/v1/admin/users` (§4).
 - **Write paths are not yet verified by execution.** Build, types and live
   payload shapes were checked; a manual click-through of create / edit / delete /
   upload / status-change is still outstanding.
@@ -371,7 +385,7 @@ The third vertical: a banquet venue whose website exists to make a family
 per the Phase 4 brief (80% experience / 20% backend), and visually richer than
 the Hotel module by design.
 
-### Scope boundary (from RULES.md §14)
+### Scope boundary (from RULES.md §2, "Hall bookings")
 **Hall bookings are never instant or self-serve.** A family submits an
 *enquiry*; nothing is reserved and nothing is charged. An admin reviews it,
 speaks to them offline, and only then confirms — which is the moment the date is

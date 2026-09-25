@@ -29,32 +29,39 @@ export default function AmenitiesPreview({
         <TextReveal as="h2" text={title} className="section-title" delay={0.05} />
       </div>
 
+      {/* Flex-wrap, not a fixed 6-column grid: the list is admin-curated and is
+          often short, and two tiles pinned to the left of a six-column track
+          read as a half-loaded section. Centred fixed-width tiles look composed
+          at any count. */}
       <Stagger
-        className="grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-5 lg:grid-cols-6"
+        className="flex flex-wrap justify-center gap-4 sm:gap-5"
         stagger={0.06}
       >
         {amenities.slice(0, 6).map((amenity) => {
           const Icon = getAmenityIcon(amenity.name);
           return (
-            <StaggerScaleItem key={amenity.name}>
+            <StaggerScaleItem
+              key={amenity.name}
+              className="w-[calc(50%-0.5rem)] sm:w-[11.5rem] lg:w-[11.25rem]"
+            >
               <div
                 className="group flex h-full flex-col items-center justify-center gap-4 rounded-luxe border border-ink/[0.07]
-                           bg-white px-4 py-9 text-center transition-all duration-600 ease-luxe
+                           bg-white px-4 py-8 text-center transition-all duration-600 ease-luxe
                            hover:-translate-y-1.5 hover:border-gold/30 hover:shadow-luxury"
               >
                 <Icon
-                  size={24}
+                  size={26}
                   strokeWidth={1.5}
                   className="text-gold transition-transform duration-600 ease-luxe group-hover:-translate-y-0.5 group-hover:scale-110"
                 />
-                <p className="text-[11px] font-medium uppercase tracking-luxe text-ink/70">{amenity.name}</p>
+                <p className="text-[0.9375rem] font-medium leading-snug text-ink/85">{amenity.name}</p>
               </div>
             </StaggerScaleItem>
           );
         })}
       </Stagger>
 
-      <Reveal delay={0.1} className="mt-14 text-center">
+      <Reveal delay={0.1} className="mt-12 text-center">
         <Link href={href} className="btn-outline group">
           {ctaLabel} <ArrowRight size={14} className="btn-arrow" />
         </Link>

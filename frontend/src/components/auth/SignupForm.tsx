@@ -67,14 +67,14 @@ export default function SignupForm() {
           <MailCheck size={22} strokeWidth={1.5} className="text-gold-light" />
         </span>
         <p className="font-display text-xl text-cream">Check your email</p>
-        <p className="mt-3 text-sm font-light leading-relaxed text-cream/60">
+        <p className="mt-3 text-base font-light leading-relaxed text-cream/75">
           We&apos;ve sent a verification link to <span className="text-cream">{form.email}</span>.
           Verify your account, then sign in.
         </p>
         <Link
           href="/login"
-          className="mt-8 flex w-full items-center justify-center rounded-xl bg-gold px-6 py-3.5
-                     text-[0.9375rem] font-medium text-ink shadow-gold transition-all
+          className="mt-8 flex w-full items-center justify-center rounded-xl bg-gold px-6 py-4
+                     text-base font-medium text-ink shadow-gold transition-all
                      duration-400 ease-luxe hover:bg-gold-light"
         >
           Go To Login
@@ -140,8 +140,8 @@ export default function SignupForm() {
               {rules.map((rule) => (
                 <li
                   key={rule.label}
-                  className={`flex items-center gap-2 text-xs font-light transition-colors duration-300 ${
-                    rule.met ? "text-gold-light" : "text-cream/45"
+                  className={`flex items-center gap-2 text-sm font-light transition-colors duration-300 ${
+                    rule.met ? "text-gold-light" : "text-cream/65"
                   }`}
                 >
                   <span
@@ -162,8 +162,8 @@ export default function SignupForm() {
         <button
           type="submit"
           disabled={submitting}
-          className="flex w-full items-center justify-center gap-2.5 rounded-xl bg-gold px-6 py-3.5
-                     text-[0.9375rem] font-medium text-ink shadow-gold
+          className="flex w-full items-center justify-center gap-2.5 rounded-xl bg-gold px-6 py-4
+                     text-base font-medium text-ink shadow-gold
                      transition-all duration-400 ease-luxe
                      hover:bg-gold-light active:scale-[0.99] disabled:opacity-60"
         >
@@ -181,7 +181,7 @@ export default function SignupForm() {
         <SocialPlaceholders />
       </div>
 
-      <p className="mt-8 text-center text-sm font-light text-cream/60">
+      <p className="mt-8 text-center text-[0.9375rem] font-light text-cream/75">
         Already have an account?{" "}
         <Link
           href="/login"

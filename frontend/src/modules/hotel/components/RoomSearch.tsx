@@ -11,7 +11,7 @@ import { EASE_LUXE } from "@/components/motion/variants";
 import Pagination from "@/components/ui/Pagination";
 import { todayISO } from "@/lib/format";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000/api/v1";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5100/api/v1";
 const PAGE_SIZE = 6;
 
 /**
@@ -200,13 +200,13 @@ export default function RoomSearch({
     <div>
       {/* ── Result count + mobile filter toggle ── */}
       <div className="mb-6 flex items-center justify-between gap-4">
-        <p className="text-[10px] uppercase tracking-luxe text-warm-500">
+        <p className="text-xs uppercase tracking-luxe text-warm-500">
           {rooms.length} {rooms.length === 1 ? "Room Type" : "Room Types"}
           {hasSearched && " Matching"}
         </p>
         <button
           onClick={() => setShowFilters((v) => !v)}
-          className="inline-flex items-center gap-2 rounded-full border border-ink/12 px-5 py-2.5 text-[10px] uppercase tracking-luxe text-ink transition-colors duration-400 hover:border-gold hover:text-gold lg:hidden"
+          className="inline-flex items-center gap-2 rounded-full border border-ink/12 px-5 py-2.5 text-xs uppercase tracking-luxe text-ink transition-colors duration-400 hover:border-gold hover:text-gold lg:hidden"
           aria-expanded={showFilters}
         >
           {showFilters ? <X size={13} /> : <SlidersHorizontal size={13} />}
@@ -260,7 +260,7 @@ export default function RoomSearch({
               <button
                 type="button"
                 onClick={handleReset}
-                className="inline-flex items-center justify-center gap-1.5 text-[10px] uppercase tracking-luxe text-warm-500 transition-colors hover:text-gold"
+                className="inline-flex items-center justify-center gap-1.5 text-xs uppercase tracking-luxe text-warm-500 transition-colors hover:text-gold"
               >
                 <RotateCcw size={12} /> Reset
               </button>

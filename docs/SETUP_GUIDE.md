@@ -90,9 +90,9 @@ cd ..
 | `package.json` | root, frontend/, backend/, admin-panel/ | Dependencies + scripts |
 | `tsconfig.json` | frontend/, backend/, admin-panel/ | TypeScript config |
 | `tailwind.config.js` / `postcss.config.js` | frontend/, admin-panel/ | Tailwind setup |
-| `src/config/db.ts` | backend/ | Mongoose connection setup (stub) |
+| `src/config/db.ts` | backend/ | Mongoose connection setup |
 | `src/server.ts` | backend/ | Express entry point with health-check route |
-| `.env.example` | frontend/, backend/, admin-panel/ | Required env var templates |
+| `.env.example` | frontend/, admin-panel/ | Env var templates (there is **no** `backend/.env.example` — see §5) |
 
 ---
 
@@ -101,9 +101,13 @@ cd ..
 ```bash
 cp frontend/.env.example frontend/.env.local
 cp admin-panel/.env.example admin-panel/.env.local
-cp backend/.env.example backend/.env
 ```
-Fill in real values — most importantly `MONGODB_URI` in `backend/.env`. Never commit these files.
+There is **no `backend/.env.example`** — create `backend/.env` by hand. At minimum:
+`MONGODB_URI`, `PORT=5100` (the code falls back to 5000 if unset, but both frontends expect 5100),
+`JWT_SECRET`, `ADMIN_JWT_SECRET`, `FRONTEND_URL=http://localhost:3100`, `ADMIN_PANEL_URL=http://localhost:3101`.
+Optional (features degrade gracefully when blank): `SMTP_*` / `EMAIL_FROM`, `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET`,
+`CLOUDINARY_*`, `SETTINGS_SECRET_KEY`. The full list with purposes is in `CLAUDE.md` → Environment and
+`docs/PROJECT_DOCUMENTATION.md`. Never commit these files.
 
 ---
 
@@ -136,9 +140,9 @@ No migration step is needed for MongoDB (schema-less at the DB level) — collec
 ```bash
 npm run dev:all
 ```
-- Frontend → http://localhost:3000
-- Backend → http://localhost:5000
-- Admin Panel → http://localhost:3001
+- Frontend → http://localhost:3100
+- Backend → http://localhost:5100
+- Admin Panel → http://localhost:3101
 
 ### Individually
 ```bash
@@ -162,9 +166,9 @@ npm run dev:admin
 ---
 
 ## 9. Verification Checklist
-- [ ] `http://localhost:3000` loads blank Next.js frontend
-- [ ] `http://localhost:3001` loads blank Next.js admin panel
-- [ ] `http://localhost:5000/api/v1/health` returns `{"status":"ok","service":"7vachan-backend"}`
+- [ ] `http://localhost:3100` loads blank Next.js frontend
+- [ ] `http://localhost:3101` loads blank Next.js admin panel
+- [ ] `http://localhost:5100/api/v1/health` returns `{"status":"ok","service":"7vachan-backend"}`
 - [ ] Backend console shows `✅ MongoDB connected successfully`
 - [ ] `.env` files exist locally and are **not** tracked by git
 

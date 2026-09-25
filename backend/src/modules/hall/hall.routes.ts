@@ -3,6 +3,7 @@ import * as hallController from "./hall.controller";
 import { authenticate, optionalAuthenticate, requireRole } from "../../middlewares/auth.middleware";
 import { auditLogger } from "../../middlewares/audit.middleware";
 import { uploadImage } from "../../middlewares/upload.middleware";
+import { publicFormLimiter, publicUploadLimiter } from "../../middlewares/rateLimit.middleware";
 
 /**
  * Marriage Hall routes.
@@ -36,6 +37,7 @@ publicHallRouter.get("/", hallController.listHalls);
 // which is why the review upload route is declared first.
 publicHallRouter.post(
   "/reviews/upload-image",
+  publicUploadLimiter,
   uploadImage.single("image"),
   hallController.uploadReviewImage
 );
@@ -50,6 +52,7 @@ publicHallRouter.get("/:slug/calendar", hallController.getCalendar);
 // when a valid token is present but never blocks, matching Hotel and Restaurant.
 publicHallRouter.post(
   "/:hallId/reviews",
+  publicFormLimiter,
   optionalAuthenticate("user"),
   hallController.createHallReview
 );
@@ -61,11 +64,17 @@ export const publicEnquiryRouter = Router();
 
 // Guest checkout supported per RULES.md — never force login to enquire.
 // This creates an ENQUIRY, not a booking: nothing is reserved, nothing charged.
-publicEnquiryRouter.post("/", optionalAuthenticate("user"), hallController.createEnquiry);
+publicEnquiryRouter.post(
+  "/",
+  publicFormLimiter,
+  optionalAuthenticate("user"),
+  hallController.createEnquiry
+);
 publicEnquiryRouter.get("/me", authenticate("user"), hallController.getMyEnquiries);
 publicEnquiryRouter.get("/reference/:reference", hallController.getEnquiryByReference);
 publicEnquiryRouter.put(
   "/reference/:reference/cancel",
+  publicFormLimiter,
   optionalAuthenticate("user"),
   hallController.cancelEnquiry
 );

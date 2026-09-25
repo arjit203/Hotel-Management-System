@@ -6,7 +6,7 @@ import Link from "next/link";
 import { ArrowRight, Loader2, MailWarning } from "lucide-react";
 import SuccessMark from "@/components/ui/SuccessMark";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000/api/v1";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5100/api/v1";
 
 /**
  * Presentation rebuild only. The verification request, its single-run guard and

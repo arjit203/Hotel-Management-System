@@ -51,7 +51,7 @@ export default function GalleryGrid({ images }: { images: GalleryImage[] }) {
                 setLightboxIndex(null);
               }}
               aria-pressed={active}
-              className={`relative rounded-full px-6 py-2.5 text-[10px] font-medium uppercase tracking-luxe transition-colors duration-400 ${
+              className={`relative rounded-full px-6 py-2.5 text-xs font-medium uppercase tracking-luxe transition-colors duration-400 ${
                 active ? "text-cream" : "border border-ink/10 text-warm-500 hover:border-gold hover:text-gold"
               }`}
             >
@@ -105,7 +105,7 @@ export default function GalleryGrid({ images }: { images: GalleryImage[] }) {
               priority={i < 3}
             />
             <span className="pointer-events-none absolute inset-x-0 bottom-0 translate-y-2 bg-gradient-to-t from-ink/85 to-transparent p-4 text-left opacity-0 transition-all duration-500 ease-luxe group-hover:translate-y-0 group-hover:opacity-100">
-              <span className="block text-[10px] uppercase tracking-luxe text-gold">{img.category}</span>
+              <span className="block text-xs uppercase tracking-luxe text-gold">{img.category}</span>
               {img.title && <span className="mt-0.5 block text-xs font-light text-cream">{img.title}</span>}
             </span>
           </motion.button>

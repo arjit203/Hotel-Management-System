@@ -61,7 +61,7 @@ export default async function AmenitiesPage() {
                         className="text-gold transition-transform duration-600 ease-luxe group-hover:scale-110"
                       />
                     </span>
-                    <p className="text-[11px] font-medium uppercase tracking-luxe text-ink/75">
+                    <p className="text-xs font-medium uppercase tracking-luxe text-ink/75">
                       {amenity.name}
                     </p>
                   </div>

@@ -3,6 +3,7 @@ import * as restaurantController from "./restaurant.controller";
 import { authenticate, optionalAuthenticate, requireRole } from "../../middlewares/auth.middleware";
 import { auditLogger } from "../../middlewares/audit.middleware";
 import { uploadImage } from "../../middlewares/upload.middleware";
+import { publicFormLimiter, publicUploadLimiter } from "../../middlewares/rateLimit.middleware";
 
 /**
  * Restaurant routes.
@@ -36,6 +37,7 @@ publicRestaurantRouter.get(
 // same multer middleware as the admin media routes.
 publicRestaurantRouter.post(
   "/reviews/upload-image",
+  publicUploadLimiter,
   uploadImage.single("image"),
   restaurantController.uploadReviewImage
 );
@@ -52,6 +54,7 @@ publicRestaurantRouter.get("/:slug/availability", restaurantController.getDayAva
 // a valid token is present but never blocks, matching the Hotel module.
 publicRestaurantRouter.post(
   "/:restaurantId/reviews",
+  publicFormLimiter,
   optionalAuthenticate("user"),
   restaurantController.createRestaurantReview
 );
@@ -64,6 +67,7 @@ export const publicReservationRouter = Router();
 // Guest checkout supported per RULES.md — never force login to reserve.
 publicReservationRouter.post(
   "/",
+  publicFormLimiter,
   optionalAuthenticate("user"),
   restaurantController.createReservation
 );
@@ -74,6 +78,7 @@ publicReservationRouter.get(
 );
 publicReservationRouter.put(
   "/reference/:reference/cancel",
+  publicFormLimiter,
   optionalAuthenticate("user"),
   restaurantController.cancelReservation
 );

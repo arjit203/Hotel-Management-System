@@ -163,18 +163,18 @@ Scales with viewport, so headings need no per-breakpoint overrides.
 | `.section-title` | Section `<h2>` | `display-md` |
 | `.card-title` | Card / article heading | 22px → 24px, medium |
 | `.lead` | Intro paragraph under a heading | 17px → 18px, `warm-600` |
-| `.body-muted` | Supporting body copy | 15px, `warm-500` |
-| `.meta` | Uppercase micro-label | 12px, `tracking-luxe`, `warm-500` |
-| `.section-eyebrow` | Gold overline (with hairline flourish) | 12px, `tracking-eyebrow` |
-| `.field-label` | Form label | 11px, uppercase, `tracking-luxe` |
+| `.body-muted` | Supporting body copy | 16px, `warm-500` |
+| `.meta` | Uppercase micro-label | 13px, `tracking-luxe`, `warm-500` |
+| `.section-eyebrow` | Gold overline (with hairline flourish) | 13px, `tracking-eyebrow`, `gold-dark` (add `!text-gold-light` on dark) |
+| `.field-label` | Form label | 13px, uppercase, `tracking-luxe`, `warm-600` |
 | `.price` | Money figures | serif, medium, `tabular-nums` |
 
 ### Letter spacing
 | Token | Value | Use |
 |---|---|---|
-| `tracking-eyebrow` | `0.32em` | Eyebrows, micro-labels |
-| `tracking-luxe` | `0.18em` | Buttons, meta text, nav-adjacent labels |
-| `tracking-[0.14em]` | — | Buttons (inside `.btn-*`) |
+| `tracking-eyebrow` | `0.22em` | Section eyebrows and the wordmark subtitle only |
+| `tracking-luxe` | `0.12em` | Meta text, inline micro-labels, chips |
+| `tracking-[0.08em]` | — | Buttons (inside `.btn-*`) and `.link-arrow` |
 
 ### Two type rules
 1. **Minimum 12px, and 12px only for uppercase labels with wide tracking**
@@ -184,9 +184,18 @@ Scales with viewport, so headings need no per-breakpoint overrides.
    navigation or running text. The navbar was uppercase in an early build and read
    as a toolbar; Title Case at 15px reads as a hotel menu.
 
-> **Known deviation:** several components still use `text-[11px]` for micro-labels,
-> below the stated floor. Correcting it is a visual change and was out of scope for
-> the architecture-only phase. Fix opportunistically, don't batch it.
+> **Readability pass (2026-09-25):** every `text-[9–11px]` was raised to `text-xs`
+> and tracking was reduced across the board. Inline micro-labels use
+> `text-xs font-medium uppercase tracking-luxe`; don't put eyebrow tracking on
+> labels. Metadata that isn't a category (guest counts, "From", "/ night") is
+> sentence case at 14–15px, not an uppercase label.
+
+> **Root size (2026-09-25 b):** `html` is `font-size: 106.25%` (17px), rising to
+> `112.5%` (18px) from 1536px (`globals.css`). Every px figure in this document
+> is the nominal size at a 16px root, so rendered sizes are ×1.0625 / ×1.125,
+> and rem spacing scales with them. Keep new sizes in `rem`/Tailwind steps, not
+> `px`, or they won't follow. Don't raise the root above 17px below 1536px: the
+> full desktop header (shown from `xl`, 1280px) only just fits at that width.
 
 ---
 
@@ -247,7 +256,7 @@ Design, not hospitality. Never use Tailwind's default `shadow-md`/`shadow-lg`.
 ## 7. Buttons
 
 ### Anatomy (shared by every variant)
-Pill · `px-8 py-4` · 14px · uppercase · `tracking-[0.14em]` · medium ·
+Pill · `min-h-[3rem] px-8 py-3.5` · 15px · uppercase · `tracking-[0.08em]` · medium ·
 `duration-400 ease-luxe` · `isolation: isolate`
 
 Every variant has a **gold sheen**: a `::before` panel that wipes in from the left
@@ -263,7 +272,7 @@ beneath the label on hover, plus `active:scale-[0.98]`.
 
 ### Sizes
 There is **one** button size. Adjust with `!` overrides only where the layout
-demands it — e.g. the navbar CTA uses `!px-7 !py-3.5 !text-[0.8125rem]`. Do not
+demands it — e.g. the navbar CTA uses `!min-h-0 !px-7 !py-3.5 !text-sm`. Do not
 create `.btn-sm` / `.btn-lg`.
 
 ### States
@@ -293,10 +302,14 @@ A stack of boxes reads as data entry; a hairline underline reads as stationery.
 
 | Class | Spec | Use |
 |---|---|---|
-| `.field-line` | Bottom border `ink/[0.12]`, transparent bg, `py-2.5`, 16px, light | Default input / textarea / select |
-| `.field-line-sm` | Same, 14px | Dense filter bars |
+| `.field-line` | Bottom border `ink/[0.12]`, transparent bg, `py-3`, 16px, normal | Default input / textarea / select |
+| `.field-line-sm` | Same, 15px | Dense filter bars |
 | `.field` | Boxed: white bg, `rounded-xl`, `border-ink/10`, `px-4 py-3` | Where a control needs its own surface on a tinted panel |
-| `.field-label` | 11px uppercase `tracking-luxe`, `warm-500`, `mb-2` | All labels |
+| `.field-label` | 13px uppercase `tracking-luxe`, `warm-600`, `mb-2` | All labels |
+
+**All controls reset `letter-spacing` and `text-transform`** (`globals.css`).
+Tailwind's preflight makes inputs inherit tracking, and most inputs here sit
+inside a tracked uppercase `<label>`.
 
 Focus on every input: border → `gold`, no ring (the global `:focus-visible` ring
 covers keyboard users).
@@ -351,8 +364,9 @@ contrast whatever photo is behind.
   `after:absolute after:inset-0 after:z-10` so the whole surface is clickable via a
   single accessible link. A secondary "Details" affordance must be a `<span aria-hidden>`,
   not a second link. (Three links to the same URL is the most common a11y bug in card grids.)
-- **Oversized index numerals** (`font-display text-7xl text-gold/10`) mark a curated
-  set — see `OffersPreview`. Reuse for Hall packages / Restaurant menus.
+- **No oversized index numerals.** The `text-7xl text-gold/10` 01/02/03 marks on
+  offer cards were removed on 2026-09-25: at 10% gold on white they were
+  invisible and read as decoration for its own sake.
 
 ---
 
@@ -522,7 +536,7 @@ section headers. Uniformly centred headings are the single strongest "template" 
 | Height | `h-20` → `lg:h-28`, shrinking to `h-[72px]` → `lg:h-20` on scroll |
 | Transparency | Transparent **only** over the home hero; opaque + `backdrop-blur-xl` elsewhere |
 | Auto-hide | Hides on scroll-down past 260px, returns on any scroll-up |
-| Nav links | **Title Case**, 15px, light, `.nav-link` with a gold underline that draws in |
+| Nav links | **Title Case**, 16px, normal weight, `.nav-link` with a gold underline that draws in |
 | Active state | `data-active="true"` → gold + underline held open |
 | Right side | "My Bookings" (`Briefcase`) → Login (`User`) / Logout (`LogOut`) → CTA pill |
 | CTA | `.btn-gold` when transparent, `.btn-primary` when opaque |
@@ -606,6 +620,8 @@ Keep to this small set — it maximises CDN cache hits. `c_limit` only ever scal
   one (see `RoomCard`). Mounting all frames of all cards is what made a room grid
   pull 15 full-size images on load.
 - **Always clear the skeleton on `onError`**, or a broken URL shimmers forever.
+- **Also check `img.complete` on mount.** A server-rendered image can finish
+  loading before hydration, so `onLoad` never reaches React (see `LuxeImage`).
 - **Reserve aspect ratio** (`aspect-[4/3]`, fixed heights) so decoding never reflows.
 - `loading="lazy"` by default; `priority` (eager) only above the fold.
 - **Not `next/image`** — sources are arbitrary Cloudinary `secure_url` strings and
@@ -843,7 +859,6 @@ buttons, same cards, same motion — different state machine.
 |---|---|
 | **`LazyMotion` unfinished** | Framer ships its full feature set (~40–50KB gzip) on nearly every route. Converting `motion` → `m` with `LazyMotion features={domAnimation}` saves ~13KB/page. The blocker (`layoutId`) is already removed — hence the rule never to reintroduce it |
 | **No browser verification** | Phase 3.8/3.9 verified by `next build`, `tsc --noEmit`, and a before/after prerendered-HTML diff. No page opened in a browser; no Lighthouse or screen-reader audit |
-| **`text-[11px]` in use** | Below the documented 12px floor. Fixing it is a visual change, deferred |
 | **GST needs backend** | `booking.service.ts` computes no tax. The invoice tax row stays hidden until the API supplies `taxAmount`/`taxLabel`/`subtotal`, with the rate admin-configurable (`AI_INSTRUCTIONS.md` §15 forbids hardcoding it) |
 | **Images not on Cloudinary** | See §17 — transforms are inert on current Hotel data |
 | **Token duplication** | `tailwind.config.js` and `lib/theme.ts` mirror by hand |

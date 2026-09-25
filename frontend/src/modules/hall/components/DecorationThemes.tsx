@@ -126,14 +126,14 @@ export default function DecorationThemes({
               />
 
               {theme.isFeatured && (
-                <span className="absolute left-4 top-4 flex items-center gap-1.5 rounded-full bg-gold px-3 py-1.5 text-[10px] uppercase tracking-eyebrow text-ink">
+                <span className="absolute left-4 top-4 flex items-center gap-1.5 rounded-full bg-gold px-3 py-1.5 text-xs font-medium uppercase tracking-luxe text-ink">
                   <Sparkles size={11} />
                   Most requested
                 </span>
               )}
 
               <span className="absolute inset-x-0 bottom-0 p-6">
-                <span className="block text-[10px] uppercase tracking-eyebrow text-gold-light">
+                <span className="block text-xs font-medium uppercase tracking-luxe text-gold-light">
                   {theme.category}
                 </span>
                 <span className="mt-1.5 block font-display text-2xl leading-tight text-cream">
@@ -224,7 +224,7 @@ export default function DecorationThemes({
                               className="h-8 w-8 rounded-full border border-ink/10 shadow-sm"
                               aria-hidden="true"
                             />
-                            <span className="font-mono text-[11px] uppercase text-warm-400">
+                            <span className="font-mono text-xs uppercase text-warm-400">
                               {hex}
                             </span>
                           </span>
