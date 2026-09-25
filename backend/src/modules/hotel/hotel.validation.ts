@@ -9,6 +9,21 @@ export const MAX_STAY_NIGHTS = 60;
 export const MAX_BOOKING_HORIZON_DAYS = 730; // check-in no more than ~2 years out
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
+const IST_OFFSET_MS = 330 * 60 * 1000; // Asia/Kolkata is UTC+05:30 with no DST.
+
+/**
+ * Check-in before today (the property's calendar day, IST) is refused on the
+ * PUBLIC schemas only. Deliberately not part of stayRangeError: that also runs
+ * inside getAvailableCount when an existing booking is re-checked (late
+ * payment, retry), which must keep working after its check-in date.
+ */
+export function checkInPastError(checkIn: Date): string | null {
+  const shifted = new Date(Date.now() + IST_OFFSET_MS);
+  const todayIST = Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate());
+  const day = Date.UTC(checkIn.getUTCFullYear(), checkIn.getUTCMonth(), checkIn.getUTCDate());
+  return day < todayIST ? "Check-in date cannot be in the past." : null;
+}
+
 /** Returns an error message when a stay breaks the caps, else null. */
 export function stayRangeError(checkIn: Date, checkOut: Date): string | null {
   const nights = Math.round((checkOut.getTime() - checkIn.getTime()) / MS_PER_DAY);
@@ -71,6 +86,8 @@ export const availabilityQuerySchema = z
     checkOut: z.string().refine((v) => !isNaN(Date.parse(v)), "Invalid checkOut date"),
   })
   .superRefine((data, ctx) => {
+    const past = checkInPastError(new Date(data.checkIn));
+    if (past) ctx.addIssue({ code: z.ZodIssueCode.custom, message: past, path: ["checkIn"] });
     const message = stayRangeError(new Date(data.checkIn), new Date(data.checkOut));
     if (message) ctx.addIssue({ code: z.ZodIssueCode.custom, message, path: ["checkOut"] });
   });
@@ -101,6 +118,8 @@ export const createBookingSchema = z
     path: ["checkOutDate"],
   })
   .superRefine((data, ctx) => {
+    const past = checkInPastError(new Date(data.checkInDate));
+    if (past) ctx.addIssue({ code: z.ZodIssueCode.custom, message: past, path: ["checkInDate"] });
     const message = stayRangeError(new Date(data.checkInDate), new Date(data.checkOutDate));
     if (message) ctx.addIssue({ code: z.ZodIssueCode.custom, message, path: ["checkOutDate"] });
   });

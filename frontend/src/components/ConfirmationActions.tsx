@@ -1,7 +1,7 @@
 "use client";
 
 import { Printer, Mail, Copy, Check } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 /**
  * Invoice actions on the confirmation page.
@@ -34,6 +34,11 @@ export default function ConfirmationActions({
   brandName: string;
 }) {
   const [copied, setCopied] = useState(false);
+  // Read after mount: `window` is absent during SSR, so reading it in render
+  // made the server and client hrefs differ (hydration mismatch), and React
+  // keeps the server's attribute, so the emailed copy lost its link.
+  const [pageUrl, setPageUrl] = useState("");
+  useEffect(() => setPageUrl(window.location.href), []);
 
   // The public booking lookup masks the email (`ra***@gm***.com`). A masked
   // address is not a recipient, so the mail client is opened without one and
@@ -45,7 +50,7 @@ export default function ConfirmationActions({
     `&body=${encodeURIComponent(
       `Booking reference: ${bookingReference}\n\n` +
         `Keep this reference handy at check-in. You can view the full confirmation at:\n` +
-        `${typeof window !== "undefined" ? window.location.href : ""}\n`
+        `${pageUrl}\n`
     )}`;
 
   async function copyReference() {

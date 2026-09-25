@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { ogDefaults } from "@/lib/seo";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, BedDouble, Users } from "lucide-react";
@@ -39,8 +40,12 @@ export async function generateMetadata({
 export default async function RoomDetailsPage({ params }: { params: { roomSlug: string } }) {
   const data = await getTheHotelRoom(params.roomSlug);
   // The hotel-level fetch failing means the API is unreachable, not that this
-  // room is missing — the roomSlug check below is the real 404.
+  // room is missing. If the hotel loaded and this slug isn't one of its rooms,
+  // it is a real 404 (a soft 200 "Just a moment" page for a dead link was
+  // indexable and looked like an outage).
   if (!data) {
+    const hotelData = await getTheHotel();
+    if (hotelData && !hotelData.rooms?.some((r) => r.slug === params.roomSlug)) notFound();
     return (
       <PropertyUnavailable
         retryHref={`/hotel/rooms/${params.roomSlug}`}

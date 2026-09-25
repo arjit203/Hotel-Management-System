@@ -732,6 +732,14 @@ query; one set of writers renders any of them. A seventh export is one object.
   `hotelAdvancePercent`, `cancellationFreeWindowHours`, `restaurantEnabled`,
   `hallEnquiriesEnabled` and `email.adminNotificationEmail`. Every other key is
   labelled **"Not yet active"** in the admin panel so it no longer claims an effect.
+- **Env-backed keys read back their env value when unsaved** (2026-09-25 d).
+  `booking.hotelAdvancePercent`, `booking.cancellationFreeWindowHours` and
+  `email.adminNotificationEmail` are consumed as stored → env → default
+  (`ENV_BACKED_KEYS` in `settings.defaults.ts`). Reads used to show the built-in
+  default instead, so the panel said 20% while `.env` charged 100%, and saving
+  the page unchanged would silently have replaced the env value. A stored blank
+  still means "not set". Add a key to `ENV_BACKED_KEYS` whenever a consumer
+  gains an env fallback.
 - **Feature toggles (`features.*`) are not enforced.** The admin panel says so.
   `features.newsletterSignup` and `features.onlineOrdering` defaults were changed
   to `true` so that wiring them later can't change what the site shows today.
@@ -783,3 +791,90 @@ placeholder is a legal claim nobody made.
 ### Full endpoint list
 See `API_DOCUMENTATION.md`.
 
+
+---
+
+## 11. Final QA — Module 6 (2026-09-25)
+
+A test-first pass over the running apps (dev backend on Atlas, Razorpay **test**
+keys), not a code read. Method and what it proved, so the next QA run can repeat it:
+
+- **Live API tests** with one temporary admin per role and one customer account,
+  all deleted afterwards (audit-log rows they produced are kept — the audit trail
+  is append-only). RBAC matrix: 29 endpoints × 5 callers (no token + 4 roles), 0
+  unexpected results, plus cross-vertical content IDOR by id (offers/FAQs through
+  another vertical's router → 404, including for Super Admin).
+- **Payments** exercised end to end by signing `order_id|payment_id` with the test
+  key secret — the exact proof Razorpay Checkout produces: invalid signature
+  (400, booking untouched), valid (confirmed), replay (idempotent 200), second
+  payment (409), payment against a superseded order after retry (confirmed),
+  unpaid admin confirm (409), cancel → refund attempt → `refund_pending` on
+  gateway failure, availability released.
+- **Hotel / Restaurant / Hall journeys** with their edge cases (past dates, zero /
+  excess guests, bad ids, overlapping sittings, double-confirming a hall date,
+  releasing it, declined → reopen), and cross-module checks (a reservation or hall
+  enquiry never moved hotel availability).
+- **Headless Chrome over the DevTools protocol** (Node's built-in WebSocket, no
+  dependency added): every public page and every admin page, at 375 / 768 / 1366 px,
+  measuring horizontal overflow, text under 12px, images without alt, broken
+  images, console errors, page exceptions and failed requests; admin pages once per
+  role. Screenshots for anything flagged.
+- **Build gates:** `tsc --noEmit` ×3, ESLint `next/core-web-vitals` ×2 (temporary
+  config in a throwaway copy — the repo still has none), `next build` ×2 and the
+  backend `tsc` build, run on copies under a temporary folder so the running dev
+  servers' `.next` was untouched.
+
+### Known limitations found, not fixed (need an owner decision or are out of scope)
+- **RESOLVED 2026-09-25 (e) — the database was shared with another application.**
+  `MONGODB_URI` had no database path, so 7 Vachan lived in Atlas's default `test`
+  database next to another app's `admins` (`username`, role `"Super Admin"`),
+  `users` (one account with `password`/`avatar`), `bookings`, `properties` and
+  `notifications`. That app's unique `username_1` index on `admins` made
+  `POST /admin/users` return 409 for every new account. 7 Vachan now has its own
+  database, **`7vachan`** — see "Database migration" below.
+
+### Database migration to `7vachan` (2026-09-25 e)
+- **Backup first:** every collection of `test` (all 28, both apps) was exported
+  as canonical EJSON plus its index definitions to
+  `E:\7vachan-db-backup-2026-09-25\` (outside the repo — it holds password
+  hashes), each file read back and count-checked. The previous `MONGODB_URI` line
+  is saved there as `OLD_MONGODB_URI.txt`.
+- **Copied:** the 25 collections backed by a 7 Vachan model (295 documents),
+  with `_id`s preserved so every reference stays valid. Filtered: `admins` → only
+  the four 7 Vachan roles; `users` → only `role: "user"`. Not copied: `bookings`,
+  `properties`, `notifications` and the other app's admin and user rows.
+- **Indexes were not copied**; Mongoose built 7 Vachan's own on boot, so the
+  foreign `username_1` index does not exist in `7vachan` (`admins`: `_id_`,
+  `email_1` only).
+- `backend/.env` `MONGODB_URI` now ends `…mongodb.net/7vachan?appName=Cluster0`.
+  No code changed; the frontends only talk to the API.
+- **Verified:** a Super Admin that existed only in `7vachan` could sign in through
+  the API (proving the backend reads the new database); `POST /admin/users`
+  created a hotel manager (201), who could sign in and was scoped correctly (hotel
+  200, restaurant 403). Temporary accounts removed. Public pages and admin panel 200.
+- **Left in place on purpose:** the original 7 Vachan collections in `test` are
+  untouched (rollback = restore `OLD_MONGODB_URI.txt`). Drop them from `test`
+  only once `7vachan` has run for a while, and never touch `bookings`,
+  `properties`, `notifications` or the non-7-Vachan `admins`/`users` rows there.
+- **Production database user — created 2026-09-25.** Atlas user `7vachan`,
+  `readWrite@7vachan` only. Its connection string is in `backend/.env.production`
+  (git-ignored by `.env.*`; not read by the dev server, which still uses `.env`).
+  Verified: connects, reads and writes `7vachan`, and is refused both reads and
+  writes on `test`. At deploy time, copy that one `MONGODB_URI` line into the
+  host's environment variables.
+- **Seven legacy single-room bookings** (pre-`rooms[]`, top-level `roomId`) are
+  not counted by availability, which queries `rooms.roomId`. All are past-dated
+  dev records (July–August 2026), so nothing is affected today; migrate any such
+  documents into `rooms[]` before importing real historical data.
+- **No restaurant booking horizon.** A reservation years ahead is accepted;
+  `booking.restaurantAdvanceDays` exists but is "Not yet active".
+- **Booking toggles are enforced only on submit.** With `hotelEnabled` /
+  `restaurantEnabled` off, the public forms still render and the guest learns on
+  submit ("…currently unavailable. Please contact us."). Showing the closed state
+  up front is a UX addition, not a fix.
+- **No Content-Security-Policy on the Next apps** (other security headers were
+  added). GTM, Facebook Pixel and Razorpay Checkout each need a reviewed allowlist.
+- **No favicon until one is set** in Settings → Branding (`/favicon.ico` 404s).
+- Not reproducible here and therefore not re-tested: real SMTP delivery, Cloudinary
+  upload of a real image, a real Razorpay Checkout in a browser, network failure
+  mid-Checkout. Manual steps for these are in the Module 6 report.

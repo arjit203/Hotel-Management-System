@@ -47,6 +47,21 @@ export const SECRET_KEYS: Partial<Record<SettingCategory, string[]>> = {
  * Anything left blank in the database is not written, so `.env` remains the
  * fallback and a half-filled Settings page cannot take payments offline.
  */
+/**
+ * Settings whose consumers fall back to an env var when nothing is saved
+ * (stored → env → default; see booking.service.ts). Reads show the env value in
+ * that case, so the admin page displays what is actually in force — otherwise
+ * it showed the built-in default (20%) while `.env` charged something else, and
+ * saving the page unchanged silently replaced the env value with that default.
+ */
+export const ENV_BACKED_KEYS: Partial<Record<SettingCategory, Record<string, string>>> = {
+  booking: {
+    hotelAdvancePercent: "HOTEL_ADVANCE_PAYMENT_PERCENT",
+    cancellationFreeWindowHours: "CANCELLATION_FREE_WINDOW_HOURS",
+  },
+  email: { adminNotificationEmail: "ADMIN_NOTIFICATION_EMAIL" },
+};
+
 export const ENV_MIRROR: Record<string, string> = {
   razorpayKeyId: "RAZORPAY_KEY_ID",
   razorpayKeySecret: "RAZORPAY_KEY_SECRET",

@@ -16,7 +16,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { BusinessKey } from "@/lib/businessContext";
-import { isSuperAdmin } from "@/lib/roles";
+import { canAccessBusiness, isSuperAdmin } from "@/lib/roles";
 
 export interface NavItem {
   label: string;
@@ -59,26 +59,34 @@ export function buildNavSections(business: BusinessKey, role?: string | null): N
     },
     {
       title: "Business",
-      items: [
+      // A manager sees only its own vertical (same idea as the Super-Admin-only
+      // items below: menu tidiness, not a security control). Before the session
+      // has loaded the role is unknown, so all three stay listed.
+      items: ([
         {
           label: "Hotel",
           href: "/hotels",
           icon: BedDouble,
           matchPrefixes: ["/hotels"],
+          business: "hotel",
         },
         {
           label: "Restaurant",
           href: "/restaurants",
           icon: UtensilsCrossed,
           matchPrefixes: ["/restaurants"],
+          business: "restaurant",
         },
         {
           label: "Marriage Hall",
           href: "/halls",
           icon: PartyPopper,
           matchPrefixes: ["/halls"],
+          business: "hall",
         },
-      ],
+      ] as (NavItem & { business: BusinessKey })[])
+        .filter((item) => !role || canAccessBusiness(role, item.business))
+        .map(({ business: _business, ...item }) => item),
     },
     {
       title: "Operations",

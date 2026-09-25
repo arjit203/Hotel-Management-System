@@ -233,7 +233,7 @@ export default function SettingsPage() {
             }
           />
         ) : (
-          <div className="grid gap-5 lg:grid-cols-[15rem_1fr]">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[15rem_minmax(0,1fr)]">
             {/* Category rail */}
             <nav aria-label="Settings sections" className="lg:sticky lg:top-20 lg:self-start">
               <ul className="flex gap-1 overflow-x-auto pb-2 lg:flex-col lg:overflow-visible lg:pb-0">

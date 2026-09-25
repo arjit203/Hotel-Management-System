@@ -7,6 +7,8 @@ import { useAdminSession } from "@/lib/adminSession";
 import { canAccessBusiness, managerVertical } from "@/lib/roles";
 import { humanise } from "@/lib/format";
 import { EmptyState } from "@/components/ui/States";
+import RequireAdmin from "@/components/RequireAdmin";
+import PageHeader from "@/components/ui/PageHeader";
 
 /**
  * Banner shown at the top of the cross-vertical content pages (Gallery, Offers,
@@ -108,5 +110,37 @@ export function OutOfScopeState({ business, what }: { business: BusinessKey; wha
         </Link>
       }
     />
+  );
+}
+
+/**
+ * Route-segment guard for a vertical's property pages (`/hotels`, `/restaurants`,
+ * `/halls` and everything under them), used from each segment's layout.tsx.
+ * Without it a manager who typed another vertical's URL got that vertical's full
+ * editor, every save of which the API then refused with 403. Rendering the
+ * explanation instead also stops those pages from firing the refused requests.
+ */
+export function SectionScopeGuard({
+  business,
+  title,
+  what,
+  children,
+}: {
+  business: BusinessKey;
+  title: string;
+  what: string;
+  children: React.ReactNode;
+}) {
+  const { ready } = useAdminSession();
+  const outOfScope = useIsOutOfScope(business);
+  // Until the session is known, show RequireAdmin's own loading state rather
+  // than mounting the page (which would fire requests the API then refuses).
+  if (!ready) return <RequireAdmin>{null}</RequireAdmin>;
+  if (!outOfScope) return <>{children}</>;
+  return (
+    <RequireAdmin>
+      <PageHeader title={title} breadcrumbs={[{ label: BUSINESS_LABEL[business] }]} />
+      <OutOfScopeState business={business} what={what} />
+    </RequireAdmin>
   );
 }

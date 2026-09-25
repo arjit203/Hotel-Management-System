@@ -141,7 +141,7 @@ export default function BookingForm({ hotelId, room, allRooms }: BookingFormProp
       const res = results[i];
       const line = cart[i];
       if (!res.success) {
-        setError(res.message || "Could not check availability.");
+        setError(res.errors?.[0]?.message || res.message || "Could not check availability.");
         return;
       }
       if (res.data!.availableCount < line.numRooms) {
@@ -219,7 +219,7 @@ export default function BookingForm({ hotelId, room, allRooms }: BookingFormProp
 
       if (!res.success || !res.data) {
         setIsSubmitting(false);
-        setError(res.message || "Booking failed. Please try again.");
+        setError(res.errors?.[0]?.message || res.message || "Booking failed. Please try again.");
         return;
       }
       payment = {

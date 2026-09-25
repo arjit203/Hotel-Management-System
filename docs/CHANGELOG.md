@@ -4,6 +4,106 @@ Format: newest entries on top. Categories: Added / Changed / Fixed / Security / 
 
 ---
 
+## [2026-09-25 e] — Own database for 7 Vachan (fixes admin creation)
+
+### Fixed
+- **Super Admins could not create admin accounts** (`POST /admin/users` → 409 for
+  everyone). Root cause was the environment, not code: 7 Vachan shared Atlas's
+  default `test` database with another app, whose unique `admins.username_1`
+  index rejected every admin without a username. 7 Vachan now uses its own
+  database, `7vachan`; admin creation verified end to end (201, new manager signs
+  in, correctly scoped).
+
+### Changed
+- `backend/.env` `MONGODB_URI` now names the database (`…/7vachan`). **Migration:**
+  full EJSON backup of `test` (28 collections + index definitions) to
+  `E:\7vachan-db-backup-2026-09-25\`; 25 7 Vachan collections / 295 documents
+  copied with `_id`s preserved, filtering out the other app's `admins` and `users`
+  rows; indexes rebuilt by Mongoose rather than copied. Old collections in `test`
+  left untouched for rollback. No code change. Details: `PROJECT_DOCUMENTATION.md`
+  §11 "Database migration to `7vachan`".
+
+---
+
+## [2026-09-25 d] — Module 6: final QA & end-to-end testing
+
+Live testing of the running apps: API journeys for all three verticals, a
+29-endpoint × 5-caller RBAC matrix, Razorpay flows driven by test-key signatures,
+headless-Chrome checks of every public and admin page at 375 / 768 / 1366 px, and
+all build gates. Method in `PROJECT_DOCUMENTATION.md` §11. No feature, module,
+route or dependency was added; Marriage Hall stays enquiry-only; refunds untouched.
+
+### Fixed
+- **Hotel bookings and availability accepted past check-in dates.** Public
+  `POST /hotel-bookings` and `GET /hotels/rooms/:roomId/availability` now return
+  400 for a check-in before today (IST). Checked only on the public schemas, not
+  in `stayRangeError`, because that also re-checks existing bookings on late
+  payment. (`hotel.validation.ts`)
+- **Admin Settings showed the wrong advance percentage.** With nothing saved, the
+  Booking page displayed the built-in 20% while `.env` was charging 100%, and
+  saving the page unchanged would have cut the advance to 20%. Env-backed keys now
+  read back their env value. (`settings.defaults.ts` `ENV_BACKED_KEYS`,
+  `settings.service.ts`)
+- **"Email a copy" on both confirmation pages lost its link in production.** The
+  `mailto:` body read `window.location` during render, so the server rendered it
+  blank, React logged a hydration mismatch and kept the server attribute. Now read
+  after mount. (`ConfirmationActions.tsx`)
+- **An unknown room URL rendered a "Just a moment" outage page** instead of the
+  site's 404. It now calls `notFound()` when the hotel loaded but has no such
+  room; an unreachable API still gets the retry screen. The response is 200 +
+  `noindex` rather than 404 because the segment has a `loading.tsx` (Next
+  streaming). (`app/hotel/rooms/[roomSlug]/page.tsx`)
+- Booking and room-availability forms showed a bare "Validation failed"; they now
+  show the field's own message (e.g. the past-date one).
+  (`BookingForm.tsx`, `RoomAvailabilityCheck.tsx`)
+- **Admin Settings overflowed on phones** (page 2226px wide at 375px): the grid had
+  no explicit column, so the scrolling tab strip set its width.
+  (`admin-panel/src/app/settings/page.tsx`)
+- **Managers saw other businesses' property editors.** The sidebar listed Hotel,
+  Restaurant and Marriage Hall to every role, and `/restaurants/…`, `/halls/…`,
+  `/hotels/…` rendered full editors whose every save the API refused with 403. The
+  sidebar now lists only the role's own vertical, and a segment `layout.tsx` in
+  each of the three folders shows the existing `OutOfScopeState` instead (and
+  waits for the session, so no refused requests fire). Server-side RBAC was
+  already correct. (`navigation.ts`, `PropertyScopeNotice.tsx` `SectionScopeGuard`,
+  `app/{hotels,restaurants,halls}/layout.tsx`)
+
+### Security
+- Customer login now spends the same bcrypt time on an unknown email as on a wrong
+  password (admin login already did); the faster 401 revealed which emails have
+  accounts. (`auth.service.ts`)
+- Both Next apps sent no security headers. Added `X-Frame-Options` (admin `DENY`,
+  site `SAMEORIGIN`), `X-Content-Type-Options: nosniff`, `Referrer-Policy`, and
+  removed `X-Powered-By`. No CSP yet — GTM / Pixel / Razorpay need a reviewed
+  allowlist. (`frontend/next.config.js`, `admin-panel/next.config.js`)
+
+### Changed
+- API contract: past check-in → 400 on the two hotel endpoints above
+  (`API_DOCUMENTATION.md`).
+
+### Found, not fixed — needs an owner decision
+- **Admin accounts cannot be created in this environment.** The database is
+  Atlas's default `test`, shared with another application whose unique
+  `admins.username_1` index rejects every admin without a username:
+  `POST /admin/users` → 409 for every new account. Operational fix (own database,
+  or drop that index if the other app is gone) — see `PROJECT_DOCUMENTATION.md`
+  §11. Not changed here because it touches another application's data.
+- Legacy past-dated single-room bookings not counted by availability; no
+  restaurant booking horizon; toggles enforced only on submit; no CSP; no favicon
+  until set. Details in §11.
+
+### Verification
+- `npx tsc --noEmit` passes in backend, frontend and admin-panel; backend `tsc`
+  build passes; ESLint (`next/core-web-vitals`, temporary config) 0 errors /
+  0 warnings in both Next apps; `next build` passes for both (frontend 40/40
+  pages) — built from copies so the dev servers were not disturbed.
+- Every fix above re-tested live (API calls, or the headless-Chrome check plus a
+  screenshot). All QA records, accounts and settings changes were removed and the
+  touched settings documents restored to their prior values.
+- No automated test suite exists; manual steps are in the Module 6 report.
+
+---
+
 ## [2026-09-25 c] — Module 5: production readiness & cross-module integration
 
 Audit of all three apps (RBAC/IDOR, payments, booking flows, settings, SEO,

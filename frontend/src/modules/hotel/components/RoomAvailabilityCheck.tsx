@@ -33,7 +33,7 @@ export default function RoomAvailabilityCheck({ roomId }: { roomId: string }) {
     );
     setChecking(false);
     if (!res.success || !res.data) {
-      setError(res.message || "Could not check availability.");
+      setError(res.errors?.[0]?.message || res.message || "Could not check availability.");
       return;
     }
     setResult(res.data);

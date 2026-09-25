@@ -1,5 +1,5 @@
 import { Setting, SettingCategory, SETTING_CATEGORIES, PUBLIC_SETTING_CATEGORIES } from "./models/setting.model";
-import { SETTING_DEFAULTS, SECRET_KEYS, ENV_MIRROR, defaultsFor } from "./settings.defaults";
+import { SETTING_DEFAULTS, SECRET_KEYS, ENV_MIRROR, ENV_BACKED_KEYS, defaultsFor } from "./settings.defaults";
 import { encrypt, decrypt, maskHint } from "./settings.crypto";
 import { resetEmailTransport } from "../../utils/email.util";
 import { ApiError } from "../../utils/apiError.util";
@@ -63,10 +63,24 @@ function mergeWithDefaults(
   stored: Record<string, unknown> | undefined
 ): Record<string, unknown> {
   const merged = defaultsFor(category);
+
+  // Env-backed keys: an unsaved (or blank) value means the env var is in force.
+  const envBacked = ENV_BACKED_KEYS[category] ?? {};
+  for (const [key, envName] of Object.entries(envBacked)) {
+    const raw = (process.env[envName] ?? "").trim();
+    if (!raw) continue;
+    if (typeof merged[key] === "number") {
+      if (Number.isFinite(Number(raw))) merged[key] = Number(raw);
+    } else {
+      merged[key] = raw;
+    }
+  }
   if (!stored) return merged;
 
   for (const key of Object.keys(merged)) {
-    if (stored[key] !== undefined) merged[key] = stored[key];
+    if (stored[key] === undefined) continue;
+    if (key in envBacked && (stored[key] === "" || stored[key] === null)) continue;
+    merged[key] = stored[key];
   }
   return merged;
 }

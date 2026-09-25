@@ -83,6 +83,9 @@ export async function verifyUserEmail(rawToken: string) {
 export async function loginUser(input: LoginInput) {
   const user = await User.findOne({ email: input.email }).select("+passwordHash");
   if (!user) {
+    // Same bcrypt cost as a wrong password, as loginAdmin does — otherwise the
+    // faster 401 tells an attacker which emails have accounts.
+    await bcrypt.compare(input.password, DUMMY_PASSWORD_HASH);
     throw new ApiError(401, "Invalid email or password.");
   }
 
