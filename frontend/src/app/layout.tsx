@@ -84,9 +84,15 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     ...(indexable ? {} : { robots: { index: false, follow: false } }),
     ...(verification ? { verification: { google: verification } } : {}),
-    ...(str(settings, "branding", "faviconUrl")
-      ? { icons: { icon: str(settings, "branding", "faviconUrl") } }
-      : {}),
+    // Built-in brand icons (public/), unless Settings → Branding supplies a favicon.
+    icons: {
+      icon: str(settings, "branding", "faviconUrl") || [
+        { url: "/favicon.ico", sizes: "16x16 32x32 48x48" },
+        { url: "/icon-192.png", type: "image/png", sizes: "192x192" },
+        { url: "/icon-512.png", type: "image/png", sizes: "512x512" },
+      ],
+      apple: "/apple-touch-icon.png",
+    },
   };
 }
 

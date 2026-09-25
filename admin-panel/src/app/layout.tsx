@@ -11,6 +11,14 @@ export const metadata: Metadata = {
   // The admin panel is behind auth and must never be indexed — unlike the
   // public site, where unique indexable metadata is a hard requirement.
   robots: { index: false, follow: false },
+  // Same "7V" mark as the sidebar logo, so the tab reads as the admin console.
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "16x16 32x32 48x48" },
+      { url: "/icon-192.png", type: "image/png", sizes: "192x192" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export const viewport: Viewport = {

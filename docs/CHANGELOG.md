@@ -4,6 +4,26 @@ Format: newest entries on top. Categories: Added / Changed / Fixed / Security / 
 
 ---
 
+## [2026-09-25 i] — Browser tab icons for the public site and admin panel
+
+### Added
+- **Public site** (`frontend/public/`): `favicon.ico` (16/32/48), `icon-192.png`,
+  `icon-512.png`, `apple-touch-icon.png` — an ink tile with a hairline gold frame
+  and a gold-gradient Cormorant "7", rendered in the site's own font; the 16/32px
+  sizes drop the frame and enlarge the numeral so it stays legible in a tab.
+  Wired in `app/layout.tsx`; **a favicon set in Settings → Branding still takes
+  precedence** (the built-in set is the fallback). Also ends the `/favicon.ico`
+  404 on every first visit.
+- **Admin panel** (`admin-panel/public/`): `favicon.ico`, `icon-192.png`,
+  `apple-touch-icon.png` — the sidebar's "7V" mark (ink `#0c111d`, white), so the
+  two tabs are told apart at a glance. Wired in `admin-panel/src/app/layout.tsx`.
+
+### Verification
+- Icons served (200, correct types) and linked in `<head>` on both apps; `tsc`,
+  ESLint 0 warnings, `next build` passes for both (40/40 and 23/23 pages).
+
+---
+
 ## [2026-09-25 h] — Public site: UI polish (focus ring, section separation, numerals, small layout bugs)
 
 Presentation only; no route, API, data, booking or payment logic changed.
