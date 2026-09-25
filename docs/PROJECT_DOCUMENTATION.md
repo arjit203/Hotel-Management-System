@@ -856,6 +856,15 @@ keys), not a code read. Method and what it proved, so the next QA run can repeat
   untouched (rollback = restore `OLD_MONGODB_URI.txt`). Drop them from `test`
   only once `7vachan` has run for a while, and never touch `bookings`,
   `properties`, `notifications` or the non-7-Vachan `admins`/`users` rows there.
+- **Development database split — 2026-09-25.** Local dev now uses
+  **`7vachan_dev`** (a full copy of `7vachan` taken 2026-09-25, same `_id`s)
+  through Atlas user `7vachan-dev` with `readWrite@7vachan_dev` only; that login is
+  refused both reads and writes on `7vachan`, so local testing cannot touch
+  production. Local and production data now diverge: edit real content in the
+  production admin panel. Seeders follow `backend/.env`, so they write to
+  `7vachan_dev`. The previous local line (an `atlasAdmin` login) is saved as
+  `DEV_ADMIN_MONGODB_URI_before_split.txt` in the backup folder, next to a fresh
+  backup of `7vachan` in `…\7vachan\`.
 - **Production database user — created 2026-09-25.** Atlas user `7vachan`,
   `readWrite@7vachan` only. Its connection string is in `backend/.env.production`
   (git-ignored by `.env.*`; not read by the dev server, which still uses `.env`).

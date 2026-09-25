@@ -36,5 +36,8 @@
     "postcss": "^8.4.39",
     "prettier": "^3.3.2",
     "typescript": "^5.5.3"
+  },
+  "engines": {
+    "node": "24.x"
   }
 }

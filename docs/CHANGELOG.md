@@ -4,6 +4,29 @@ Format: newest entries on top. Categories: Added / Changed / Fixed / Security / 
 
 ---
 
+## [2026-09-25 f] — Deployment prep: dev/prod database split, backend dependency fix
+
+### Fixed
+- **The backend could not build or start on Render.** `cloudinary` was declared
+  in the root `package.json` instead of `backend/package.json`, so a
+  workspace-only install (`npm ci --workspace=backend`, what Render runs) left it
+  out: `tsc` failed with TS2307, and the API crashed on its first import. Moved the
+  declaration to `backend/package.json` (same `^2.10.0`, installed 2.10.0);
+  the lockfile change is the two declarations only, and no package moved or changed
+  version. Verified from a clean clone: install, build and start (DB connected,
+  `/health` OK). Both Next apps also build from a clean clone with a root install,
+  as Vercel runs them.
+
+### Changed
+- Node pinned to `24.x` via `engines` in the root, `frontend` and `admin-panel`
+  `package.json` (Render reads the root one, Vercel each app's), matching the
+  version every build was verified on. `npm pkg set` also re-sorted two
+  dependency lists alphabetically; no dependency changed.
+- Local development now uses database `7vachan_dev` via a dev-only Atlas user;
+  production keeps `7vachan` (see `PROJECT_DOCUMENTATION.md` §11).
+
+---
+
 ## [2026-09-25 e] — Own database for 7 Vachan (fixes admin creation)
 
 ### Fixed
